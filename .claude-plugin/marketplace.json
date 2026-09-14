@@ -1,0 +1,35 @@
+{
+  "name": "pravex",
+  "owner": {
+    "name": "Meeteam",
+    "url": "https://github.com/meeteam-ai"
+  },
+  "metadata": {
+    "description": "The Pravex plugin for Claude Code",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "pravex",
+      "description": "Reports every Claude Code session (model, tokens, cost, duration, files, PR) to your Pravex workspace",
+      "version": "0.1.0",
+      "author": {
+        "name": "Meeteam"
+      },
+      "source": "./plugins/pravex",
+      "category": "developer-tools",
+      "tags": [
+        "pravex",
+        "analytics",
+        "usage",
+        "cost"
+      ],
+      "keywords": [
+        "pravex",
+        "claude-code",
+        "telemetry",
+        "analytics"
+      ]
+    }
+  ]
+}

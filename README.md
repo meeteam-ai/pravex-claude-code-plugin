@@ -1,0 +1,80 @@
+# Pravex plugin for Claude Code
+
+Reports each finished coding session to your [Pravex](https://pravex.tenox.ai)
+workspace — model, tokens, cost, active duration, files touched and the pull
+request it led to.
+
+## Install
+
+```
+/plugin marketplace add meeteam-ai/pravex-claude-code-plugin
+/plugin install pravex@pravex
+/pravex:setup --host https://pravex.tenox.ai --key pvx_…
+```
+
+Create the key on the **Install** page of your Pravex workspace. It is shown once;
+Pravex stores only a hash of it. `/pravex:status` checks the connection.
+
+## What it sends
+
+A session is reported once, when it ends. The payload is metrics — **no prompts,
+no code, no file contents**:
+
+| Field | Notes |
+| --- | --- |
+| `externalId` | The Claude Code session id. Re-posting the same id updates the row |
+| `title` | The session's own title, or the first prompt. **Key-shaped strings are masked before the payload leaves the machine** |
+| `repo`, `branch` | From `git remote get-url origin` and the transcript |
+| `durationMinutes` | **Active** time, not wall clock — see below |
+| `usage` | Input, output, cache-read and cache-write tokens, per model |
+| `filesTouched` | Only edits a `tool_result` confirmed. A denied or failed edit did not touch anything |
+| `testsAdded` | How many of those look like test files |
+| `retryRate` | Percentage of tool calls that errored |
+| `prUrl` | Only a pull request belonging to this session's own repo |
+
+Three of those are deliberate and were measured rather than guessed:
+
+- **Duration is active time.** One real session left open overnight measured
+  7,237 wall-clock minutes against ~110 minutes of work. Gaps over five minutes
+  are dropped, so a long think counts and lunch does not.
+- **`filesTouched` counts what landed.** Holding each edit until its result
+  confirms it is what keeps denied edits out of the number.
+- **`prUrl` has to name this repo.** A pull request from an unrelated
+  organisation, open in another browser tab, once turned up in tool output and
+  was reported as the session's own.
+
+If a session ends offline the report is spooled to `~/.pravex/spool` and sent at
+the start of the next one. A failure never blocks or fails your session; it is
+logged to `~/.pravex/last-report.log`.
+
+## Layout
+
+```
+plugins/pravex/
+├── .claude-plugin/plugin.json
+├── hooks/hooks.json               SessionEnd → scripts/report-session.js
+├── commands/{setup,status}.md      /pravex:setup, /pravex:status
+└── scripts/
+    ├── report-session.js           reads the transcript, posts the session
+    ├── report-session.test.js      the test suite
+    └── setup.js                    writes ~/.pravex/config.json
+```
+
+## Development
+
+```
+node --test plugins/pravex/scripts/*.test.js
+```
+
+**No dependencies, by design.** This runs inside someone else's Claude Code
+session, so it must not pull anything at install time. The scripts import only
+the Node standard library, the tests use `node:test`, and CI asserts that nothing
+else creeps in.
+
+Configuration comes from `PRAVEX_API_KEY` / `PRAVEX_API_HOST`, or
+`~/.pravex/config.json`, in that order — the environment variables are how the
+tests drive it against a local server.
+
+## Licence
+
+MIT — see [LICENSE](./LICENSE).
