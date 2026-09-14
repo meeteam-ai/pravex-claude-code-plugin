@@ -275,8 +275,10 @@ jobs:
       - name: Assert the hook has no dependencies
         run: |
           # grep -E has no lookahead, so list what is required and subtract the allowlist.
+          # Relative requires are this plugin's own files, not dependencies.
           bad=$(grep -ohE "require\('[^']+'\)" plugins/pravex/scripts/*.js \
                 | sed -E "s/require\('(.*)'\)/\1/" | sort -u \
+                | grep -v "^\.\{1,2\}/" \
                 | grep -vxE "fs|os|path|http|https|readline|child_process|url|node:test|node:assert|node:fs|node:os|node:path|node:http|node:child_process" || true)
           if [ -n "$bad" ]; then
             echo "✗ non-stdlib require() found — the hook must stay dependency-free:"
