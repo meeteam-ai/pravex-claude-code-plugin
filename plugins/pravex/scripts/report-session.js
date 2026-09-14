@@ -72,6 +72,24 @@ const REPORTED_MAX = 500;
  * by the next session start, because each reported id is recorded as it succeeds.
  */
 const SWEEP_BUDGET_MS = 10_000;
+/** Records when each session last sent a progress report, so `Stop` can throttle. */
+const PROGRESS_FILE = path.join(CONFIG_DIR, 'progress.json');
+/**
+ * Least time between two `Stop` reports for the same session.
+ *
+ * ⚠️ **This is the single most expensive decision in the hook, so it is stated
+ * rather than left implicit.** `Stop` fires after *every* assistant turn, and each
+ * report re-reads and re-parses the whole transcript from byte 0 — O(final size)
+ * per turn, so O(turns x size) per session. A session reaching 20 MB over 60 turns
+ * would read and parse ~600 MB, of which ~98% is lines already seen, and add
+ * 0.1-0.3s of blocking latency to every turn plus a database write on the server.
+ *
+ * None of that buys anything: the server's own liveness window is fifteen minutes
+ * (`LIVE_GRACE_MS`), so it cannot tell per-turn reporting from per-minute
+ * reporting. Ninety seconds keeps the indicator honest and cuts the work by an
+ * order of magnitude.
+ */
+const PROGRESS_MIN_INTERVAL_MS = 90_000;
 
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 // Claude Code writes placeholder assistant turns (API errors, interrupts) as `<synthetic>`
@@ -376,7 +394,7 @@ function packTranscript(turns) {
  * @param repo `owner/name` for the working directory, used to reject pull-request
  *   URLs that belong to some other repository. See `prUrlMatchesRepo`.
  */
-async function aggregate(transcriptPath, repo) {
+async function aggregate(transcriptPath, repo, { wantTranscript = true } = {}) {
   const byMessage = new Map(); // message.id -> { model, usage }
   // tool_use.id -> file path, resolved to a real edit only once its result says it
   // succeeded. A denied or failed edit never touched the file.
@@ -465,8 +483,13 @@ async function aggregate(transcriptPath, repo) {
       }
     }
 
-    const turn = extractTurn(o);
-    if (turn) turns.push(turn);
+    // Skipped entirely on a progress report, which discards the result: extraction
+    // runs `redact` over every prompt and reply and holds the whole turn list in
+    // memory, and the gzip at the end is the cheapest part of it.
+    if (wantTranscript) {
+      const turn = extractTurn(o);
+      if (turn) turns.push(turn);
+    }
   }
 
   const usageByModel = new Map();
@@ -510,8 +533,40 @@ async function aggregate(transcriptPath, repo) {
     durationMinutes: activeMinutes(stamps),
     filesTouchedFromShell: bashFiles.size,
     assistantMessages: byMessage.size,
-    transcript: packTranscript(turns),
+    transcript: wantTranscript ? packTranscript(turns) : undefined,
   };
+}
+
+/**
+ * Whether enough time has passed to send another progress report for a session.
+ *
+ * Reads and writes a small map keyed on session id. Failing open on any I/O error
+ * is deliberate: the throttle is an optimisation, and a corrupt state file must
+ * not stop a session being reported at all.
+ */
+function shouldSendProgress(sessionId, now = Date.now()) {
+  let seen = {};
+  try {
+    seen = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8')) || {};
+  } catch {
+    /* no file yet, or unreadable — send, and rewrite it below */
+  }
+  if (typeof seen[sessionId] === 'number' && now - seen[sessionId] < PROGRESS_MIN_INTERVAL_MS) {
+    return false;
+  }
+  try {
+    // Only sessions touched recently are kept, so this cannot grow without bound
+    // on a machine that has run thousands of sessions.
+    const fresh = { [sessionId]: now };
+    for (const [id, at] of Object.entries(seen)) {
+      if (id !== sessionId && typeof at === 'number' && now - at < SWEEP_MAX_AGE_MS) fresh[id] = at;
+    }
+    fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
+    fs.writeFileSync(PROGRESS_FILE, JSON.stringify(fresh), { mode: 0o600 });
+  } catch {
+    /* housekeeping */
+  }
+  return true;
 }
 
 /**
@@ -802,6 +857,13 @@ async function main() {
     await sweepUnreported(apiHost, apiKey, sessionId, cwd);
   }
 
+  // Before the transcript is opened, so a throttled turn costs one small file
+  // read rather than a full re-parse of a file that can be tens of megabytes.
+  if (mode === 'progress' && !shouldSendProgress(sessionId)) {
+    log(`skipped (progress) ${sessionId}: reported less than ${PROGRESS_MIN_INTERVAL_MS / 1000}s ago`);
+    return;
+  }
+
   if (!transcriptPath || !fs.existsSync(transcriptPath)) {
     // Normal on `SessionStart`: the file does not exist until the first turn.
     // There is nothing to report yet, and the `Stop` hook will be along shortly.
@@ -809,7 +871,7 @@ async function main() {
     return;
   }
 
-  const agg = await aggregate(transcriptPath, repo);
+  const agg = await aggregate(transcriptPath, repo, { wantTranscript: mode === 'end' });
   if (!agg.assistantMessages || !agg.startedAt) {
     log(`skipped (${mode}) ${sessionId}: empty transcript`);
     return;
@@ -856,8 +918,10 @@ if (require.main === module) {
 }
 
 module.exports = {
+  PROGRESS_MIN_INTERVAL_MS,
   SECRET_RE,
   buildBody,
+  shouldSendProgress,
   findUnreported,
   modeFrom,
   readReported,

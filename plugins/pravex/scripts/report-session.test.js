@@ -858,3 +858,75 @@ test('the sweep does not report the same session twice', async () => {
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+
+// ⚠️ The most expensive decision in the hook. `Stop` fires after every assistant
+// turn and each report re-parses the whole transcript from byte 0 — O(turns x
+// size) per session — while the server's liveness window is fifteen minutes, so
+// it cannot tell per-turn reporting from per-minute reporting.
+test('a progress report is throttled, and the first one is not', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-throttle-'));
+  try {
+    const script = `const m = require(${JSON.stringify(path.join(__dirname, 'report-session.js'))});
+      if (!m.shouldSendProgress('s1')) throw new Error('first report was throttled');
+      if (m.shouldSendProgress('s1')) throw new Error('second report was not throttled');
+      if (!m.shouldSendProgress('s2')) throw new Error('a different session was throttled');
+      const past = Date.now() + m.PROGRESS_MIN_INTERVAL_MS + 1000;
+      if (!m.shouldSendProgress('s1', past)) throw new Error('not sent again after the interval');`;
+    const r = require('node:child_process').spawnSync(process.execPath, ['-e', script], {
+      env: { ...process.env, HOME: home },
+      encoding: 'utf8',
+    });
+    assert.strictEqual(r.status, 0, r.stderr);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// Failing open matters: the throttle is an optimisation, and a corrupt state file
+// must not stop a session being reported at all.
+test('an unreadable throttle file fails open', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-throttle-bad-'));
+  try {
+    fs.mkdirSync(path.join(home, '.pravex'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.pravex', 'progress.json'), '{ not json');
+    const script = `const m = require(${JSON.stringify(path.join(__dirname, 'report-session.js'))});
+      if (!m.shouldSendProgress('s1')) throw new Error('throttled on a corrupt file');`;
+    const r = require('node:child_process').spawnSync(process.execPath, ['-e', script], {
+      env: { ...process.env, HOME: home },
+      encoding: 'utf8',
+    });
+    assert.strictEqual(r.status, 0, r.stderr);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// The extraction is the expensive half — `redact` over every prompt and reply,
+// plus the whole turn list held in memory. Skipping it is the point of the flag.
+test('aggregate skips extraction when the caller does not want the transcript', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-skip-'));
+  const file = path.join(dir, 't.jsonl');
+  fs.writeFileSync(
+    file,
+    [
+      JSON.stringify({ type: 'user', timestamp: '2026-09-14T10:00:00.000Z', message: { content: 'hello' } }),
+      JSON.stringify({
+        type: 'assistant',
+        timestamp: '2026-09-14T10:01:00.000Z',
+        message: { id: 'm1', model: 'claude-opus-5', usage: { input_tokens: 1, output_tokens: 1 }, content: [{ type: 'text', text: 'hi' }] },
+      }),
+    ].join('\n'),
+  );
+  try {
+    const withIt = await aggregate(file, 'acme/widgets');
+    const without = await aggregate(file, 'acme/widgets', { wantTranscript: false });
+
+    assert.ok(withIt.transcript, 'expected a transcript by default');
+    assert.strictEqual(without.transcript, undefined);
+    // The metrics are identical either way — only the transcript is skipped.
+    assert.strictEqual(without.assistantMessages, withIt.assistantMessages);
+    assert.strictEqual(without.durationMinutes, withIt.durationMinutes);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
