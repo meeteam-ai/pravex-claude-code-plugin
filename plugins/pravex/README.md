@@ -39,7 +39,30 @@ machine can be cut off without touching the others.
 
 ## How it works
 
-- `SessionEnd` hook runs `scripts/report-session.js`.
+The plugin reports at three points in a session's life:
+
+| Hook | What it does |
+| --- | --- |
+| `SessionStart` | Reports the session as **live**, and sweeps for any earlier session that was never reported at all |
+| `Stop` | Updates the running numbers after each assistant turn |
+| `SessionEnd` | The final report, with the transcript |
+
+⚠️ **`SessionEnd` does not always fire.** It fires on `clear`, `logout`,
+`prompt_input_exit` and `other` — closing the terminal or killing the process
+fires **nothing**, and that session would never be reported at all. That is
+measured, not assumed, and the spool does not help: it replays POSTs that
+*failed*, not hooks that never *ran*. The `SessionStart` sweep is the fix, and
+ingest is idempotent on the session id, so re-reporting costs nothing.
+
+The sweep is bounded to recent transcripts by both count and age: the projects
+directory grows without limit, and a hook that read two years of history on every
+session start would be worse than the problem it solves.
+
+The transcript is sent **only on the final report**. A `Stop` hook fires after
+every assistant turn, and re-uploading tens of kilobytes each time would be pure
+waste — the server summarises once, when the transcript arrives.
+
+- `scripts/report-session.js` serves all three.
 - The script parses the session transcript (`transcript_path`), aggregates usage per model (deduped by message id, `<synthetic>` error turns excluded), and grabs any PR URL.
 
 **Duration is active time, not wall clock.** Gaps longer than five minutes are dropped, because the first and last transcript timestamps count a laptop left open overnight as work — one real session measured 7,237 wall-clock minutes against ~110 minutes of activity.

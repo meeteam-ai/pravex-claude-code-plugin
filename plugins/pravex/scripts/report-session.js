@@ -1,10 +1,21 @@
 #!/usr/bin/env node
 /**
- * Pravex SessionEnd hook.
+ * Pravex session-reporting hook. Runs at three points in a session's life.
+ *
+ *   --start      SessionStart: report this session as live, and sweep for any
+ *                previous session that was never reported at all
+ *   --progress   Stop: update the running numbers after an assistant turn
+ *   (none)       SessionEnd: the final report
  *
  * Reads the hook payload from stdin, aggregates the session transcript
  * (tokens per model, duration, files touched, tool errors, PR url) and
  * POSTs it to `POST /api/sessions` on the configured Pravex host.
+ *
+ * ⚠️ **`SessionEnd` does not always fire.** It fires on `clear`, `logout`,
+ * `prompt_input_exit` and `other` — closing the terminal or killing the process
+ * fires nothing, and that session would never be reported. Measured, not
+ * assumed. The `SessionStart` sweep is what covers it: ingest is idempotent on
+ * `externalId`, so re-reporting a session already sent is free.
  *
  * Config (first match wins):
  *   - env PRAVEX_API_KEY + PRAVEX_API_HOST
@@ -31,6 +42,23 @@ const SPOOL_DIR = path.join(CONFIG_DIR, 'spool');
 // A session ends offline more often than you would think — VPN down, laptop closed on a
 // plane. Ingest is idempotent on `externalId`, so replaying a spooled report is safe.
 const SPOOL_MAX = 50;
+/** Where Claude Code keeps transcripts, one directory per project. */
+const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
+/** Records which sessions have been reported, so the sweep does not re-send everything. */
+const REPORTED_FILE = path.join(CONFIG_DIR, 'reported.json');
+/**
+ * Transcripts the sweep will look at, newest first.
+ *
+ * Bounded because the directory grows without limit — a machine with two years
+ * of history should not read all of it on every session start. A session missed
+ * by more than this many transcripts ago is lost, which is the acceptable trade:
+ * the alternative is a hook that takes seconds to run.
+ */
+const SWEEP_MAX_FILES = 40;
+/** Sessions older than this are not worth sweeping for; they are nobody's current work. */
+const SWEEP_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+/** How many ids to remember. Enough to cover the sweep window several times over. */
+const REPORTED_MAX = 500;
 
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 // Claude Code writes placeholder assistant turns (API errors, interrupts) as `<synthetic>`
@@ -473,6 +501,155 @@ async function aggregate(transcriptPath, repo) {
   };
 }
 
+/**
+ * Session ids this machine has already reported, newest last.
+ *
+ * A file rather than asking the server, because the sweep runs on `SessionStart`
+ * — before anything else — and a network round trip there would delay every
+ * session's first prompt. Being wrong is cheap in one direction only: a forgotten
+ * id means one redundant POST, and ingest is idempotent.
+ */
+function readReported() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(REPORTED_FILE, 'utf8'));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberReported(sessionId) {
+  try {
+    const seen = readReported().filter((id) => id !== sessionId);
+    seen.push(sessionId);
+    fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
+    fs.writeFileSync(REPORTED_FILE, JSON.stringify(seen.slice(-REPORTED_MAX)), { mode: 0o600 });
+  } catch {
+    /* housekeeping; a failure here costs a redundant POST, nothing more */
+  }
+}
+
+/**
+ * Transcripts for sessions that were never reported.
+ *
+ * This is the fix for the silent data loss: `SessionEnd` does not fire when a
+ * terminal is closed or the process is killed, so those sessions are simply
+ * never sent. The spool does not help — it replays POSTs that *failed*, not
+ * hooks that never *ran*.
+ *
+ * Deliberately bounded by both count and age. The projects directory grows
+ * without limit, and a hook that reads two years of history on every session
+ * start would be worse than the problem it solves.
+ */
+function findUnreported(currentSessionId) {
+  const reported = new Set(readReported());
+  reported.add(currentSessionId);
+
+  let files = [];
+  try {
+    for (const project of fs.readdirSync(PROJECTS_DIR)) {
+      const dir = path.join(PROJECTS_DIR, project);
+      let entries;
+      try {
+        entries = fs.readdirSync(dir);
+      } catch {
+        continue;
+      }
+      for (const entry of entries) {
+        if (!entry.endsWith('.jsonl')) continue;
+        const full = path.join(dir, entry);
+        try {
+          const stat = fs.statSync(full);
+          files.push({ full, sessionId: entry.replace(/\.jsonl$/, ''), mtime: stat.mtimeMs });
+        } catch {
+          /* vanished between readdir and stat */
+        }
+      }
+    }
+  } catch {
+    return [];
+  }
+
+  const cutoff = Date.now() - SWEEP_MAX_AGE_MS;
+  files = files
+    .filter((f) => f.mtime >= cutoff && !reported.has(f.sessionId))
+    .sort((a, b) => b.mtime - a.mtime)
+    .slice(0, SWEEP_MAX_FILES);
+
+  return files;
+}
+
+/**
+ * Report sessions the machine never sent.
+ *
+ * ⚠️ Reported as **ended**, never active. They are finished by definition — the
+ * terminal they ran in is gone — and marking them live would put a permanent
+ * green dot on somebody's dashboard for a session nobody is working on.
+ *
+ * Errors are swallowed per session: one unreadable transcript must not stop the
+ * sweep, and none of this may delay the session the user is actually starting.
+ */
+async function sweepUnreported(apiHost, apiKey, currentSessionId, cwd) {
+  const candidates = findUnreported(currentSessionId);
+  if (!candidates.length) return;
+
+  log(`sweep: ${candidates.length} unreported session(s)`);
+  const repo = repoSlug(cwd);
+
+  for (const { full, sessionId } of candidates) {
+    try {
+      const agg = await aggregate(full, repo);
+      if (!agg.assistantMessages || !agg.startedAt) {
+        // An empty transcript is not a session. Remembered anyway so the sweep
+        // does not reconsider it on every start for the next week.
+        rememberReported(sessionId);
+        continue;
+      }
+      const res = await post(apiHost, apiKey, buildBody(sessionId, repo, agg, cwd, 'ended'));
+      if (res.status >= 200 && res.status < 300) {
+        rememberReported(sessionId);
+        log(`sweep: reported ${sessionId} -> ${res.status}`);
+      } else if (res.status < 500) {
+        // Our own bad request; it will never succeed on a replay either.
+        rememberReported(sessionId);
+        log(`sweep: ${sessionId} rejected -> ${res.status}`);
+      } else {
+        log(`sweep: ${sessionId} deferred -> ${res.status}`);
+      }
+    } catch (err) {
+      log(`sweep: ${sessionId} failed (${err && err.message})`);
+    }
+  }
+}
+
+/** The payload, shared by every report so the three hooks cannot drift apart. */
+function buildBody(sessionId, repo, agg, cwd, status) {
+  return {
+    externalId: sessionId,
+    title: agg.title || undefined,
+    repo,
+    branch: agg.branch || git(['rev-parse', '--abbrev-ref', 'HEAD'], cwd).replace(/^HEAD$/, ''),
+    startedAt: agg.startedAt,
+    endedAt: agg.endedAt,
+    // Sent explicitly so the server does not fall back to wall clock.
+    durationMinutes: agg.durationMinutes,
+    usage: agg.usage,
+    filesTouched: agg.filesTouched,
+    testsAdded: agg.testsAdded,
+    retryRate: agg.retryRate,
+    prUrl: agg.prUrl,
+    status,
+    // Extracted and gzipped here so attachments and hook output never leave the
+    // machine. Absent rather than null when it could not be packed — the metrics
+    // are still worth reporting on their own.
+    //
+    // ⚠️ Only on the final report. A `Stop` hook fires after every assistant
+    // turn, and re-uploading tens of kilobytes each time would be pure waste:
+    // the server only summarises once, when the transcript arrives.
+    transcript: status === 'ended' ? agg.transcript || undefined : undefined,
+  };
+}
+
 /** Park a report that could not be delivered, oldest dropped once the spool is full. */
 function spool(body) {
   try {
@@ -564,10 +741,18 @@ function post(apiHost, apiKey, body) {
   });
 }
 
+/** Which point in the session's life this invocation is. */
+function modeFrom(argv) {
+  if (argv.includes('--start')) return 'start';
+  if (argv.includes('--progress')) return 'progress';
+  return 'end';
+}
+
 async function main() {
+  const mode = modeFrom(process.argv.slice(2));
   const { apiKey, apiHost } = loadConfig();
   if (!apiKey || !apiHost) {
-    log('skipped: no apiKey/apiHost (run /pravex:setup)');
+    log(`skipped (${mode}): no apiKey/apiHost (run /pravex:login)`);
     return;
   }
 
@@ -575,64 +760,69 @@ async function main() {
   try {
     input = JSON.parse((await readStdin()) || '{}');
   } catch {
-    log('skipped: could not parse hook stdin');
+    log(`skipped (${mode}): could not parse hook stdin`);
     return;
   }
 
   const sessionId = input.session_id;
   const transcriptPath = input.transcript_path && input.transcript_path.replace(/^~/, os.homedir());
   const cwd = input.cwd || process.cwd();
-  if (!sessionId || !transcriptPath || !fs.existsSync(transcriptPath)) {
-    log(`skipped: missing session_id or transcript (${transcriptPath})`);
+  if (!sessionId) {
+    log(`skipped (${mode}): missing session_id`);
     return;
   }
 
   // Resolved before aggregating: it is what a pull-request URL has to match.
   const repo = repoSlug(cwd);
 
+  // The sweep runs first and only on start. It is the fix for sessions whose
+  // terminal was closed, which `SessionEnd` never reported at all.
+  if (mode === 'start') {
+    await sweepUnreported(apiHost, apiKey, sessionId, cwd);
+  }
+
+  if (!transcriptPath || !fs.existsSync(transcriptPath)) {
+    // Normal on `SessionStart`: the file does not exist until the first turn.
+    // There is nothing to report yet, and the `Stop` hook will be along shortly.
+    log(`skipped (${mode}): no transcript at ${transcriptPath}`);
+    return;
+  }
+
   const agg = await aggregate(transcriptPath, repo);
   if (!agg.assistantMessages || !agg.startedAt) {
-    log(`skipped ${sessionId}: empty transcript`);
+    log(`skipped (${mode}) ${sessionId}: empty transcript`);
     return;
   }
   if (agg.prUrlsRejected) {
     log(`${sessionId}: ignored ${agg.prUrlsRejected} pull-request url(s) from outside ${repo}`);
   }
 
-  const body = {
-    externalId: sessionId,
-    title: agg.title || undefined,
-    repo,
-    branch: agg.branch || git(['rev-parse', '--abbrev-ref', 'HEAD'], cwd).replace(/^HEAD$/, ''),
-    startedAt: agg.startedAt,
-    endedAt: agg.endedAt,
-    // Sent explicitly so the server does not fall back to wall clock.
-    durationMinutes: agg.durationMinutes,
-    usage: agg.usage,
-    filesTouched: agg.filesTouched,
-    testsAdded: agg.testsAdded,
-    retryRate: agg.retryRate,
-    prUrl: agg.prUrl,
-    // Extracted and gzipped here so attachments and hook output never leave the
-    // machine. Absent rather than null when it could not be packed — the metrics
-    // are still worth reporting on their own.
-    transcript: agg.transcript || undefined,
-  };
+  const body = buildBody(sessionId, repo, agg, cwd, mode === 'end' ? 'ended' : 'active');
 
-  await flushSpool(apiHost, apiKey);
+  // Only on the final report. Replaying the spool on every `Stop` would retry a
+  // dead host once per assistant turn, which is neither kind nor useful.
+  if (mode === 'end') {
+    await flushSpool(apiHost, apiKey);
+  }
 
   try {
     const res = await post(apiHost, apiKey, body);
     if (res.status >= 200 && res.status < 300) {
-      log(`ok ${sessionId} -> ${res.status} ${res.body.slice(0, 200)}`);
+      log(`ok (${mode}) ${sessionId} -> ${res.status} ${res.body.slice(0, 200)}`);
+      if (mode === 'end') rememberReported(sessionId);
     } else if (res.status >= 500) {
-      // The server's problem, so it is worth replaying. A 4xx is ours and never will be.
-      log(`error ${sessionId} -> ${res.status} ${res.body.slice(0, 500)}${spool(body) ? ' (spooled)' : ''}`);
+      // The server's problem, so it is worth replaying. A 4xx is ours and never
+      // will be. Progress reports are NOT spooled: the next one is one assistant
+      // turn away and carries the same numbers, only fresher, so spooling them
+      // would fill the spool with stale copies of a session still running.
+      const spooled = mode === 'end' && spool(body) ? ' (spooled)' : '';
+      log(`error (${mode}) ${sessionId} -> ${res.status} ${res.body.slice(0, 500)}${spooled}`);
     } else {
-      log(`error ${sessionId} -> ${res.status} ${res.body.slice(0, 500)}`);
+      log(`error (${mode}) ${sessionId} -> ${res.status} ${res.body.slice(0, 500)}`);
     }
   } catch (err) {
-    log(`error ${sessionId} -> ${err && err.message}${spool(body) ? ' (spooled)' : ''}`);
+    const spooled = mode === 'end' && spool(body) ? ' (spooled)' : '';
+    log(`error (${mode}) ${sessionId} -> ${err && err.message}${spooled}`);
   }
 }
 
@@ -646,6 +836,11 @@ if (require.main === module) {
 
 module.exports = {
   SECRET_RE,
+  buildBody,
+  findUnreported,
+  modeFrom,
+  readReported,
+  rememberReported,
   TRANSCRIPT_FORMAT,
   TRANSCRIPT_MAX_GZIP,
   TRANSCRIPT_MAX_TEXT,
