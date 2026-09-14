@@ -9,11 +9,22 @@ request it led to.
 ```
 /plugin marketplace add meeteam-ai/pravex-claude-code-plugin
 /plugin install pravex@pravex
-/pravex:setup --host https://pravex.tenox.ai --key pvx_…
+/pravex:login
 ```
 
-Create the key on the **Install** page of your Pravex workspace. It is shown once;
-Pravex stores only a hash of it. `/pravex:status` checks the connection.
+`/pravex:login` prints a short code and opens your browser. Approve it on a page
+you are already signed in to, and the plugin collects its credential itself.
+
+**Nothing is copied and nothing is pasted.** This is the OAuth 2.0 Device
+Authorization Grant (RFC 8628), the flow `gh auth login` and `docker login` use,
+and it matters here more than most places: a pasted key lands in the clipboard,
+in terminal scrollback, and in the session transcript **this plugin uploads**.
+One real key was burned exactly that way.
+
+`--api-url` points it elsewhere (`/pravex:login --api-url http://localhost:3000`).
+`/pravex:status` says whether this machine is connected, and the **Install** page
+disconnects it — each login is its own connection, so one machine can be cut off
+without touching the others.
 
 ## What it sends
 
@@ -53,11 +64,12 @@ logged to `~/.pravex/last-report.log`.
 plugins/pravex/
 ├── .claude-plugin/plugin.json
 ├── hooks/hooks.json               SessionEnd → scripts/report-session.js
-├── commands/{setup,status}.md      /pravex:setup, /pravex:status
+├── commands/{login,status}.md      /pravex:login, /pravex:status
 └── scripts/
     ├── report-session.js           reads the transcript, posts the session
-    ├── report-session.test.js      the test suite
-    └── setup.js                    writes ~/.pravex/config.json
+    ├── report-session.test.js
+    ├── login.js                    the device flow; writes ~/.pravex/config.json
+    └── login.test.js
 ```
 
 ## Development
