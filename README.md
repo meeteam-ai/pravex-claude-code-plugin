@@ -20,7 +20,7 @@ Create and distribute Claude Code plugins for your team or community. This GitHu
 |-----------|-------------|
 | **Marketplace Configuration** | `.claude-plugin/marketplace.json` following the [official schema](https://code.claude.com/docs/en/plugin-marketplaces#marketplace-schema) |
 | **Plugin Development Toolkit** | `plugin-development` plugin with 7 slash commands, a `plugin-authoring` skill for ambient guidance, and a reviewer agent |
-| **Example Plugin** | `hello-world` plugin demonstrating proper structure and best practices |
+| **Pravex Plugin** | `pravex` — reports each finished Claude Code session to your Pravex workspace |
 | **CI/CD Workflows** | GitHub Actions for automated plugin validation on every push and PR |
 | **Documentation** | Complete guides for plugins, hooks, settings, commands, skills, and sub-agents |
 
@@ -113,7 +113,7 @@ The `plugin-development` plugin provides these commands:
 │   ├── skills.md                 # Agent skills guide
 │   └── sub-agents.md             # Sub-agent system
 └── plugins/
-    ├── hello-world/              # Example plugin
+    ├── pravex/                   # The Pravex session reporter
     └── plugin-development/       # Development toolkit
 ```
 
@@ -163,7 +163,7 @@ claude
 /plugin marketplace add .
 
 # Install and test a plugin
-/plugin install hello-world@my-team-marketplace
+/plugin install pravex@pravex
 /hello World
 ```
 
@@ -284,16 +284,18 @@ Add to `.claude-plugin/marketplace.json`:
 - [Plugins Reference](https://code.claude.com/docs/en/plugins-reference) — Technical specifications
 - [Slash Commands](https://code.claude.com/docs/en/slash-commands) — Command development
 
-## Example Plugins
+## Plugins
 
-### hello-world
+### pravex
 
-A minimal example demonstrating proper plugin structure:
+Reports each finished Claude Code session to your Pravex workspace — model mix,
+tokens, cost, active duration, files touched, tests added, tool-error rate and PR
+link. See [`plugins/pravex/README.md`](plugins/pravex/README.md).
 
 ```bash
-/plugin install hello-world@my-team-marketplace
-/hello World
-# Output: Hello, World! 👋
+/plugin install pravex@pravex
+/pravex:setup --host https://pravex.tenox.ai --key 'pvx_…'
+/pravex:status
 ```
 
 ### plugin-development

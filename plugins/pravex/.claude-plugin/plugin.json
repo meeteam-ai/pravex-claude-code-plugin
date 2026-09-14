@@ -1,0 +1,13 @@
+{
+  "name": "pravex",
+  "version": "0.1.0",
+  "description": "Reports every Claude Code session (model, tokens, cost, duration, files, PR) to your Pravex workspace",
+  "author": {
+    "name": "Meeteam",
+    "url": "https://github.com/meeteam-ai"
+  },
+  "homepage": "https://github.com/meeteam-ai/pravex-claude-code-plugin",
+  "repository": "https://github.com/meeteam-ai/pravex-claude-code-plugin",
+  "license": "MIT",
+  "keywords": ["pravex", "analytics", "usage", "cost", "telemetry"]
+}
