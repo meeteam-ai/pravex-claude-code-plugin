@@ -59,6 +59,19 @@ const SWEEP_MAX_FILES = 40;
 const SWEEP_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 /** How many ids to remember. Enough to cover the sweep window several times over. */
 const REPORTED_MAX = 500;
+/**
+ * Wall-clock budget for the whole sweep.
+ *
+ * This runs on `SessionStart`, before the user's first prompt, and the hook is
+ * killed at 30 seconds. Measured on a real machine the first sweep after
+ * upgrading read 460 MB across 40 transcripts in 2.7s — comfortable, but that is
+ * one machine's numbers on one day, and the POSTs that follow are sequential and
+ * as slow as the network is.
+ *
+ * So the bound is stated rather than inferred. Whatever is left over is picked up
+ * by the next session start, because each reported id is recorded as it succeeds.
+ */
+const SWEEP_BUDGET_MS = 10_000;
 
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 // Claude Code writes placeholder assistant turns (API errors, interrupts) as `<synthetic>`
@@ -595,8 +608,16 @@ async function sweepUnreported(apiHost, apiKey, currentSessionId, cwd) {
 
   log(`sweep: ${candidates.length} unreported session(s)`);
   const repo = repoSlug(cwd);
+  const deadline = Date.now() + SWEEP_BUDGET_MS;
 
-  for (const { full, sessionId } of candidates) {
+  for (let index = 0; index < candidates.length; index += 1) {
+    const { full, sessionId } = candidates[index];
+    // Checked before each session rather than after: stopping here leaves the
+    // rest for the next session start, and being killed mid-POST does not.
+    if (Date.now() > deadline) {
+      log(`sweep: out of time after ${index} of ${candidates.length}; the rest wait for the next session`);
+      return;
+    }
     try {
       const agg = await aggregate(full, repo);
       if (!agg.assistantMessages || !agg.startedAt) {
