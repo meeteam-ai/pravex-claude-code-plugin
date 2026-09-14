@@ -20,9 +20,17 @@ function parseArgs(argv) {
   const out = {};
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--host') out.host = argv[++i];
-    else if (a === '--key') out.key = argv[++i];
-    else if (a === '--status') out.status = true;
+    if (a === '--host' || a === '--key') {
+      const value = argv[i + 1];
+      // Without this, `setup.js --host` (no value) silently reuses the stored config
+      // and reports success for a command that set nothing.
+      if (value === undefined || value.startsWith('--')) {
+        console.error(`Missing value for ${a}.`);
+        process.exit(1);
+      }
+      out[a === '--host' ? 'host' : 'key'] = value;
+      i += 1;
+    } else if (a === '--status') out.status = true;
   }
   return out;
 }
@@ -37,7 +45,8 @@ function readConfig() {
 
 function get(apiHost, apiKey, route) {
   return new Promise((resolve, reject) => {
-    const url = new URL(route, apiHost);
+    const url = new URL(apiHost);
+    url.pathname = `${url.pathname.replace(/\/+$/, '')}${route}`;
     const client = url.protocol === 'https:' ? https : http;
     const req = client.get(
       url,
@@ -56,7 +65,12 @@ function get(apiHost, apiKey, route) {
 async function verify(apiHost, apiKey) {
   const res = await get(apiHost, apiKey, '/api/me');
   if (res.status !== 200) throw new Error(`HTTP ${res.status}: ${res.body.slice(0, 200)}`);
-  const json = JSON.parse(res.body);
+  let json;
+  try {
+    json = JSON.parse(res.body);
+  } catch {
+    throw new Error(`${apiHost} did not return JSON — is that the Pravex API host?`);
+  }
   return json.result || json;
 }
 
@@ -73,7 +87,13 @@ async function main() {
       console.log('Pravex: not configured. Run /pravex:setup');
       return;
     }
-    const me = await verify(current.apiHost, current.apiKey);
+    let me;
+    try {
+      me = await verify(current.apiHost, current.apiKey);
+    } catch (err) {
+      console.error(`Pravex: not connected to ${current.apiHost} — ${err.message}`);
+      process.exit(1);
+    }
     console.log(`Pravex: connected to ${current.apiHost} as ${me.email} (${me.orgName})`);
     return;
   }
@@ -90,10 +110,13 @@ async function main() {
   }
 
   const me = await verify(host, key);
-  fs.mkdirSync(CONFIG_DIR, { recursive: true });
+  fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
   fs.writeFileSync(CONFIG_FILE, JSON.stringify({ apiHost: host, apiKey: key }, null, 2) + '\n', {
     mode: 0o600,
   });
+  // `mode` only applies when the file is created, so an existing looser file would keep
+  // its permissions and leave the API key readable by everyone on the machine.
+  fs.chmodSync(CONFIG_FILE, 0o600);
   console.log(`Pravex: configured. Sessions will be reported as ${me.email} (${me.orgName}).`);
   console.log(`Config: ${CONFIG_FILE}`);
 }
