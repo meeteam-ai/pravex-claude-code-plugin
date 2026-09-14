@@ -249,3 +249,93 @@ jobs:
           fi
 
           echo "✓ No duplicate plugin names"
+
+  pravex-scripts:
+    name: Pravex scripts — parse, lint and smoke test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      # The marketplace checks above validate JSON only. The hook is the part that
+      # runs on a developer's machine at the end of every session, so a syntax
+      # error here is a broken SessionEnd for everyone who installed it.
+      - name: Parse both scripts
+        run: |
+          node --check plugins/pravex/scripts/report-session.js
+          node --check plugins/pravex/scripts/setup.js
+
+      # Zero dependencies is a deliberate property of this plugin: it runs inside
+      # someone else's session, so it must not pull anything at install time.
+      - name: Assert the hook has no dependencies
+        run: |
+          # grep -E has no lookahead, so list what is required and subtract the allowlist.
+          bad=$(grep -ohE "require\('[^']+'\)" plugins/pravex/scripts/*.js \
+                | sed -E "s/require\('(.*)'\)/\1/" | sort -u \
+                | grep -vxE "fs|os|path|http|https|readline|child_process|url" || true)
+          if [ -n "$bad" ]; then
+            echo "✗ non-stdlib require() found — the hook must stay dependency-free:"
+            echo "$bad"
+            exit 1
+          fi
+          echo "✓ stdlib only"
+
+      - name: Smoke test the hook end to end
+        run: |
+          # A capture server standing in for the Pravex API, and a two-line
+          # transcript, so the hook's happy path is exercised on every push.
+          cat > /tmp/capture.js <<'EOF'
+          const http = require('http');
+          http.createServer((req, res) => {
+            let b = ''; req.on('data', c => (b += c));
+            req.on('end', () => {
+              require('fs').writeFileSync('/tmp/payload.json', b || '{}');
+              res.writeHead(201, { 'content-type': 'application/json' });
+              res.end(JSON.stringify({ status: 201, result: { created: true } }));
+            });
+          }).listen(3999);
+          EOF
+          node /tmp/capture.js & sleep 1
+
+          TS=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
+          cat > /tmp/t.jsonl <<EOF
+          {"type":"assistant","timestamp":"$TS","gitBranch":"main","message":{"id":"m1","model":"claude-opus-5","usage":{"input_tokens":10,"output_tokens":5,"cache_read_input_tokens":900},"content":[{"type":"tool_use","id":"t1","name":"Write","input":{"file_path":"src/a.ts"}}]}}
+          {"type":"user","timestamp":"$TS","message":{"content":[{"type":"tool_result","tool_use_id":"t1","is_error":false,"content":"ok"}]}}
+          EOF
+
+          echo "{\"session_id\":\"ci\",\"transcript_path\":\"/tmp/t.jsonl\",\"cwd\":\"$PWD\"}" \
+            | PRAVEX_API_HOST=http://localhost:3999 PRAVEX_API_KEY=pvx_ci \
+              node plugins/pravex/scripts/report-session.js
+          sleep 1
+
+          node -e "
+            const p = require('/tmp/payload.json');
+            const fail = (m) => { console.error('✗ ' + m); process.exit(1); };
+            if (p.externalId !== 'ci') fail('externalId not reported');
+            if (p.filesTouched !== 1) fail('a confirmed edit was not counted: ' + p.filesTouched);
+            if (typeof p.durationMinutes !== 'number') fail('durationMinutes missing');
+            if (!p.usage || !p.usage.length) fail('usage missing');
+            if (p.usage.some((u) => u.model === '<synthetic>')) fail('synthetic model leaked');
+            console.log('✓ hook reported', JSON.stringify(p.usage));
+          "
+
+      - name: Assert a pasted key never ships as a title
+        run: |
+          # The highest-severity finding from review: with no ai-title the title
+          # falls back to the user's first prompt, which is routinely a credential.
+          node -e "
+            const src = require('fs').readFileSync('plugins/pravex/scripts/report-session.js', 'utf8');
+            const re = eval(src.match(/const SECRET_RE =\s*([\s\S]*?);/)[1]);
+            const leak = 're_6iKUvs2i_K1JowUUKD4XVTBRPfAjuQtnA key';
+            const masked = leak.replace(re, '[redacted]');
+            if (masked.includes('6iKUvs2i')) { console.error('✗ key survived redaction'); process.exit(1); }
+            re.lastIndex = 0;
+            const keep = 'Bump actions/checkout from 6 to 7';
+            if (keep.replace(re, '[redacted]') !== keep) { console.error('✗ ordinary title was redacted'); process.exit(1); }
+            console.log('✓ redaction masks keys, keeps titles');
+          "
