@@ -132,6 +132,50 @@ function collectPrUrls(str, into) {
 }
 
 /**
+ * `owner/name` out of a pull-request URL, lowercased.
+ *
+ * Works off the tail of the path rather than the host, so all three forges are one
+ * code path: strip the `/pull/123`, `/merge_requests/9`, `/pull-requests/4` suffix
+ * and GitLab's `/-` separator, then take the last two segments. A nested GitLab
+ * subgroup yields `subgroup/name`, which is still specific enough to match on.
+ */
+function prUrlSlug(url) {
+  try {
+    const segments = new URL(url).pathname
+      .replace(/\/(?:pull|merge_requests|pull-requests)\/\d+.*$/, '')
+      .replace(/\/-$/, '')
+      .split('/')
+      .filter(Boolean);
+    if (segments.length < 2) return '';
+    return segments.slice(-2).join('/').toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Does this pull-request URL belong to the repo the session was worked in?
+ *
+ * PR URLs are collected from assistant text and tool output, and tool output
+ * includes things like a browser's open-tab list. Measured against a real
+ * transcript, that reported a pull request from an unrelated repo belonging to a
+ * different organisation — it was simply open in another tab — and the dashboard
+ * would have shown it to every admin as the PR for this session.
+ *
+ * So a URL has to name the session's own repo to be believed. When the repo cannot
+ * be determined (no `origin` remote, so `repoSlug` falls back to the directory
+ * name) only the repository name is compared, and a URL is dropped rather than
+ * guessed at.
+ */
+function prUrlMatchesRepo(url, repo) {
+  const slug = prUrlSlug(url);
+  if (!slug || !repo) return false;
+  const own = repo.toLowerCase().replace(/\.git$/, '');
+  if (own.includes('/')) return slug === own.split('/').slice(-2).join('/');
+  return slug.split('/')[1] === own;
+}
+
+/**
  * Minutes the session was actually being worked on.
  *
  * Wall clock between the first and last transcript line counts a laptop left open
@@ -181,7 +225,11 @@ function redact(str) {
   return str.replace(SECRET_RE, '[redacted]');
 }
 
-async function aggregate(transcriptPath) {
+/**
+ * @param repo `owner/name` for the working directory, used to reject pull-request
+ *   URLs that belong to some other repository. See `prUrlMatchesRepo`.
+ */
+async function aggregate(transcriptPath, repo) {
   const byMessage = new Map(); // message.id -> { model, usage }
   // tool_use.id -> file path, resolved to a real edit only once its result says it
   // succeeded. A denied or failed edit never touched the file.
@@ -290,7 +338,10 @@ async function aggregate(transcriptPath) {
   const testsAdded = [...files].filter((f) => TEST_FILE_RE.test(f)).length;
   const retryRate = toolUses ? Math.round((toolErrors / toolUses) * 1000) / 10 : 0;
   const title = redact((aiTitle || firstPrompt || '').replace(/\s+/g, ' ')).slice(0, 120);
-  const prUrl = prUrls.size ? [...prUrls].pop() : undefined;
+  // Last one wins, but only among URLs that actually name this repo.
+  const ownPrUrls = [...prUrls].filter((u) => prUrlMatchesRepo(u, repo));
+  const prUrl = ownPrUrls.length ? ownPrUrls[ownPrUrls.length - 1] : undefined;
+  const prUrlsRejected = prUrls.size - ownPrUrls.length;
 
   return {
     usage: [...usageByModel.values()],
@@ -302,6 +353,7 @@ async function aggregate(transcriptPath) {
     testsAdded,
     retryRate,
     prUrl,
+    prUrlsRejected,
     durationMinutes: activeMinutes(stamps),
     filesTouchedFromShell: bashFiles.size,
     assistantMessages: byMessage.size,
@@ -422,16 +474,22 @@ async function main() {
     return;
   }
 
-  const agg = await aggregate(transcriptPath);
+  // Resolved before aggregating: it is what a pull-request URL has to match.
+  const repo = repoSlug(cwd);
+
+  const agg = await aggregate(transcriptPath, repo);
   if (!agg.assistantMessages || !agg.startedAt) {
     log(`skipped ${sessionId}: empty transcript`);
     return;
+  }
+  if (agg.prUrlsRejected) {
+    log(`${sessionId}: ignored ${agg.prUrlsRejected} pull-request url(s) from outside ${repo}`);
   }
 
   const body = {
     externalId: sessionId,
     title: agg.title || undefined,
-    repo: repoSlug(cwd),
+    repo,
     branch: agg.branch || git(['rev-parse', '--abbrev-ref', 'HEAD'], cwd).replace(/^HEAD$/, ''),
     startedAt: agg.startedAt,
     endedAt: agg.endedAt,
