@@ -21,6 +21,7 @@ const path = require('path');
 const http = require('http');
 const https = require('https');
 const readline = require('readline');
+const zlib = require('zlib');
 const { execFileSync } = require('child_process');
 
 const CONFIG_DIR = path.join(os.homedir(), '.pravex');
@@ -62,6 +63,24 @@ const LOOKS_LIKE_PATH = /^(?:\.{0,2}\/|~\/|[A-Za-z0-9._-]+\/)[A-Za-z0-9._\/-]+$|
 // `node -e`, `python -c` and friends carry their own code, and a `>` inside that code is
 // not a shell redirection. Their bodies are unreadable from here, so skip them whole.
 const INLINE_SCRIPT = /\b(?:node|python3?|ruby|perl|deno|bun|osascript)\s+-(?:e|c)\b/;
+/**
+ * Version of the extracted-transcript format. Bumped when its shape changes, so
+ * the server can read an older plugin's upload instead of guessing.
+ */
+const TRANSCRIPT_FORMAT = 1;
+/** Longest single message kept. Past this a turn is context, not content. */
+const TRANSCRIPT_MAX_TEXT = 4000;
+/**
+ * Ceiling on the gzipped upload, before base64.
+ *
+ * Measured across 358 real transcripts the worst single file was 49.3 MB raw,
+ * 141 KB extracted, **50 KB gzipped** — so 1 MB is roughly twenty times the
+ * worst case seen. It exists for the transcript nobody has measured yet: without
+ * it one pathological session could post a body large enough to be refused, and
+ * the whole report would be lost rather than the transcript alone.
+ */
+const TRANSCRIPT_MAX_GZIP = 1024 * 1024;
+
 const PR_URL_RE =
   /https?:\/\/(?:www\.)?(?:github\.com\/[^\s"'<>)]+\/pull\/\d+|gitlab\.com\/[^\s"'<>)]+\/merge_requests\/\d+|bitbucket\.org\/[^\s"'<>)]+\/pull-requests\/\d+)/g;
 
@@ -226,6 +245,93 @@ function redact(str) {
 }
 
 /**
+ * Keep the prompts and the replies; throw away everything else.
+ *
+ * Measured across 358 real transcripts (1.4 GB): `attachment` lines are **79.9%**
+ * of the bytes — `hook_success` alone is 64% of a file — and most of what is left
+ * under `user` is tool *output* rather than anything a person typed. Keeping only
+ * user prompts, assistant prose and the tool **names** comes to 0.38% of raw, and
+ * 0.13% gzipped.
+ *
+ * That ratio is the whole reason this is cheap enough to do at all, and it is also
+ * what keeps attachments and hook output — the two things most likely to contain
+ * somebody's environment — from ever leaving the machine.
+ *
+ * Tool *names*, never arguments or results: "it ran Edit and Bash" is what a
+ * summary needs, and a `Bash` command line or a `Read` result is exactly the sort
+ * of thing that carries a path, a hostname or a token.
+ */
+function extractTurn(entry) {
+  const msg = entry.message;
+  if (!msg || typeof msg !== 'object') return null;
+
+  if (entry.type === 'user') {
+    if (entry.isMeta) return null;
+    const text = textOf(msg.content).trim();
+    // A tool result reduces to empty here, which is what drops it.
+    if (!text || text.startsWith('<')) return null;
+    return { role: 'user', at: entry.timestamp, text: clampText(text) };
+  }
+
+  if (entry.type === 'assistant') {
+    if (!Array.isArray(msg.content)) return null;
+    const text = [];
+    const tools = [];
+    for (const block of msg.content) {
+      if (!block) continue;
+      if (block.type === 'text' && block.text) text.push(block.text);
+      else if (block.type === 'tool_use' && block.name) tools.push(block.name);
+    }
+    const joined = text.join('\n').trim();
+    if (!joined && !tools.length) return null;
+    const turn = { role: 'assistant', at: entry.timestamp };
+    if (joined) turn.text = clampText(joined);
+    if (tools.length) turn.tools = tools;
+    return turn;
+  }
+
+  return null;
+}
+
+/**
+ * Redacted, then cut.
+ *
+ * In that order on purpose: truncating first could leave the front half of a key
+ * in place, and half a token is still most of a token.
+ */
+function clampText(text) {
+  const safe = redact(text);
+  return safe.length > TRANSCRIPT_MAX_TEXT ? `${safe.slice(0, TRANSCRIPT_MAX_TEXT)}…` : safe;
+}
+
+/**
+ * Gzip the extracted turns, dropping from the **front** if the result is too big.
+ *
+ * The front, because the end of a session is what a summary is about — what was
+ * decided, what was built, what broke. The opening of a long session is setup.
+ *
+ * Returns null rather than throwing: a transcript that cannot be packed must not
+ * cost the session its metrics, which are the part somebody is looking at a
+ * dashboard for.
+ */
+function packTranscript(turns) {
+  try {
+    let kept = turns;
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const gz = zlib.gzipSync(Buffer.from(JSON.stringify({ v: TRANSCRIPT_FORMAT, turns: kept }), 'utf8'), { level: 9 });
+      if (gz.length <= TRANSCRIPT_MAX_GZIP) {
+        return { encoding: 'gzip+base64', format: TRANSCRIPT_FORMAT, turns: kept.length, dropped: turns.length - kept.length, data: gz.toString('base64') };
+      }
+      if (kept.length <= 1) return null;
+      kept = kept.slice(Math.ceil(kept.length / 2));
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * @param repo `owner/name` for the working directory, used to reject pull-request
  *   URLs that belong to some other repository. See `prUrlMatchesRepo`.
  */
@@ -238,6 +344,9 @@ async function aggregate(transcriptPath, repo) {
   const bashFiles = new Set();
   const prUrls = new Set();
   const stamps = [];
+  // Collected in this same pass. The transcript can be 50 MB; reading it twice
+  // to extract what a summary needs would double the I/O for no benefit.
+  const turns = [];
   let toolUses = 0;
   let toolErrors = 0;
   let first = null;
@@ -314,6 +423,9 @@ async function aggregate(transcriptPath, repo) {
         if (t && !t.startsWith('<') && !t.startsWith('/')) firstPrompt = t;
       }
     }
+
+    const turn = extractTurn(o);
+    if (turn) turns.push(turn);
   }
 
   const usageByModel = new Map();
@@ -357,6 +469,7 @@ async function aggregate(transcriptPath, repo) {
     durationMinutes: activeMinutes(stamps),
     filesTouchedFromShell: bashFiles.size,
     assistantMessages: byMessage.size,
+    transcript: packTranscript(turns),
   };
 }
 
@@ -500,6 +613,10 @@ async function main() {
     testsAdded: agg.testsAdded,
     retryRate: agg.retryRate,
     prUrl: agg.prUrl,
+    // Extracted and gzipped here so attachments and hook output never leave the
+    // machine. Absent rather than null when it could not be packed — the metrics
+    // are still worth reporting on their own.
+    transcript: agg.transcript || undefined,
   };
 
   await flushSpool(apiHost, apiKey);
@@ -529,9 +646,15 @@ if (require.main === module) {
 
 module.exports = {
   SECRET_RE,
+  TRANSCRIPT_FORMAT,
+  TRANSCRIPT_MAX_GZIP,
+  TRANSCRIPT_MAX_TEXT,
   activeMinutes,
   aggregate,
   bashWrites,
+  clampText,
+  extractTurn,
+  packTranscript,
   collectPrUrls,
   prUrlMatchesRepo,
   prUrlSlug,
