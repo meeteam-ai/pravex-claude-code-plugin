@@ -81,7 +81,7 @@ function segmentFor(state, { color = true, update = false } = {}) {
   else if (state === 'incognito') segment = paint('magenta', '◌ Pravex incognito');
   else segment = paint('green', '● Pravex');
   // The full command is in the session's start message; the bar only has room to say so.
-  return update ? `${segment} ${paint('yellow', '⬆ update')}` : segment;
+  return update ? `${segment} ${paint('yellow', '⬆ /pravex:update')}` : segment;
 }
 
 /** Run the status line that was there before, with the same stdin. Empty when there was none or it failed. */

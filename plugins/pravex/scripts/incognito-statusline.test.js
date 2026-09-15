@@ -280,7 +280,7 @@ test('the start message and the status line both say when an update is waiting',
   const { startMessage } = require('./report-session.js');
   assert.match(
     startMessage({ configured: true, source: 'startup', update: { available: true, installed: '0.4.0', latest: '0.5.0' } }),
-    /0\.4\.0 → 0\.5\.0.*claude plugin update pravex@pravex/
+    /0\.4\.0 → 0\.5\.0.*\/pravex:update/
   );
 
   const home = tempHome();
@@ -288,7 +288,7 @@ test('the start message and the status line both say when an update is waiting',
   fs.writeFileSync(path.join(home, '.pravex', 'update-check.json'), JSON.stringify({ installed: '0.4.0', latest: '0.5.0' }));
   const env = envFor(home, { PRAVEX_API_KEY: 'pvx_test', PRAVEX_API_HOST: 'http://127.0.0.1:1' });
   const out = (await run(STATUSLINE, [], { input: '{"session_id":"s"}', env })).stdout.replace(/\x1b\[[0-9;]*m/g, '').trim();
-  assert.strictEqual(out, '● Pravex ⬆ update');
+  assert.strictEqual(out, '● Pravex ⬆ /pravex:update');
 });
 
 test('alone, the status line still shows the model and context use', async () => {
@@ -306,4 +306,54 @@ test('with nothing to show but Pravex, it prints just the segment', async () => 
   const env = envFor(home, { PRAVEX_API_KEY: 'pvx_test', PRAVEX_API_HOST: 'http://127.0.0.1:1' });
   const out = (await run(STATUSLINE, [], { input: '{"session_id":"s"}', env })).stdout.replace(/\x1b\[[0-9;]*m/g, '').trim();
   assert.strictEqual(out, '● Pravex');
+});
+
+function fakeClaude(dir, updateOutput, exitCode = 0) {
+  const bin = path.join(dir, 'claude');
+  const log = path.join(dir, 'calls.log');
+  fs.writeFileSync(
+    bin,
+    `#!/usr/bin/env node\nrequire('fs').appendFileSync(${JSON.stringify(log)}, process.argv.slice(2).join(' ') + '\\n');\n` +
+      `if (process.argv[3] === 'update' && process.argv[2] === 'plugin') { process.stdout.write(${JSON.stringify(updateOutput)}); process.exit(${exitCode}); }\n`,
+    { mode: 0o755 }
+  );
+  return { bin, log };
+}
+
+test('/pravex:update refreshes the marketplace, then updates, then clears the cache', async () => {
+  const home = tempHome();
+  fs.mkdirSync(path.join(home, '.pravex'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.pravex', 'update-check.json'), '{"installed":"0.4.0","latest":"0.5.0"}');
+  const { bin, log } = fakeClaude(home, 'Plugin "pravex" updated from 0.4.0 to 0.5.0 for scope user.');
+
+  const { code, stdout } = await run(path.join(__dirname, 'update.js'), [], { env: envFor(home, { PRAVEX_CLAUDE_BIN: bin }) });
+
+  assert.strictEqual(code, 0);
+  assert.deepStrictEqual(fs.readFileSync(log, 'utf8').trim().split('\n'), ['plugin marketplace update pravex', 'plugin update pravex@pravex']);
+  assert.match(stdout, /\/reload-plugins/);
+  assert.ok(!fs.existsSync(path.join(home, '.pravex', 'update-check.json')));
+});
+
+test('/pravex:update says so when there is nothing to update', async () => {
+  const home = tempHome();
+  const { bin } = fakeClaude(home, 'pravex is already at the latest version (0.5.1).');
+  const { stdout } = await run(path.join(__dirname, 'update.js'), [], { env: envFor(home, { PRAVEX_CLAUDE_BIN: bin }) });
+  assert.match(stdout, /already up to date/);
+});
+
+test('/pravex:update reports a failed update and exits non-zero', async () => {
+  const home = tempHome();
+  const { bin } = fakeClaude(home, 'network down', 1);
+  const { code, stdout } = await run(path.join(__dirname, 'update.js'), [], { env: envFor(home, { PRAVEX_CLAUDE_BIN: bin }) });
+  assert.strictEqual(code, 1);
+  assert.match(stdout, /update failed[\s\S]*network down/);
+});
+
+test('/pravex:update explains what to run when claude is not on PATH', async () => {
+  const home = tempHome();
+  const { code, stdout } = await run(path.join(__dirname, 'update.js'), [], {
+    env: envFor(home, { PRAVEX_CLAUDE_BIN: path.join(home, 'does-not-exist') }),
+  });
+  assert.strictEqual(code, 1);
+  assert.match(stdout, /claude plugin update pravex@pravex/);
 });

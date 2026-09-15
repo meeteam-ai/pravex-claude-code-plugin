@@ -233,7 +233,7 @@ function startMessage({ configured, incognito, source, update }) {
   else if (incognito) message = 'Pravex: incognito. Only usage and cost are reported for this session.';
   else message = 'Pravex: recording this session. Run /pravex:incognito to keep the conversation private.';
   if (update && update.available) {
-    message += ` Update available (${update.installed} → ${update.latest}): run \`claude plugin update pravex@pravex\`, then /reload-plugins.`;
+    message += ` Update available (${update.installed} → ${update.latest}): run /pravex:update.`;
   }
   return message;
 }
