@@ -263,9 +263,9 @@ const http = require('node:http');
  * once the parent unblocks. The assertions then pass against a request that was never
  * actually answered, which is exactly what happened when this was written.
  */
-function runHook(input, env) {
+function runHook(input, env, args = []) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [path.join(__dirname, 'report-session.js')], {
+    const child = spawn(process.execPath, [path.join(__dirname, 'report-session.js'), ...args], {
       env: { ...process.env, ...env },
       stdio: ['pipe', 'ignore', 'ignore'],
     });
@@ -528,4 +528,405 @@ test('packTranscript returns null rather than throwing on something unserialisab
   circular.self = circular;
 
   assert.strictEqual(packTranscript([circular]), null);
+});
+
+// ── Lifecycle hooks ──────────────────────────────────────────────────────────
+//
+// `SessionEnd` fires on `clear`, `logout`, `prompt_input_exit` and `other`.
+// Closing the terminal or killing the process fires NOTHING, and that session is
+// never reported. Measured, not assumed. The `SessionStart` sweep is what covers
+// it, and these are the tests that keep it covering it.
+
+const { buildBody, findUnreported, modeFrom, readReported, rememberReported } = require('./report-session.js');
+
+test('modeFrom reads the hook flag', () => {
+  assert.strictEqual(modeFrom(['--start']), 'start');
+  assert.strictEqual(modeFrom(['--progress']), 'progress');
+  assert.strictEqual(modeFrom([]), 'end');
+});
+
+test('buildBody reports the status it was given', () => {
+  const agg = { usage: [], startedAt: 'a', endedAt: 'b', durationMinutes: 1, filesTouched: 0, testsAdded: 0, retryRate: 0 };
+
+  assert.strictEqual(buildBody('s1', 'acme/widgets', agg, process.cwd(), 'active').status, 'active');
+  assert.strictEqual(buildBody('s1', 'acme/widgets', agg, process.cwd(), 'ended').status, 'ended');
+});
+
+// ⚠️ A `Stop` hook fires after every assistant turn. Re-uploading tens of
+// kilobytes each time would be pure waste — the server only summarises once,
+// when the transcript arrives.
+test('buildBody sends the transcript only on the final report', () => {
+  const agg = {
+    usage: [],
+    startedAt: 'a',
+    durationMinutes: 1,
+    filesTouched: 0,
+    testsAdded: 0,
+    retryRate: 0,
+    transcript: { encoding: 'gzip+base64', format: 1, turns: 3, data: 'Zm9v' },
+  };
+
+  assert.strictEqual(buildBody('s1', 'r', agg, process.cwd(), 'active').transcript, undefined);
+  assert.ok(buildBody('s1', 'r', agg, process.cwd(), 'ended').transcript);
+});
+
+test('the reported list round-trips and is capped', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-reported-'));
+  try {
+    const script = `const m = require(${JSON.stringify(path.join(__dirname, 'report-session.js'))});
+      for (let i = 0; i < 600; i++) m.rememberReported('session-' + i);
+      const seen = m.readReported();
+      if (seen.length > 500) throw new Error('not capped: ' + seen.length);
+      if (seen[seen.length - 1] !== 'session-599') throw new Error('newest not last');
+      if (seen.includes('session-0')) throw new Error('oldest not dropped');`;
+
+    const result = require('node:child_process').spawnSync(process.execPath, ['-e', script], {
+      env: { ...process.env, HOME: home },
+      encoding: 'utf8',
+    });
+    assert.strictEqual(result.status, 0, result.stderr);
+    assert.strictEqual(typeof readReported, 'function');
+    assert.strictEqual(typeof rememberReported, 'function');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('findUnreported skips the session that is starting, and anything already sent', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-sweep-'));
+  try {
+    const projects = path.join(home, '.claude', 'projects', 'some-project');
+    fs.mkdirSync(projects, { recursive: true });
+    for (const id of ['current', 'already-sent', 'never-sent']) {
+      fs.writeFileSync(path.join(projects, `${id}.jsonl`), '{}\n');
+    }
+
+    const script = `const m = require(${JSON.stringify(path.join(__dirname, 'report-session.js'))});
+      m.rememberReported('already-sent');
+      const found = m.findUnreported('current').map((f) => f.sessionId);
+      if (found.includes('current')) throw new Error('swept the session that is starting');
+      if (found.includes('already-sent')) throw new Error('swept one already reported');
+      if (!found.includes('never-sent')) throw new Error('missed the unreported one');`;
+
+    const result = require('node:child_process').spawnSync(process.execPath, ['-e', script], {
+      env: { ...process.env, HOME: home },
+      encoding: 'utf8',
+    });
+    assert.strictEqual(result.status, 0, result.stderr);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// The projects directory grows without limit. A hook that reads two years of
+// history on every session start would be worse than the problem it solves.
+test('findUnreported ignores transcripts older than the sweep window', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-sweep-age-'));
+  try {
+    const projects = path.join(home, '.claude', 'projects', 'p');
+    fs.mkdirSync(projects, { recursive: true });
+    const old = path.join(projects, 'ancient.jsonl');
+    fs.writeFileSync(old, '{}\n');
+    const longAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    fs.utimesSync(old, longAgo, longAgo);
+    fs.writeFileSync(path.join(projects, 'recent.jsonl'), '{}\n');
+
+    const script = `const m = require(${JSON.stringify(path.join(__dirname, 'report-session.js'))});
+      const found = m.findUnreported('none').map((f) => f.sessionId);
+      if (found.includes('ancient')) throw new Error('swept a month-old transcript');
+      if (!found.includes('recent')) throw new Error('missed the recent one');`;
+
+    const result = require('node:child_process').spawnSync(process.execPath, ['-e', script], {
+      env: { ...process.env, HOME: home },
+      encoding: 'utf8',
+    });
+    assert.strictEqual(result.status, 0, result.stderr);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('findUnreported survives a machine with no projects directory at all', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-sweep-none-'));
+  try {
+    const script = `const m = require(${JSON.stringify(path.join(__dirname, 'report-session.js'))});
+      if (m.findUnreported('x').length !== 0) throw new Error('expected nothing');`;
+    const result = require('node:child_process').spawnSync(process.execPath, ['-e', script], {
+      env: { ...process.env, HOME: home },
+      encoding: 'utf8',
+    });
+    assert.strictEqual(result.status, 0, result.stderr);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('the Stop hook reports the session as active, without a transcript', async () => {
+  const { server, received } = captureServer();
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const port = server.address().port;
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-progress-'));
+  const transcript = path.join(dir, 'transcript.jsonl');
+  fs.writeFileSync(
+    transcript,
+    [
+      JSON.stringify({ type: 'user', timestamp: '2026-09-14T10:00:00.000Z', message: { content: 'fix the thing' } }),
+      JSON.stringify({
+        type: 'assistant',
+        timestamp: '2026-09-14T10:01:00.000Z',
+        message: { id: 'm1', model: 'claude-opus-5', usage: { input_tokens: 10, output_tokens: 5 }, content: [{ type: 'text', text: 'Done.' }] },
+      }),
+    ].join('\n'),
+  );
+
+  try {
+    const code = await runHook(
+      { session_id: 'progress-session', transcript_path: transcript, cwd: process.cwd() },
+      {
+        PRAVEX_API_KEY: 'pvx_test',
+        PRAVEX_API_HOST: `http://127.0.0.1:${port}`,
+        HOME: fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-home-')),
+      },
+      ['--progress'],
+    );
+    assert.strictEqual(code, 0);
+
+    const { body } = await received;
+    assert.strictEqual(body.status, 'active');
+    // The whole point: a transcript on every assistant turn would be waste.
+    assert.strictEqual(body.transcript, undefined);
+    assert.strictEqual(body.externalId, 'progress-session');
+  } finally {
+    server.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the SessionEnd hook reports the session as ended, with the transcript', async () => {
+  const { server, received } = captureServer();
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const port = server.address().port;
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-end-'));
+  const transcript = path.join(dir, 'transcript.jsonl');
+  fs.writeFileSync(
+    transcript,
+    [
+      JSON.stringify({ type: 'user', timestamp: '2026-09-14T10:00:00.000Z', message: { content: 'fix the thing' } }),
+      JSON.stringify({
+        type: 'assistant',
+        timestamp: '2026-09-14T10:01:00.000Z',
+        message: { id: 'm1', model: 'claude-opus-5', usage: { input_tokens: 10, output_tokens: 5 }, content: [{ type: 'text', text: 'Done.' }] },
+      }),
+    ].join('\n'),
+  );
+
+  try {
+    const code = await runHook(
+      { session_id: 'end-session', transcript_path: transcript, cwd: process.cwd() },
+      {
+        PRAVEX_API_KEY: 'pvx_test',
+        PRAVEX_API_HOST: `http://127.0.0.1:${port}`,
+        HOME: fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-home-')),
+      },
+    );
+    assert.strictEqual(code, 0);
+
+    const { body } = await received;
+    assert.strictEqual(body.status, 'ended');
+    assert.strictEqual(body.transcript.encoding, 'gzip+base64');
+  } finally {
+    server.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+/**
+ * ⚠️ The test this whole phase exists for.
+ *
+ * `SessionEnd` fires on `clear`, `logout`, `prompt_input_exit` and `other`.
+ * Closing the terminal or killing the process fires **nothing**, so that session
+ * is never reported and its work is simply lost. The spool does not help: it
+ * replays POSTs that failed, not hooks that never ran.
+ */
+test('SessionStart sweeps up a session whose terminal was closed', async () => {
+  const bodies = [];
+  const server = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (c) => (body += c));
+    req.on('end', () => {
+      bodies.push(JSON.parse(body || '{}'));
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ status: 200, result: { created: true } }));
+    });
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const port = server.address().port;
+
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-sweep-e2e-'));
+  const projects = path.join(home, '.claude', 'projects', 'some-project');
+  fs.mkdirSync(projects, { recursive: true });
+
+  const turns = (text) =>
+    [
+      JSON.stringify({ type: 'user', timestamp: '2026-09-14T10:00:00.000Z', message: { content: text } }),
+      JSON.stringify({
+        type: 'assistant',
+        timestamp: '2026-09-14T10:01:00.000Z',
+        message: {
+          id: `m-${text}`,
+          model: 'claude-opus-5',
+          usage: { input_tokens: 10, output_tokens: 5 },
+          content: [{ type: 'text', text: 'Done.' }],
+        },
+      }),
+    ].join('\n');
+
+  // The one whose terminal was closed, and the one starting now.
+  fs.writeFileSync(path.join(projects, 'abandoned.jsonl'), turns('the lost session'));
+  const current = path.join(projects, 'current.jsonl');
+  fs.writeFileSync(current, turns('the session starting now'));
+
+  try {
+    const code = await runHook(
+      { session_id: 'current', transcript_path: current, cwd: process.cwd() },
+      { PRAVEX_API_KEY: 'pvx_test', PRAVEX_API_HOST: `http://127.0.0.1:${port}`, HOME: home },
+      ['--start'],
+    );
+    assert.strictEqual(code, 0);
+
+    const abandoned = bodies.find((b) => b.externalId === 'abandoned');
+    assert.ok(abandoned, 'the abandoned session was never reported');
+    // ⚠️ Ended, never active. Its terminal is gone — marking it live would put a
+    // permanent green dot on somebody's dashboard for work nobody is doing.
+    assert.strictEqual(abandoned.status, 'ended');
+    assert.ok(abandoned.transcript, 'a swept session should carry its transcript');
+
+    // And the session actually starting is reported as live.
+    const live = bodies.find((b) => b.externalId === 'current');
+    assert.ok(live, 'the starting session was not reported');
+    assert.strictEqual(live.status, 'active');
+
+    // Remembered, so the next SessionStart does not report it again.
+    const seen = JSON.parse(fs.readFileSync(path.join(home, '.pravex', 'reported.json'), 'utf8'));
+    assert.ok(seen.includes('abandoned'));
+  } finally {
+    server.close();
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('the sweep does not report the same session twice', async () => {
+  const bodies = [];
+  const server = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (c) => (body += c));
+    req.on('end', () => {
+      bodies.push(JSON.parse(body || '{}'));
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ status: 200, result: {} }));
+    });
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const port = server.address().port;
+
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-sweep-twice-'));
+  const projects = path.join(home, '.claude', 'projects', 'p');
+  fs.mkdirSync(projects, { recursive: true });
+  fs.writeFileSync(
+    path.join(projects, 'abandoned.jsonl'),
+    [
+      JSON.stringify({ type: 'user', timestamp: '2026-09-14T10:00:00.000Z', message: { content: 'hi' } }),
+      JSON.stringify({
+        type: 'assistant',
+        timestamp: '2026-09-14T10:01:00.000Z',
+        message: { id: 'm1', model: 'claude-opus-5', usage: { input_tokens: 1, output_tokens: 1 }, content: [{ type: 'text', text: 'ok' }] },
+      }),
+    ].join('\n'),
+  );
+
+  const env = { PRAVEX_API_KEY: 'pvx_test', PRAVEX_API_HOST: `http://127.0.0.1:${port}`, HOME: home };
+  try {
+    await runHook({ session_id: 'first', cwd: process.cwd() }, env, ['--start']);
+    await runHook({ session_id: 'second', cwd: process.cwd() }, env, ['--start']);
+
+    const reports = bodies.filter((b) => b.externalId === 'abandoned');
+    assert.strictEqual(reports.length, 1, `expected one report, got ${reports.length}`);
+  } finally {
+    server.close();
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// ⚠️ The most expensive decision in the hook. `Stop` fires after every assistant
+// turn and each report re-parses the whole transcript from byte 0 — O(turns x
+// size) per session — while the server's liveness window is fifteen minutes, so
+// it cannot tell per-turn reporting from per-minute reporting.
+test('a progress report is throttled, and the first one is not', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-throttle-'));
+  try {
+    const script = `const m = require(${JSON.stringify(path.join(__dirname, 'report-session.js'))});
+      if (!m.shouldSendProgress('s1')) throw new Error('first report was throttled');
+      if (m.shouldSendProgress('s1')) throw new Error('second report was not throttled');
+      if (!m.shouldSendProgress('s2')) throw new Error('a different session was throttled');
+      const past = Date.now() + m.PROGRESS_MIN_INTERVAL_MS + 1000;
+      if (!m.shouldSendProgress('s1', past)) throw new Error('not sent again after the interval');`;
+    const r = require('node:child_process').spawnSync(process.execPath, ['-e', script], {
+      env: { ...process.env, HOME: home },
+      encoding: 'utf8',
+    });
+    assert.strictEqual(r.status, 0, r.stderr);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// Failing open matters: the throttle is an optimisation, and a corrupt state file
+// must not stop a session being reported at all.
+test('an unreadable throttle file fails open', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-throttle-bad-'));
+  try {
+    fs.mkdirSync(path.join(home, '.pravex'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.pravex', 'progress.json'), '{ not json');
+    const script = `const m = require(${JSON.stringify(path.join(__dirname, 'report-session.js'))});
+      if (!m.shouldSendProgress('s1')) throw new Error('throttled on a corrupt file');`;
+    const r = require('node:child_process').spawnSync(process.execPath, ['-e', script], {
+      env: { ...process.env, HOME: home },
+      encoding: 'utf8',
+    });
+    assert.strictEqual(r.status, 0, r.stderr);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// The extraction is the expensive half — `redact` over every prompt and reply,
+// plus the whole turn list held in memory. Skipping it is the point of the flag.
+test('aggregate skips extraction when the caller does not want the transcript', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-skip-'));
+  const file = path.join(dir, 't.jsonl');
+  fs.writeFileSync(
+    file,
+    [
+      JSON.stringify({ type: 'user', timestamp: '2026-09-14T10:00:00.000Z', message: { content: 'hello' } }),
+      JSON.stringify({
+        type: 'assistant',
+        timestamp: '2026-09-14T10:01:00.000Z',
+        message: { id: 'm1', model: 'claude-opus-5', usage: { input_tokens: 1, output_tokens: 1 }, content: [{ type: 'text', text: 'hi' }] },
+      }),
+    ].join('\n'),
+  );
+  try {
+    const withIt = await aggregate(file, 'acme/widgets');
+    const without = await aggregate(file, 'acme/widgets', { wantTranscript: false });
+
+    assert.ok(withIt.transcript, 'expected a transcript by default');
+    assert.strictEqual(without.transcript, undefined);
+    // The metrics are identical either way — only the transcript is skipped.
+    assert.strictEqual(without.assistantMessages, withIt.assistantMessages);
+    assert.strictEqual(without.durationMinutes, withIt.durationMinutes);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
