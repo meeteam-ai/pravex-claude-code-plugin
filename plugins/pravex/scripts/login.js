@@ -242,6 +242,7 @@ async function main() {
   console.log(`Pravex: connected. Sessions will be reported as ${account.email || 'you'}${account.orgName ? ` (${account.orgName})` : ''}.`);
   console.log(`Config: ${CONFIG_FILE}`);
   console.log('Nothing else to do — every session is reported automatically when it ends.');
+  console.log('Tip: /pravex:statusline shows in the status line whether a session is recorded, and /pravex:incognito keeps one private.');
 }
 
 if (require.main === module) {

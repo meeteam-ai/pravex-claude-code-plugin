@@ -37,6 +37,47 @@ The credential is stored in `~/.pravex/config.json` (mode 600). `PRAVEX_API_HOST
 **Install** page in Pravex — each `/pravex:login` is its own connection, so one
 machine can be cut off without touching the others.
 
+## Know when Pravex is watching
+
+Every new or resumed session opens with one line saying which of three states it
+is in: **recording**, **incognito**, or **not connected — run `/pravex:login`**.
+
+For an indicator that stays on screen, add it to the status line:
+
+```
+/pravex:statusline              # ● Pravex · ◌ Pravex incognito · ⚠ Pravex: /pravex:login
+/pravex:statusline --uninstall
+```
+
+A plugin cannot declare Claude Code's status line (plugin `settings.json` supports
+only `agent` and `subagentStatusLine`), so this writes `statusLine` in
+`~/.claude/settings.json`. **An existing status line is kept**: it still runs
+first and Pravex is appended to its last line. The script is copied to
+`~/.pravex/statusline.js`, because the plugin's own directory changes on every
+update, and each session start refreshes the copy. Under a managed
+`allowManagedHooksOnly` policy only a managed status line shows.
+
+## Incognito sessions
+
+```
+/pravex:incognito
+```
+
+The session still appears in Pravex, labelled incognito, with its **token usage,
+cost, model and duration**. The conversation, title, repository and branch, files
+touched and pull request are not sent, and the command reports straight away so
+the server scrubs what earlier progress reports already sent. It lasts until the
+session ends and cannot be undone for that session.
+
+Markers live in `~/.pravex/incognito/<session id>` and are pruned after 30 days.
+
+## Keep it up to date
+
+Claude Code does not auto-update third-party marketplaces by default, so an
+install stays on the version it started with. Turn auto-update on under
+`/plugin` → Marketplaces → pravex, or run `claude plugin update pravex@pravex`.
+Organizations rolling it out through managed settings set `"autoUpdate": true`.
+
 ## How it works
 
 The plugin reports at three points in a session's life:
