@@ -34,6 +34,8 @@ const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 const INCOGNITO_DIR = path.join(CONFIG_DIR, 'incognito');
 const INSTALLED_COPY = path.join(CONFIG_DIR, 'statusline.js');
 const CHAIN_FILE = path.join(CONFIG_DIR, 'statusline.json');
+// Written by `update-check.js`, which the SessionStart hook runs in the background.
+const UPDATE_FILE = path.join(CONFIG_DIR, 'update-check.json');
 const SETTINGS_FILE = path.join(os.homedir(), '.claude', 'settings.json');
 /** The status line blocks the UI while it runs; a slow chained command must not. */
 const CHAIN_TIMEOUT_MS = 2000;
@@ -58,11 +60,28 @@ function stateFor(sessionId, env = process.env) {
   return 'watching';
 }
 
-function segmentFor(state, { color = true } = {}) {
+function newerThan(latest, installed) {
+  const parts = (v) => String(v || '').replace(/^v/, '').split(/[.-]/).slice(0, 3).map((n) => Number.parseInt(n, 10) || 0);
+  const a = parts(latest);
+  const b = parts(installed);
+  for (let i = 0; i < 3; i += 1) if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) > (b[i] || 0);
+  return false;
+}
+
+/** From the cache only: the status line runs on every refresh and must never touch the network. */
+function updateAvailable() {
+  const cache = readJson(UPDATE_FILE, null);
+  return Boolean(cache && cache.latest && cache.installed && newerThan(cache.latest, cache.installed));
+}
+
+function segmentFor(state, { color = true, update = false } = {}) {
   const paint = (c, text) => (color ? `${COLOR[c]}${text}${COLOR.reset}` : text);
-  if (state === 'login') return paint('yellow', '⚠ Pravex: /pravex:login');
-  if (state === 'incognito') return paint('magenta', '◌ Pravex incognito');
-  return paint('green', '● Pravex');
+  let segment;
+  if (state === 'login') segment = paint('yellow', '⚠ Pravex: /pravex:login');
+  else if (state === 'incognito') segment = paint('magenta', '◌ Pravex incognito');
+  else segment = paint('green', '● Pravex');
+  // The full command is in the session's start message; the bar only has room to say so.
+  return update ? `${segment} ${paint('yellow', '⬆ update')}` : segment;
 }
 
 /** Run the status line that was there before, with the same stdin. Empty when there was none or it failed. */
@@ -103,7 +122,7 @@ function render() {
   } catch {
     /* render the segment anyway */
   }
-  process.stdout.write(`${compose(runPrevious(stdin), segmentFor(stateFor(session.session_id)))}\n`);
+  process.stdout.write(`${compose(runPrevious(stdin), segmentFor(stateFor(session.session_id), { update: updateAvailable() }))}\n`);
 }
 
 function commandFor(file) {
@@ -181,4 +200,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { INCOGNITO_DIR, INSTALLED_COPY, compose, install, refreshCopy, segmentFor, stateFor, uninstall };
+module.exports = { INCOGNITO_DIR, INSTALLED_COPY, UPDATE_FILE, compose, install, newerThan, refreshCopy, segmentFor, stateFor, uninstall };
