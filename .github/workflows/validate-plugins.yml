@@ -276,10 +276,15 @@ jobs:
         run: |
           # grep -E has no lookahead, so list what is required and subtract the allowlist.
           # Relative requires are this plugin's own files, not dependencies.
+          # Anything `node:`-prefixed is stdlib by definition, so it is allowed by the
+          # prefix rather than by name — an explicit list went stale the moment the
+          # transcript work added `zlib` and `node:crypto`, and failed CI on main for
+          # two modules that were always standard library.
           bad=$(grep -ohE "require\('[^']+'\)" plugins/pravex/scripts/*.js \
                 | sed -E "s/require\('(.*)'\)/\1/" | sort -u \
                 | grep -v "^\.\{1,2\}/" \
-                | grep -vxE "fs|os|path|http|https|readline|child_process|url|node:test|node:assert|node:fs|node:os|node:path|node:http|node:child_process" || true)
+          | grep -v "^node:" \
+          | grep -vxE "assert|child_process|crypto|fs|http|https|os|path|readline|url|zlib" || true)
           if [ -n "$bad" ]; then
             echo "✗ non-stdlib require() found — the hook must stay dependency-free:"
             echo "$bad"
