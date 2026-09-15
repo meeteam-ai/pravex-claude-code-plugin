@@ -380,3 +380,152 @@ test('a report that cannot be delivered is spooled for the next session', async 
   const body = JSON.parse(fs.readFileSync(path.join(home, '.pravex', 'spool', spooled[0]), 'utf8'));
   assert.strictEqual(body.externalId, 'offline-session');
 });
+
+// ── Transcript extraction ────────────────────────────────────────────────────
+//
+// What is kept and what is dropped is a privacy decision as much as a size one:
+// attachments and hook output are 79.9% of a real transcript's bytes AND the part
+// most likely to carry somebody's environment. These assert both halves.
+
+const zlib = require('node:zlib');
+const { randomBytes } = require('node:crypto');
+const { TRANSCRIPT_FORMAT, TRANSCRIPT_MAX_TEXT, clampText, extractTurn, packTranscript } = require('./report-session.js');
+
+const unpack = (packed) => JSON.parse(zlib.gunzipSync(Buffer.from(packed.data, 'base64')).toString('utf8'));
+
+test('extractTurn keeps what a person typed', () => {
+  const turn = extractTurn({
+    type: 'user',
+    timestamp: '2026-09-14T10:00:00.000Z',
+    message: { content: 'why is the dashboard showing 0 sessions' },
+  });
+
+  assert.deepStrictEqual(turn, {
+    role: 'user',
+    at: '2026-09-14T10:00:00.000Z',
+    text: 'why is the dashboard showing 0 sessions',
+  });
+});
+
+test('extractTurn keeps assistant prose and the names of the tools it called', () => {
+  const turn = extractTurn({
+    type: 'assistant',
+    timestamp: '2026-09-14T10:00:05.000Z',
+    message: {
+      content: [
+        { type: 'text', text: 'Reading the config first.' },
+        { type: 'tool_use', name: 'Read', input: { file_path: '/etc/passwd' } },
+        { type: 'tool_use', name: 'Bash', input: { command: 'curl -H "Authorization: Bearer sk-live-abc" https://api.internal' } },
+      ],
+    },
+  });
+
+  assert.deepStrictEqual(turn.tools, ['Read', 'Bash']);
+  assert.strictEqual(turn.text, 'Reading the config first.');
+});
+
+// Names, never arguments. A `Bash` command line or a `Read` path is exactly the
+// sort of thing that carries a hostname, a path or a token.
+test('extractTurn never carries a tool argument', () => {
+  const turn = extractTurn({
+    type: 'assistant',
+    timestamp: '2026-09-14T10:00:05.000Z',
+    message: {
+      content: [{ type: 'tool_use', name: 'Bash', input: { command: 'ssh deploy@10.0.0.4 cat /etc/shadow' } }],
+    },
+  });
+
+  const serialised = JSON.stringify(turn);
+  assert.ok(!serialised.includes('10.0.0.4'));
+  assert.ok(!serialised.includes('/etc/shadow'));
+  assert.deepStrictEqual(turn.tools, ['Bash']);
+});
+
+// Tool results are `user` entries whose content is all `tool_result` blocks, so
+// they reduce to empty text and fall out here. This is what keeps command output
+// — the largest and most sensitive part of a transcript — on the machine.
+test('extractTurn drops tool output', () => {
+  assert.strictEqual(
+    extractTurn({
+      type: 'user',
+      timestamp: '2026-09-14T10:00:06.000Z',
+      message: { content: [{ type: 'tool_result', tool_use_id: 't1', content: 'root:x:0:0:root:/root:/bin/bash' }] },
+    }),
+    null,
+  );
+});
+
+test('extractTurn drops meta entries and system tags', () => {
+  assert.strictEqual(
+    extractTurn({ type: 'user', isMeta: true, timestamp: 't', message: { content: 'internal' } }),
+    null,
+  );
+  assert.strictEqual(
+    extractTurn({ type: 'user', timestamp: 't', message: { content: '<system-reminder>be good</system-reminder>' } }),
+    null,
+  );
+});
+
+test('extractTurn drops anything that is not a turn', () => {
+  assert.strictEqual(extractTurn({ type: 'attachment', message: { content: 'x'.repeat(50000) } }), null);
+  assert.strictEqual(extractTurn({ type: 'system', message: { content: 'x' } }), null);
+  assert.strictEqual(extractTurn({ type: 'user' }), null);
+  assert.strictEqual(extractTurn({ type: 'assistant', message: { content: 'not an array' } }), null);
+  assert.strictEqual(extractTurn({ type: 'assistant', timestamp: 't', message: { content: [] } }), null);
+});
+
+// Redact first, then cut. Truncating first could leave the front half of a key in
+// place, and half a token is still most of a token.
+test('clampText redacts before truncating', () => {
+  const key = `${FAKE_KEY}`;
+  const padded = `${'a '.repeat(TRANSCRIPT_MAX_TEXT / 2 - 20)}${key} trailing`;
+
+  const clamped = clampText(padded);
+
+  assert.ok(!clamped.includes('notarealkey'));
+  assert.ok(clamped.length <= TRANSCRIPT_MAX_TEXT + 1);
+});
+
+test('clampText leaves a short ordinary message untouched', () => {
+  assert.strictEqual(clampText('fix the billing page'), 'fix the billing page');
+});
+
+test('packTranscript gzips into a base64 envelope that names its format', () => {
+  const packed = packTranscript([{ role: 'user', at: 't', text: 'hello' }]);
+
+  assert.strictEqual(packed.encoding, 'gzip+base64');
+  assert.strictEqual(packed.format, TRANSCRIPT_FORMAT);
+  assert.strictEqual(packed.turns, 1);
+  assert.strictEqual(packed.dropped, 0);
+  assert.deepStrictEqual(unpack(packed), { v: TRANSCRIPT_FORMAT, turns: [{ role: 'user', at: 't', text: 'hello' }] });
+});
+
+// The front, because the end of a session is what a summary is about — what was
+// decided, what was built, what broke. The opening of a long session is setup.
+test('packTranscript drops from the front when it has to drop something', () => {
+  // Genuinely incompressible: `Math.random().toString(36).repeat(n)` looks random
+  // and gzips to almost nothing, which is how this test first failed to fail.
+  const big = Array.from({ length: 3000 }, (_, i) => ({
+    role: 'assistant',
+    at: 't',
+    text: `${i} ${randomBytes(700).toString('base64')}`,
+  }));
+
+  const packed = packTranscript(big);
+
+  assert.ok(packed.dropped > 0, 'expected some turns to be dropped');
+  assert.strictEqual(packed.turns + packed.dropped, big.length);
+  const { turns } = unpack(packed);
+  // The last turn survived; the first did not.
+  assert.strictEqual(turns[turns.length - 1].text, big[big.length - 1].text);
+  assert.notStrictEqual(turns[0].text, big[0].text);
+});
+
+// A transcript that cannot be packed must not cost the session its metrics, which
+// are what somebody is actually looking at a dashboard for.
+test('packTranscript returns null rather than throwing on something unserialisable', () => {
+  const circular = { role: 'user', at: 't' };
+  circular.self = circular;
+
+  assert.strictEqual(packTranscript([circular]), null);
+});

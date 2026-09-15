@@ -53,6 +53,35 @@ machine can be cut off without touching the others.
 - Idempotent: re-posting the same `session_id` updates the row.
 - Never blocks Claude Code — errors go to `~/.pravex/last-report.log`. Check with `/pravex:status`.
 
+## What it sends about the conversation
+
+The session report carries an **extracted** transcript, not the file on disk.
+
+Measured across 358 real transcripts (1.4 GB), `attachment` lines are **79.9%**
+of the bytes — `hook_success` alone is 64% of a file — and most of what is left
+under `user` is tool *output* rather than anything a person typed. Keeping only
+user prompts, assistant prose and the tool **names** comes to 0.076% of raw:
+
+```
+51.7 MB raw  ->  847 turns  ->  39 KB gzipped  ->  51 KB on the wire
+```
+
+That ratio is why this is cheap enough to do at all, and it is also what keeps
+attachments and hook output — the two things most likely to carry somebody's
+environment — from ever leaving the machine.
+
+- **Tool names, never arguments or results.** "It ran `Edit` and `Bash`" is what
+  a summary needs. A `Bash` command line or a `Read` result is exactly the sort
+  of thing that carries a path, a hostname or a token.
+- **Redacted before it is cut.** Key-shaped tokens are masked first, then long
+  messages are truncated — the other order can leave the front half of a key in
+  place, and half a token is still most of a token.
+- **Capped at 1 MB gzipped**, about twenty times the worst case measured. Past
+  that, turns are dropped from the **front**: the end of a session is what a
+  summary is about; the opening of a long one is setup.
+- If it cannot be packed at all it is simply **absent**, and the metrics still
+  report.
+
 ## Payload
 
 ```json
@@ -61,6 +90,7 @@ machine can be cut off without touching the others.
   "title": "...", "repo": "owner/name", "branch": "main",
   "startedAt": "ISO", "endedAt": "ISO",
   "usage": [{ "model": "claude-opus-5", "inputTokens": 0, "outputTokens": 0, "cacheReadTokens": 0, "cacheWriteTokens": 0 }],
-  "filesTouched": 0, "testsAdded": 0, "retryRate": 0, "prUrl": "https://github.com/.../pull/1"
+  "filesTouched": 0, "testsAdded": 0, "retryRate": 0, "prUrl": "https://github.com/.../pull/1",
+  "transcript": { "encoding": "gzip+base64", "format": 1, "turns": 847, "dropped": 0, "data": "H4sIA..." }
 }
 ```
