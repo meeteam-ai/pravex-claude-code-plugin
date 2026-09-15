@@ -98,6 +98,26 @@ function runPrevious(stdin) {
   return (result.stdout || '').replace(/\s+$/, '');
 }
 
+/**
+ * Model and context use, for when Pravex is the only status line.
+ *
+ * Replacing a status line that showed them — every popular one does — and printing
+ * only a dot would lose the two things people actually glance at. With a chained
+ * status line this is skipped: that line already shows its own version of them.
+ */
+function basics(session, { color = true } = {}) {
+  const parts = [];
+  const model = session.model && session.model.display_name;
+  if (model) parts.push(model);
+  const used = session.context_window && session.context_window.used_percentage;
+  if (typeof used === 'number') {
+    const pct = Math.round(used);
+    const tone = pct >= 80 ? 'yellow' : 'dim';
+    parts.push(color ? `${COLOR[tone]}ctx ${pct}%${COLOR.reset}` : `ctx ${pct}%`);
+  }
+  return parts.join(` ${COLOR.dim}│${COLOR.reset} `);
+}
+
 /** Pravex goes on the last line of whatever the previous status line printed. */
 function compose(previousOutput, segment) {
   if (!previousOutput) return segment;
@@ -122,7 +142,8 @@ function render() {
   } catch {
     /* render the segment anyway */
   }
-  process.stdout.write(`${compose(runPrevious(stdin), segmentFor(stateFor(session.session_id), { update: updateAvailable() }))}\n`);
+  const previous = runPrevious(stdin);
+  process.stdout.write(`${compose(previous || basics(session), segmentFor(stateFor(session.session_id), { update: updateAvailable() }))}\n`);
 }
 
 function commandFor(file) {
@@ -200,4 +221,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { INCOGNITO_DIR, INSTALLED_COPY, UPDATE_FILE, compose, install, newerThan, refreshCopy, segmentFor, stateFor, uninstall };
+module.exports = { INCOGNITO_DIR, INSTALLED_COPY, UPDATE_FILE, basics, compose, install, newerThan, refreshCopy, segmentFor, stateFor, uninstall };

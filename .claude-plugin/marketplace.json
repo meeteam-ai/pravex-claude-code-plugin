@@ -6,13 +6,13 @@
   },
   "metadata": {
     "description": "The Pravex plugin for Claude Code",
-    "version": "0.5.0"
+    "version": "0.5.1"
   },
   "plugins": [
     {
       "name": "pravex",
       "description": "Reports every Claude Code session (model, tokens, cost, duration, files, PR) to your Pravex workspace",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "author": {
         "name": "Meeteam"
       },
