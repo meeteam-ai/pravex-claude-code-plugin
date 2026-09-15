@@ -290,3 +290,20 @@ test('the start message and the status line both say when an update is waiting',
   const out = (await run(STATUSLINE, [], { input: '{"session_id":"s"}', env })).stdout.replace(/\x1b\[[0-9;]*m/g, '').trim();
   assert.strictEqual(out, '● Pravex ⬆ update');
 });
+
+test('alone, the status line still shows the model and context use', async () => {
+  const home = tempHome();
+  const env = envFor(home, { PRAVEX_API_KEY: 'pvx_test', PRAVEX_API_HOST: 'http://127.0.0.1:1' });
+  const input = JSON.stringify({ session_id: 's', model: { display_name: 'Opus 5' }, context_window: { used_percentage: 41.6 } });
+
+  const out = (await run(STATUSLINE, [], { input, env })).stdout.replace(/\x1b\[[0-9;]*m/g, '').trim();
+
+  assert.strictEqual(out, 'Opus 5 │ ctx 42% │ ● Pravex');
+});
+
+test('with nothing to show but Pravex, it prints just the segment', async () => {
+  const home = tempHome();
+  const env = envFor(home, { PRAVEX_API_KEY: 'pvx_test', PRAVEX_API_HOST: 'http://127.0.0.1:1' });
+  const out = (await run(STATUSLINE, [], { input: '{"session_id":"s"}', env })).stdout.replace(/\x1b\[[0-9;]*m/g, '').trim();
+  assert.strictEqual(out, '● Pravex');
+});
