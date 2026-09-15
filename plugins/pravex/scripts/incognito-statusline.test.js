@@ -234,3 +234,59 @@ test('install refuses to rewrite a settings file it cannot parse', async () => {
   assert.strictEqual(code, 1);
   assert.strictEqual(fs.readFileSync(settingsFile, 'utf8'), '{ not json');
 });
+
+test('update-check compares versions numerically, not as strings', () => {
+  const { isNewer } = require('./update-check.js');
+  assert.strictEqual(isNewer('0.10.0', '0.9.0'), true);
+  assert.strictEqual(isNewer('0.4.0', '0.4.0'), false);
+  assert.strictEqual(isNewer('0.3.9', '0.4.0'), false);
+  assert.strictEqual(isNewer('v1.0.0', '0.9.9'), true);
+});
+
+test('a cached check goes stale the moment the installed version changes', () => {
+  const { isFresh } = require('./update-check.js');
+  const now = Date.now();
+  assert.strictEqual(isFresh({ installed: '0.4.0', checkedAt: now - 1000 }, '0.4.0', now), true);
+  // Just updated: the old "update available" must not survive twelve more hours.
+  assert.strictEqual(isFresh({ installed: '0.4.0', checkedAt: now - 1000 }, '0.5.0', now), false);
+  assert.strictEqual(isFresh({ installed: '0.4.0', checkedAt: now - 13 * 60 * 60 * 1000 }, '0.4.0', now), false);
+});
+
+test('updateStatus reads only the cache and compares with the running version', () => {
+  const { updateStatus } = require('./update-check.js');
+  assert.deepStrictEqual(updateStatus({ latest: '0.5.0', installed: '0.4.0' }, '0.4.0'), { available: true, installed: '0.4.0', latest: '0.5.0' });
+  assert.strictEqual(updateStatus({ latest: '0.5.0', installed: '0.4.0' }, '0.5.0').available, false);
+  assert.strictEqual(updateStatus(null, '0.4.0').available, false);
+});
+
+test('check writes the answer, and a failed fetch keeps the last good one', async () => {
+  const home = tempHome();
+  const script = `
+    const u = require(${JSON.stringify(path.join(__dirname, 'update-check.js'))});
+    (async () => {
+      const first = await u.check({ fetch: async () => '9.9.9', now: 1 });
+      const failed = await u.check({ fetch: async () => null, now: 1 + 13 * 3600 * 1000 });
+      process.stdout.write(JSON.stringify({ first, failed }));
+    })();`;
+  const result = spawnSync(process.execPath, ['-e', script], { env: envFor(home), encoding: 'utf8' });
+  const { first, failed } = JSON.parse(result.stdout);
+  assert.strictEqual(first.latest, '9.9.9');
+  assert.strictEqual(first.updateAvailable, true);
+  assert.deepStrictEqual(failed, first);
+  assert.ok(fs.existsSync(path.join(home, '.pravex', 'update-check.json')));
+});
+
+test('the start message and the status line both say when an update is waiting', async () => {
+  const { startMessage } = require('./report-session.js');
+  assert.match(
+    startMessage({ configured: true, source: 'startup', update: { available: true, installed: '0.4.0', latest: '0.5.0' } }),
+    /0\.4\.0 → 0\.5\.0.*claude plugin update pravex@pravex/
+  );
+
+  const home = tempHome();
+  fs.mkdirSync(path.join(home, '.pravex'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.pravex', 'update-check.json'), JSON.stringify({ installed: '0.4.0', latest: '0.5.0' }));
+  const env = envFor(home, { PRAVEX_API_KEY: 'pvx_test', PRAVEX_API_HOST: 'http://127.0.0.1:1' });
+  const out = (await run(STATUSLINE, [], { input: '{"session_id":"s"}', env })).stdout.replace(/\x1b\[[0-9;]*m/g, '').trim();
+  assert.strictEqual(out, '● Pravex ⬆ update');
+});

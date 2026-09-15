@@ -63,7 +63,10 @@ Markers live in `~/.pravex/incognito/<session id>` and are pruned after 30 days.
 ## Keep it up to date
 
 Claude Code does not auto-update third-party marketplaces by default, so an
-install stays on the version it started with. Turn auto-update on under
+install stays on the version it started with. The plugin checks for a newer version in
+the background at session start (at most twice a day, never blocking startup) and
+says so in the start message and as `⬆ update` on the status line. It never
+updates itself. Turn auto-update on under
 `/plugin` → Marketplaces → pravex, or run `claude plugin update pravex@pravex`.
 Organizations rolling it out through managed settings set `"autoUpdate": true`.
 

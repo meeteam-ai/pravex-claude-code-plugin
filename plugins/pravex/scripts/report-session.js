@@ -33,7 +33,7 @@ const http = require('http');
 const https = require('https');
 const readline = require('readline');
 const zlib = require('zlib');
-const { execFileSync } = require('child_process');
+const { execFileSync, spawn } = require('child_process');
 
 const CONFIG_DIR = path.join(os.homedir(), '.pravex');
 const PLUGIN_VERSION = (() => {
@@ -226,11 +226,34 @@ function pruneIncognito(now = Date.now()) {
  * `null` after `/clear` and compaction: the session did not change hands, and a
  * banner every time the context is compacted would be noise nobody reads.
  */
-function startMessage({ configured, incognito, source }) {
+function startMessage({ configured, incognito, source, update }) {
   if (source === 'clear' || source === 'compact') return null;
-  if (!configured) return 'Pravex: not connected, so this session will not be reported. Run /pravex:login.';
-  if (incognito) return 'Pravex: incognito. Only usage and cost are reported for this session.';
-  return 'Pravex: recording this session. Run /pravex:incognito to keep the conversation private.';
+  let message;
+  if (!configured) message = 'Pravex: not connected, so this session will not be reported. Run /pravex:login.';
+  else if (incognito) message = 'Pravex: incognito. Only usage and cost are reported for this session.';
+  else message = 'Pravex: recording this session. Run /pravex:incognito to keep the conversation private.';
+  if (update && update.available) {
+    message += ` Update available (${update.installed} → ${update.latest}): run \`claude plugin update pravex@pravex\`, then /reload-plugins.`;
+  }
+  return message;
+}
+
+/**
+ * Check for a newer plugin without making the session wait: detached, unreferenced,
+ * output ignored. Its answer lands in a cache file that the next start message and the
+ * status line read.
+ */
+function spawnUpdateCheck() {
+  try {
+    const child = spawn(process.execPath, [path.join(__dirname, 'update-check.js')], {
+      detached: true, // required on Windows for the child to outlive this hook
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+    child.unref();
+  } catch (err) {
+    log(`update check could not start: ${err && err.message}`);
+  }
 }
 
 /**
@@ -986,10 +1009,16 @@ async function main() {
   if (mode === 'start') {
     // Before anything that can fail or take time: the indicator is the one part
     // of this hook the user actually sees.
-    const message = startMessage({ configured: Boolean(apiKey && apiHost), incognito: isIncognito(input.session_id), source: input.source });
+    const message = startMessage({
+      configured: Boolean(apiKey && apiHost),
+      incognito: isIncognito(input.session_id),
+      source: input.source,
+      update: require('./update-check.js').updateStatus(),
+    });
     if (message) process.stdout.write(JSON.stringify({ systemMessage: message }));
     pruneIncognito();
     refreshStatusline();
+    spawnUpdateCheck();
   }
   if (!apiKey || !apiHost) {
     log(`skipped (${mode}): no apiKey/apiHost (run /pravex:login)`);
