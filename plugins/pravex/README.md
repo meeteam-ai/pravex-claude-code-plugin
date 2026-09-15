@@ -9,16 +9,33 @@ Claude Code plugin that reports each finished session to your [Pravex](https://g
 /plugin install pravex@pravex
 ```
 
-## Setup
-
-1. In Pravex, open **Install** and create an API key (`pvx_...`).
-2. In Claude Code:
+## Sign in
 
 ```
-/pravex:setup --host https://api.your-pravex.com --key pvx_xxx
+/pravex:login
 ```
 
-Config is stored in `~/.pravex/config.json` (mode 600). Env vars `PRAVEX_API_HOST` / `PRAVEX_API_KEY` override it (useful for CI).
+It prints a short code and opens your browser. Approve the code on a page you
+are already signed in to, and the plugin collects its credential itself.
+
+**Nothing is copied and nothing is pasted.** This is the OAuth 2.0 Device
+Authorization Grant (RFC 8628) — the flow `gh auth login` and `docker login` use.
+It matters here more than most places: a pasted key lands in the clipboard, in
+terminal scrollback, and in the session transcript *this plugin uploads*. One
+real key was burned exactly that way.
+
+Point it somewhere else with `--api-url`:
+
+```
+/pravex:login --api-url http://localhost:3000
+```
+
+The credential is stored in `~/.pravex/config.json` (mode 600). `PRAVEX_API_HOST`
+/ `PRAVEX_API_KEY` override it, which is how CI and the test suite drive it.
+
+`/pravex:status` says whether this machine is connected. Revoke it from the
+**Install** page in Pravex — each `/pravex:login` is its own connection, so one
+machine can be cut off without touching the others.
 
 ## How it works
 

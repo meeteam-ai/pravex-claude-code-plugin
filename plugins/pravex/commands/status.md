@@ -1,8 +1,12 @@
 ---
-description: Show Pravex connection status and the last report result
-allowed-tools: Bash(node:*), Bash(tail:*)
+description: Check whether this machine is connected to Pravex
+allowed-tools: Bash(node:*)
 ---
 
-Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/setup.js" --status` and show the output.
+Report whether this machine is signed in to a Pravex workspace.
 
-Then run `tail -n 5 ~/.pravex/last-report.log 2>/dev/null` and show it as "Last reports" (if the file is missing, say no session has been reported yet).
+Run and show the output verbatim:
+
+`node "${CLAUDE_PLUGIN_ROOT}/scripts/login.js" --status`
+
+If it reports that nothing is configured, suggest `/pravex:login`.
