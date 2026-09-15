@@ -268,6 +268,7 @@ jobs:
         run: |
           node --check plugins/pravex/scripts/report-session.js
           node --check plugins/pravex/scripts/login.js
+          node --check plugins/pravex/scripts/statusline.js
 
       # Zero dependencies is a deliberate property of this plugin: it runs inside
       # someone else's session, so it must not pull anything at install time. The tests

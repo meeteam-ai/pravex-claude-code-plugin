@@ -36,6 +36,13 @@ const zlib = require('zlib');
 const { execFileSync } = require('child_process');
 
 const CONFIG_DIR = path.join(os.homedir(), '.pravex');
+const PLUGIN_VERSION = (() => {
+  try {
+    return require('../.claude-plugin/plugin.json').version;
+  } catch {
+    return 'unknown';
+  }
+})();
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 const LOG_FILE = path.join(CONFIG_DIR, 'last-report.log');
 const SPOOL_DIR = path.join(CONFIG_DIR, 'spool');
@@ -74,6 +81,17 @@ const REPORTED_MAX = 500;
 const SWEEP_BUDGET_MS = 10_000;
 /** Records when each session last sent a progress report, so `Stop` can throttle. */
 const PROGRESS_FILE = path.join(CONFIG_DIR, 'progress.json');
+/**
+ * One empty file per session the user took incognito with `/pravex:incognito`.
+ *
+ * A file per session rather than a JSON map: the command, the `Stop` hook and the
+ * status line can all touch it at once, and creating a file is atomic where
+ * rewriting a shared map is a lost update. `statusline.js` reads the same path —
+ * change both together.
+ */
+const INCOGNITO_DIR = path.join(CONFIG_DIR, 'incognito');
+/** Markers outlive the session by a month, then go: long enough for the sweep and any spooled replay. */
+const INCOGNITO_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 /**
  * Least time between two `Stop` reports for the same session.
  *
@@ -162,6 +180,84 @@ function loadConfig() {
   const apiKey = process.env.PRAVEX_API_KEY || file.apiKey;
   const apiHost = (process.env.PRAVEX_API_HOST || file.apiHost || '').replace(/\/+$/, '');
   return { apiKey, apiHost };
+}
+
+/** Session ids are UUIDs; anything else must not become a path segment. */
+function incognitoMarker(sessionId) {
+  const safe = String(sessionId || '').replace(/[^A-Za-z0-9_-]/g, '');
+  return safe ? path.join(INCOGNITO_DIR, safe) : null;
+}
+
+function isIncognito(sessionId) {
+  const marker = incognitoMarker(sessionId);
+  return Boolean(marker && fs.existsSync(marker));
+}
+
+/** One-way for the life of the session: there is no un-incognito, so nothing already withheld can be sent later. */
+function markIncognito(sessionId) {
+  const marker = incognitoMarker(sessionId);
+  if (!marker) return false;
+  fs.mkdirSync(INCOGNITO_DIR, { recursive: true, mode: 0o700 });
+  fs.writeFileSync(marker, '', { mode: 0o600 });
+  return true;
+}
+
+function pruneIncognito(now = Date.now()) {
+  let entries = [];
+  try {
+    entries = fs.readdirSync(INCOGNITO_DIR);
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    const full = path.join(INCOGNITO_DIR, entry);
+    try {
+      if (now - fs.statSync(full).mtimeMs > INCOGNITO_MAX_AGE_MS) fs.unlinkSync(full);
+    } catch {
+      /* already gone */
+    }
+  }
+}
+
+/**
+ * The line shown to the user when a session starts — the indicator that Pravex is
+ * watching, or that it cannot.
+ *
+ * `null` after `/clear` and compaction: the session did not change hands, and a
+ * banner every time the context is compacted would be noise nobody reads.
+ */
+function startMessage({ configured, incognito, source }) {
+  if (source === 'clear' || source === 'compact') return null;
+  if (!configured) return 'Pravex: not connected, so this session will not be reported. Run /pravex:login.';
+  if (incognito) return 'Pravex: incognito. Only usage and cost are reported for this session.';
+  return 'Pravex: recording this session. Run /pravex:incognito to keep the conversation private.';
+}
+
+/**
+ * Keep the installed status line copy current. Only once somebody ran
+ * `/pravex:statusline`: installing it is theirs to choose, updating it is ours.
+ */
+function refreshStatusline() {
+  try {
+    const statusline = require('./statusline.js');
+    if (fs.existsSync(statusline.INSTALLED_COPY)) statusline.refreshCopy(path.join(__dirname, 'statusline.js'));
+  } catch (err) {
+    log(`statusline refresh failed: ${err && err.message}`);
+  }
+}
+
+/** Where Claude Code keeps a session's transcript, for the command that has only its id. */
+function findTranscript(sessionId) {
+  const name = `${String(sessionId).replace(/[^A-Za-z0-9_-]/g, '')}.jsonl`;
+  try {
+    for (const project of fs.readdirSync(PROJECTS_DIR)) {
+      const full = path.join(PROJECTS_DIR, project, name);
+      if (fs.existsSync(full)) return full;
+    }
+  } catch {
+    /* no projects directory */
+  }
+  return null;
 }
 
 function readStdin() {
@@ -674,7 +770,7 @@ async function sweepUnreported(apiHost, apiKey, currentSessionId, cwd) {
       return;
     }
     try {
-      const agg = await aggregate(full, repo);
+      const agg = await aggregate(full, repo, { wantTranscript: !isIncognito(sessionId) });
       if (!agg.assistantMessages || !agg.startedAt) {
         // An empty transcript is not a session. Remembered anyway so the sweep
         // does not reconsider it on every start for the next week.
@@ -699,7 +795,22 @@ async function sweepUnreported(apiHost, apiKey, currentSessionId, cwd) {
 }
 
 /** The payload, shared by every report so the three hooks cannot drift apart. */
-function buildBody(sessionId, repo, agg, cwd, status) {
+function buildBody(sessionId, repo, agg, cwd, status, { incognito = isIncognito(sessionId) } = {}) {
+  if (incognito) {
+    // Usage and cost only. No title (it is the first prompt, or a summary of it),
+    // no repo or branch, no files, no pull request and never the transcript. The
+    // server also scrubs, because progress reports sent before the user went
+    // incognito already carried a title.
+    return {
+      externalId: sessionId,
+      incognito: true,
+      startedAt: agg.startedAt,
+      endedAt: agg.endedAt,
+      durationMinutes: agg.durationMinutes,
+      usage: agg.usage,
+      status,
+    };
+  }
   return {
     externalId: sessionId,
     title: agg.title || undefined,
@@ -800,7 +911,7 @@ function post(apiHost, apiKey, body) {
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(payload),
           Authorization: `Bearer ${apiKey}`,
-          'User-Agent': 'pravex-claude-code-plugin/0.1.0',
+          'User-Agent': `pravex-claude-code-plugin/${PLUGIN_VERSION}`,
         },
         timeout: 10000,
       },
@@ -819,16 +930,47 @@ function post(apiHost, apiKey, body) {
 
 /** Which point in the session's life this invocation is. */
 function modeFrom(argv) {
+  if (argv.includes('--incognito')) return 'incognito';
   if (argv.includes('--start')) return 'start';
   if (argv.includes('--progress')) return 'progress';
   return 'end';
 }
 
-async function main() {
-  const mode = modeFrom(process.argv.slice(2));
+/**
+ * `/pravex:incognito`. Marks the session, then reports it straight away so the
+ * server scrubs the title that earlier progress reports already sent, rather
+ * than waiting up to 90 seconds for the next `Stop`.
+ *
+ * Prints for a person: the command shows this output verbatim.
+ */
+async function goIncognito(sessionId) {
+  if (!markIncognito(sessionId)) {
+    console.log('Pravex: could not tell which session this is, so nothing changed.');
+    return;
+  }
+  log(`incognito ${sessionId}`);
+  console.log('Pravex: this session is incognito. The conversation, title, repository, files and pull request');
+  console.log('will not be sent; only usage and cost are recorded. This lasts until the session ends.');
+
   const { apiKey, apiHost } = loadConfig();
-  if (!apiKey || !apiHost) {
-    log(`skipped (${mode}): no apiKey/apiHost (run /pravex:login)`);
+  const transcriptPath = findTranscript(sessionId);
+  if (!apiKey || !apiHost || !transcriptPath) return;
+  try {
+    const agg = await aggregate(transcriptPath, '', { wantTranscript: false });
+    if (!agg.assistantMessages || !agg.startedAt) return;
+    const res = await post(apiHost, apiKey, buildBody(sessionId, '', agg, process.cwd(), 'active', { incognito: true }));
+    log(`ok (incognito) ${sessionId} -> ${res.status}`);
+  } catch (err) {
+    // The marker is what matters; the next Stop or SessionEnd sends the scrubbed report.
+    log(`error (incognito) ${sessionId} -> ${err && err.message}`);
+  }
+}
+
+async function main() {
+  const argv = process.argv.slice(2);
+  const mode = modeFrom(argv);
+  if (mode === 'incognito') {
+    await goIncognito(argv[argv.indexOf('--incognito') + 1]);
     return;
   }
 
@@ -837,6 +979,20 @@ async function main() {
     input = JSON.parse((await readStdin()) || '{}');
   } catch {
     log(`skipped (${mode}): could not parse hook stdin`);
+    return;
+  }
+
+  const { apiKey, apiHost } = loadConfig();
+  if (mode === 'start') {
+    // Before anything that can fail or take time: the indicator is the one part
+    // of this hook the user actually sees.
+    const message = startMessage({ configured: Boolean(apiKey && apiHost), incognito: isIncognito(input.session_id), source: input.source });
+    if (message) process.stdout.write(JSON.stringify({ systemMessage: message }));
+    pruneIncognito();
+    refreshStatusline();
+  }
+  if (!apiKey || !apiHost) {
+    log(`skipped (${mode}): no apiKey/apiHost (run /pravex:login)`);
     return;
   }
 
@@ -871,7 +1027,7 @@ async function main() {
     return;
   }
 
-  const agg = await aggregate(transcriptPath, repo, { wantTranscript: mode === 'end' });
+  const agg = await aggregate(transcriptPath, repo, { wantTranscript: mode === 'end' && !isIncognito(sessionId) });
   if (!agg.assistantMessages || !agg.startedAt) {
     log(`skipped (${mode}) ${sessionId}: empty transcript`);
     return;
@@ -918,7 +1074,13 @@ if (require.main === module) {
 }
 
 module.exports = {
+  INCOGNITO_DIR,
   PROGRESS_MIN_INTERVAL_MS,
+  findTranscript,
+  isIncognito,
+  markIncognito,
+  pruneIncognito,
+  startMessage,
   SECRET_RE,
   buildBody,
   shouldSendProgress,
