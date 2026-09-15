@@ -313,6 +313,36 @@ function repoSlug(cwd) {
   return m ? m[1] : url;
 }
 
+/**
+ * The directory a transcript's session ran in, from the transcript itself.
+ *
+ * Every line Claude Code writes carries `cwd`, so the first one that does is
+ * enough and the rest of a file that can be 50 MB is never read. `''` when no
+ * line says, which the caller must treat as unknown rather than guess at.
+ */
+async function transcriptCwd(transcriptPath) {
+  const rl = readline.createInterface({
+    input: fs.createReadStream(transcriptPath, { encoding: 'utf8' }),
+    crlfDelay: Infinity,
+  });
+  try {
+    for await (const line of rl) {
+      if (!line) continue;
+      try {
+        const o = JSON.parse(line);
+        if (o && typeof o.cwd === 'string' && o.cwd) return o.cwd;
+      } catch {
+        // A torn line is not the end of the file.
+      }
+    }
+  } catch {
+    // Unreadable: unknown, same as a file with no cwd in it.
+  } finally {
+    rl.close();
+  }
+  return '';
+}
+
 function textOf(content) {
   if (typeof content === 'string') return content;
   if (!Array.isArray(content)) return '';
@@ -773,15 +803,20 @@ function findUnreported(currentSessionId) {
  * terminal they ran in is gone — and marking them live would put a permanent
  * green dot on somebody's dashboard for a session nobody is working on.
  *
+ * ⚠️ **Repo and branch come from each transcript's own `cwd`**, never from the
+ * session that is starting. The sweep picks up transcripts from every project on
+ * the machine, and labelling them with the current directory filed a week of
+ * other repositories' sessions under whichever repo was opened next — 32 of them
+ * at once in production.
+ *
  * Errors are swallowed per session: one unreadable transcript must not stop the
  * sweep, and none of this may delay the session the user is actually starting.
  */
-async function sweepUnreported(apiHost, apiKey, currentSessionId, cwd) {
+async function sweepUnreported(apiHost, apiKey, currentSessionId) {
   const candidates = findUnreported(currentSessionId);
   if (!candidates.length) return;
 
   log(`sweep: ${candidates.length} unreported session(s)`);
-  const repo = repoSlug(cwd);
   const deadline = Date.now() + SWEEP_BUDGET_MS;
 
   for (let index = 0; index < candidates.length; index += 1) {
@@ -793,6 +828,9 @@ async function sweepUnreported(apiHost, apiKey, currentSessionId, cwd) {
       return;
     }
     try {
+      // Unknown stays unknown: an empty repo is honest, the current one is not.
+      const cwd = await transcriptCwd(full);
+      const repo = cwd ? repoSlug(cwd) : '';
       const agg = await aggregate(full, repo, { wantTranscript: !isIncognito(sessionId) });
       if (!agg.assistantMessages || !agg.startedAt) {
         // An empty transcript is not a session. Remembered anyway so the sweep
@@ -838,7 +876,8 @@ function buildBody(sessionId, repo, agg, cwd, status, { incognito = isIncognito(
     externalId: sessionId,
     title: agg.title || undefined,
     repo,
-    branch: agg.branch || git(['rev-parse', '--abbrev-ref', 'HEAD'], cwd).replace(/^HEAD$/, ''),
+    // No cwd means no fallback: `git` with no cwd would ask the current directory.
+    branch: agg.branch || (cwd ? git(['rev-parse', '--abbrev-ref', 'HEAD'], cwd).replace(/^HEAD$/, '') : ''),
     startedAt: agg.startedAt,
     endedAt: agg.endedAt,
     // Sent explicitly so the server does not fall back to wall clock.
@@ -1039,7 +1078,7 @@ async function main() {
   // The sweep runs first and only on start. It is the fix for sessions whose
   // terminal was closed, which `SessionEnd` never reported at all.
   if (mode === 'start') {
-    await sweepUnreported(apiHost, apiKey, sessionId, cwd);
+    await sweepUnreported(apiHost, apiKey, sessionId);
   }
 
   // Before the transcript is opened, so a throttled turn costs one small file
@@ -1131,5 +1170,6 @@ module.exports = {
   prUrlSlug,
   redact,
   repoSlug,
+  transcriptCwd,
   textOf,
 };
