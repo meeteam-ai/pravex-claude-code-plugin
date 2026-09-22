@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * `npx @meeteam/pravex-codex <command>` — Pravex for OpenAI's Codex CLI on a
+ * `npx @pravex/codex <command>` — Pravex for OpenAI's Codex CLI on a
  * machine that has no Claude Code.
  *
  *   install               write the three hooks into ~/.codex/hooks.json and copy the reporter

@@ -4,7 +4,7 @@ Reports each finished coding session to your [Pravex](https://pravex.tenox.ai)
 workspace — model, tokens, cost, active duration, files touched and the pull
 request it led to. Claude Code first; OpenAI's Codex CLI too, from the same
 machine (`/pravex:codex --install`) or on its own
-(`npx @meeteam/pravex-codex install`, see `packages/pravex-codex/`).
+(`npx @pravex/codex install`, see `packages/pravex-codex/`).
 
 ## Install
 

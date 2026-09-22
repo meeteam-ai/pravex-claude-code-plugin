@@ -104,7 +104,7 @@ turn's model; rollouts from CLIs before those existed fall back to the last
 cumulative `token_count`.
 
 A machine without Claude Code installs the same hooks with
-[`npx @meeteam/pravex-codex install`](../../packages/pravex-codex/README.md).
+[`npx @pravex/codex install`](../../packages/pravex-codex/README.md).
 
 ## Keep it up to date
 
