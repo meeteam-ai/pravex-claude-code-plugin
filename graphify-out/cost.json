@@ -6,8 +6,15 @@
       "output_tokens": 0,
       "files": 21,
       "note": "semantic results reused from combined Pravex build (565,824 tokens, 2026-09-21)"
+    },
+    {
+      "date": "2026-09-22T01:31:21.839712+00:00",
+      "input_tokens": 77784,
+      "output_tokens": 0,
+      "files": 33,
+      "note": "refresh after rebase onto main: new/changed docs re-extracted (subagent total, input/output not separated)"
     }
   ],
-  "total_input_tokens": 0,
+  "total_input_tokens": 77784,
   "total_output_tokens": 0
 }
