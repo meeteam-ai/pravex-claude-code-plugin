@@ -314,11 +314,15 @@ jobs:
         run: node --test packages/pravex-codex/*.test.js
 
   publish-codex-package:
-    name: Publish @meeteam/pravex-codex
+    name: Publish @pravex/codex
     # Only a version tag publishes; PRs and branch pushes just build and test.
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [pravex-scripts]
     runs-on: ubuntu-latest
+    # npm Trusted Publishing: npm exchanges this job's GitHub OIDC token for a
+    # short-lived publish credential and attaches a signed provenance statement.
+    # No NPM_TOKEN exists to leak. The trusted publisher on npmjs.com names this
+    # repository and this workflow file, so renaming either breaks publishing.
     permissions:
       contents: read
       id-token: write
@@ -327,13 +331,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      # Trusted publishing needs npm 11.5.1 or later, which Node 24 ships.
       - uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
+
+      # A tag that disagrees with package.json would publish the wrong version
+      # under the right tag, or fail halfway. Refuse before touching the registry.
+      - name: Tag matches package version
+        working-directory: packages/pravex-codex
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match packages/pravex-codex version $version"
+            exit 1
+          fi
 
       - name: Publish
         working-directory: packages/pravex-codex
-        run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public

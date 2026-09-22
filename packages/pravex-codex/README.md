@@ -1,4 +1,4 @@
-# @meeteam/pravex-codex
+# @pravex/codex
 
 Reports every [OpenAI Codex CLI](https://github.com/openai/codex) session —
 model, tokens, API-equivalent cost, active duration, files touched, PR link —
@@ -6,9 +6,9 @@ to your Pravex workspace. For machines without Claude Code; with it, run
 `/pravex:codex --install` instead.
 
 ```bash
-npx @meeteam/pravex-codex login      # device flow, nothing to paste
-npx @meeteam/pravex-codex install    # three hooks in ~/.codex/hooks.json
-npx @meeteam/pravex-codex status
+npx @pravex/codex login      # device flow, nothing to paste
+npx @pravex/codex install    # three hooks in ~/.codex/hooks.json
+npx @pravex/codex status
 ```
 
 `install` copies the reporter to `~/.pravex/codex/` and points Codex's
