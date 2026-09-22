@@ -134,6 +134,18 @@ Configuration comes from `PRAVEX_API_KEY` / `PRAVEX_API_HOST`, or
 `~/.pravex/config.json`, in that order — the environment variables are how the
 tests drive it against a local server.
 
+**Knowledge graph.** `graphify-out/` holds a [graphify](https://github.com/Graphify-Labs/graphify)
+graph of this repo (`graphify query "<question>"`). The hooks in `.githooks/`
+rebuild it after each commit and branch switch — code only, no LLM — and do
+nothing if graphify isn't installed. Enable them once per clone:
+
+```
+git config core.hooksPath .githooks
+```
+
+The rebuild runs after the commit, so the refreshed graph shows up as a change
+to commit next. Doc changes need `/graphify . --update` in Claude Code.
+
 ## Licence
 
 MIT — see [LICENSE](./LICENSE).
