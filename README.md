@@ -146,6 +146,12 @@ git config core.hooksPath .githooks
 The rebuild runs after the commit, so the refreshed graph shows up as a change
 to commit next. Doc changes need `/graphify . --update` in Claude Code.
 
+Also once per clone: `graphify hook install` registers the union merge driver for
+`graph.json` in your local git config. After `git pull`, run `graphify update .`
+(or `git config --global alias.gpull '!git pull && graphify update .'`). Committed:
+`graph.json`, `GRAPH_REPORT.md`, `graph.html`, `manifest.json`; ignored:
+`cost.json`, `cache/` and machine-local state.
+
 ## Licence
 
 MIT — see [LICENSE](./LICENSE).

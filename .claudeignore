@@ -1,0 +1,7 @@
+# Recommended by graphify (README → Troubleshooting): its outputs change on every
+# rebuild. NOTE: Claude Code does not read .claudeignore — it is not an official
+# feature (anthropics/claude-code#29455). It only takes effect with a hook such as
+# li-zhixin/claude-ignore; the built-in equivalent is `permissions.deny` in
+# .claude/settings.json.
+graph.json
+graphify-out/
