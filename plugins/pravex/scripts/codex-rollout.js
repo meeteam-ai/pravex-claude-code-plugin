@@ -40,6 +40,9 @@
 
 const fs = require('fs');
 const readline = require('readline');
+// Required rather than passed in with the other helpers: it requires nothing back,
+// so there is no cycle to break, and it is the same file report-session.js uses.
+const facetsLib = require('./session-facets.js');
 
 /**
  * A `TokenUsage` as the Codex protocol writes it, in the shape `POST /sessions`
@@ -89,7 +92,7 @@ function patchPaths(patch) {
 
 /** The command string of a shell-ish tool call, whatever the CLI version named it. */
 function shellCommand(name, args) {
-  if (!/^(shell|exec_command|container\.exec|local_shell)/.test(name || '')) return null;
+  if (facetsLib.codexToolCategory(name) !== 'shell') return null;
   let a = args;
   if (typeof a === 'string') {
     try {
@@ -131,15 +134,19 @@ function outputFailed(output) {
  *   than required, because that file requires this one.
  */
 async function aggregate(transcriptPath, repo, { wantTranscript = true } = {}, helpers) {
-  const { addUsage, bashWrites, collectPrUrls, prUrlMatchesRepo, activeMinutes, clampText, packTranscript, redact, textOf, TEST_FILE_RE } = helpers;
+  const { addUsage, bashWrites, collectPrUrls, prUrlMatchesRepo, activeMinutes, clampText, packTranscript, redact, textOf } = helpers;
+  const { TEST_FILE_RE } = facetsLib;
 
   const files = new Set();
   const bashFiles = new Set();
   const prUrls = new Set();
   const stamps = [];
   const turns = [];
-  // call_id -> paths, held until the output says the patch applied.
+  // call_id -> { paths, lines }, held until the output says the patch applied.
   const pendingPatches = new Map();
+  // call_id -> what a shell command was (commit, PR, test run), until its exit code is known.
+  const pendingShells = new Map();
+  const facets = facetsLib.createFacets();
   // Per-response usage records, the primary source. Deduped on response_id.
   const byModel = new Map();
   const seenResponses = new Set();
@@ -233,6 +240,7 @@ async function aggregate(transcriptPath, repo, { wantTranscript = true } = {}, h
     if (p.type === 'function_call' || p.type === 'custom_tool_call' || p.type === 'local_shell_call') {
       toolUses += 1;
       const name = p.name || (p.type === 'local_shell_call' ? 'local_shell' : 'tool');
+      facets.tool(facetsLib.codexToolCategory(name));
       if (wantTranscript) {
         const lastTurn = turns[turns.length - 1];
         if (lastTurn && lastTurn.role === 'assistant') (lastTurn.tools = lastTurn.tools || []).push(name);
@@ -240,22 +248,43 @@ async function aggregate(transcriptPath, repo, { wantTranscript = true } = {}, h
       }
       const argsRaw = p.type === 'custom_tool_call' ? p.input : p.type === 'local_shell_call' ? p.action : p.arguments;
       if (name === 'apply_patch') {
-        const paths = patchPaths(typeof argsRaw === 'string' ? argsRaw : argsRaw && argsRaw.patch);
-        if (paths.length && p.call_id) pendingPatches.set(p.call_id, paths);
+        const patch = typeof argsRaw === 'string' ? argsRaw : argsRaw && argsRaw.patch;
+        const paths = patchPaths(patch);
+        if (paths.length && p.call_id) pendingPatches.set(p.call_id, { paths, lines: facetsLib.patchLines(patch) });
       } else {
         const cmd = shellCommand(name, argsRaw);
-        if (cmd) for (const f of bashWrites(cmd)) bashFiles.add(f);
+        if (cmd) {
+          for (const f of bashWrites(cmd)) bashFiles.add(f);
+          if (p.call_id) pendingShells.set(p.call_id, facetsLib.classifyShell(cmd));
+        }
       }
+      continue;
+    }
+
+    // The hosted web search the model runs itself. No output item follows, so it
+    // can never fail — but it is a tool call, and the web category would otherwise
+    // always read zero for Codex.
+    if (p.type === 'web_search_call') {
+      toolUses += 1;
+      facets.tool('web');
       continue;
     }
 
     if (p.type === 'function_call_output' || p.type === 'custom_tool_call_output' || p.type === 'local_shell_call_output') {
       const failed = outputFailed(p.output);
       if (failed) toolErrors += 1;
-      const paths = pendingPatches.get(p.call_id);
-      if (paths) {
-        if (!failed) for (const f of paths) files.add(f);
+      const patch = pendingPatches.get(p.call_id);
+      if (patch) {
+        if (!failed) {
+          for (const f of patch.paths) files.add(f);
+          facets.edit(patch.lines);
+        }
         pendingPatches.delete(p.call_id);
+      }
+      const shell = pendingShells.get(p.call_id);
+      if (shell) {
+        facets.shell(shell, !failed);
+        pendingShells.delete(p.call_id);
       }
       if (typeof p.output === 'string') collectPrUrls(p.output, prUrls);
     }
@@ -289,6 +318,7 @@ async function aggregate(transcriptPath, repo, { wantTranscript = true } = {}, h
     filesTouchedFromShell: bashFiles.size,
     assistantMessages,
     transcript: wantTranscript ? packTranscript(turns) : undefined,
+    facets: facets.result(files, toolUses, toolErrors),
   };
 }
 

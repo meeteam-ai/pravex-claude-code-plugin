@@ -1,15 +1,15 @@
 {
   ".claude-plugin/marketplace.json": {
-    "mtime": 1790040398.5842454,
-    "seen": 1790040681.8373811,
-    "ast_hash": "86ce3432f529fbf868227f9b9d4c04b5",
-    "semantic_hash": "86ce3432f529fbf868227f9b9d4c04b5"
+    "mtime": 1790083558.1209912,
+    "seen": 1790083564.299528,
+    "ast_hash": "6714e9318806177c2fb42de7d4471cf1",
+    "semantic_hash": ""
   },
   "plugins/pravex/.claude-plugin/plugin.json": {
-    "mtime": 1790040398.5904222,
-    "seen": 1790040681.837388,
-    "ast_hash": "e8d2891f7826d8d04bfa76c158977301",
-    "semantic_hash": "e8d2891f7826d8d04bfa76c158977301"
+    "mtime": 1790083558.121963,
+    "seen": 1790083564.299537,
+    "ast_hash": "06927d51549243bf7a2a1960fd47f5d8",
+    "semantic_hash": ""
   },
   "plugins/pravex/hooks/hooks.json": {
     "mtime": 1789430691.388445,
@@ -18,10 +18,10 @@
     "semantic_hash": "061b9b228941744b01648b04f6246381"
   },
   "plugins/pravex/scripts/incognito-statusline.test.js": {
-    "mtime": 1790040398.5929377,
-    "seen": 1790040681.8373928,
-    "ast_hash": "c7ec9e06593a22ae0bfa63caa83ad6a7",
-    "semantic_hash": "c7ec9e06593a22ae0bfa63caa83ad6a7"
+    "mtime": 1790083558.089601,
+    "seen": 1790083564.299541,
+    "ast_hash": "bf61414942e547242ec1b62b5f86b118",
+    "semantic_hash": ""
   },
   "plugins/pravex/scripts/login.js": {
     "mtime": 1789435443.2431145,
@@ -36,16 +36,16 @@
     "semantic_hash": "86384b12fcbffc04325efae45202a5d5"
   },
   "plugins/pravex/scripts/report-session.js": {
-    "mtime": 1790040398.5938928,
-    "seen": 1790040681.837395,
-    "ast_hash": "72e563cadd7a4422432a23ecf40efd03",
-    "semantic_hash": "72e563cadd7a4422432a23ecf40efd03"
+    "mtime": 1790083558.1229796,
+    "seen": 1790083564.2995431,
+    "ast_hash": "fa2be3280390dae66366914268198197",
+    "semantic_hash": ""
   },
   "plugins/pravex/scripts/report-session.test.js": {
-    "mtime": 1790040398.5949593,
-    "seen": 1790040681.837396,
-    "ast_hash": "7ddff005eb055107f2243ddaa195a4f3",
-    "semantic_hash": "7ddff005eb055107f2243ddaa195a4f3"
+    "mtime": 1790083558.090767,
+    "seen": 1790083564.299544,
+    "ast_hash": "3fc333e0c36f5a32445c7a78f5bed514",
+    "semantic_hash": ""
   },
   "plugins/pravex/scripts/statusline.js": {
     "mtime": 1789436760.5117207,
@@ -78,22 +78,22 @@
     "semantic_hash": "25d1f64d4903f02e86cfaf76e106fbb3"
   },
   ".github/workflows/validate-plugins.yml": {
-    "mtime": 1790040398.5849602,
-    "seen": 1790040681.837399,
-    "ast_hash": "f272c9c4ca5e75bf3000f014671fda54",
-    "semantic_hash": "f272c9c4ca5e75bf3000f014671fda54"
+    "mtime": 1790083558.0876312,
+    "seen": 1790083564.2995489,
+    "ast_hash": "0afb3e7cb8c9b638b160880c44c5036e",
+    "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1790040398.5860574,
-    "seen": 1790040681.8374,
-    "ast_hash": "faa0bc9c4d4427f670950cbbdaf81a05",
-    "semantic_hash": "faa0bc9c4d4427f670950cbbdaf81a05"
+    "mtime": 1790083558.0878844,
+    "seen": 1790083564.2995489,
+    "ast_hash": "24573807bea4e42b3a9f7b7b190850ae",
+    "semantic_hash": ""
   },
   "plugins/pravex/README.md": {
-    "mtime": 1790040398.5907574,
-    "seen": 1790040681.8374012,
-    "ast_hash": "3e8770814646a342f3244cab30b82814",
-    "semantic_hash": "3e8770814646a342f3244cab30b82814"
+    "mtime": 1790083558.0882573,
+    "seen": 1790083564.299551,
+    "ast_hash": "5400924f5c1f7518b654eeab30d02aef",
+    "semantic_hash": ""
   },
   "plugins/pravex/commands/incognito.md": {
     "mtime": 1789435443.2425046,
@@ -138,10 +138,10 @@
     "semantic_hash": "0746314ce7a28d865cb5fe2454cabf55"
   },
   "packages/pravex-codex/package.json": {
-    "mtime": 1790040398.5899324,
-    "seen": 1790040681.837387,
-    "ast_hash": "ac88e8a3334d1fa83eeceb5add920621",
-    "semantic_hash": "ac88e8a3334d1fa83eeceb5add920621"
+    "mtime": 1790083558.1212957,
+    "seen": 1790083564.299536,
+    "ast_hash": "0bbcbaf3eab612b6f6b2e8ea2b2cc1f9",
+    "semantic_hash": ""
   },
   "packages/pravex-codex/sync-scripts.js": {
     "mtime": 1790040398.5901628,
@@ -150,10 +150,10 @@
     "semantic_hash": "ef54f55a1434bbb1fe1bdea89a05d691"
   },
   "plugins/pravex/scripts/codex-install.js": {
-    "mtime": 1790040398.5912294,
-    "seen": 1790040681.8373911,
-    "ast_hash": "97413764c6ee811a47cc112a5ccad575",
-    "semantic_hash": "97413764c6ee811a47cc112a5ccad575"
+    "mtime": 1790083558.0885704,
+    "seen": 1790083564.2995389,
+    "ast_hash": "6f8366f290f701579e151f44bae9433a",
+    "semantic_hash": ""
   },
   "plugins/pravex/scripts/codex-install.test.js": {
     "mtime": 1790040398.5914645,
@@ -162,16 +162,16 @@
     "semantic_hash": "11767b39eae6995f301d33312b197ed4"
   },
   "plugins/pravex/scripts/codex-report.test.js": {
-    "mtime": 1790040398.591707,
-    "seen": 1790040681.8373919,
-    "ast_hash": "e4b409436d3e644f65e183973d652c86",
-    "semantic_hash": "e4b409436d3e644f65e183973d652c86"
+    "mtime": 1790083558.0888484,
+    "seen": 1790083564.29954,
+    "ast_hash": "1e8870ec2e656aeb025842d75aa3bec4",
+    "semantic_hash": ""
   },
   "plugins/pravex/scripts/codex-rollout.js": {
-    "mtime": 1790040398.5920646,
-    "seen": 1790040681.8373919,
-    "ast_hash": "bbd6ed83cf745974aeef548f2aa0c3db",
-    "semantic_hash": "bbd6ed83cf745974aeef548f2aa0c3db"
+    "mtime": 1790083558.122408,
+    "seen": 1790083564.29954,
+    "ast_hash": "4c477c0fa76909a09e285f1ba91e0977",
+    "semantic_hash": ""
   },
   "plugins/pravex/scripts/codex-rollout.test.js": {
     "mtime": 1790040398.5924141,
@@ -196,5 +196,29 @@
     "seen": 1790040681.8374012,
     "ast_hash": "d6fe00bd6d9103e992f42e494d1f0c8a",
     "semantic_hash": "d6fe00bd6d9103e992f42e494d1f0c8a"
+  },
+  ".githooks/post-checkout": {
+    "mtime": 1790041105.2841825,
+    "seen": 1790083564.29953,
+    "ast_hash": "7073187378716bbef9b4c9712d17b3bb",
+    "semantic_hash": ""
+  },
+  ".githooks/post-commit": {
+    "mtime": 1790041105.2889457,
+    "seen": 1790083564.299531,
+    "ast_hash": "045003768f00209951786dc9f10ce652",
+    "semantic_hash": ""
+  },
+  "plugins/pravex/scripts/session-facets.js": {
+    "mtime": 1790083558.0911229,
+    "seen": 1790083564.299544,
+    "ast_hash": "8ca190545d053b8e800d1350a3e435ae",
+    "semantic_hash": ""
+  },
+  "plugins/pravex/scripts/session-facets.test.js": {
+    "mtime": 1790083558.0914247,
+    "seen": 1790083564.299545,
+    "ast_hash": "9362584b4e229821afca28db45e92725",
+    "semantic_hash": ""
   }
 }

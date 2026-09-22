@@ -55,9 +55,10 @@ update, and each session start refreshes the copy. Under a managed
 ```
 
 The session still appears in Pravex, labelled incognito, with its **token usage,
-cost, model and duration**. The conversation, title, repository and branch, files
-touched and pull request are not sent, and the command reports straight away so
-the server scrubs what earlier progress reports already sent. It lasts until the
+cost, model and duration**, plus the machine's time zone. The conversation, title,
+repository and branch, files touched, pull request and session facets are not
+sent, and the command reports straight away so the server scrubs what earlier
+progress reports already sent. It lasts until the
 session ends and cannot be undone for that session.
 
 Markers live in `~/.pravex/incognito/<session id>` and are pruned after 30 days.
@@ -89,6 +90,24 @@ no code, no file contents**:
 | `testsAdded` | How many of those look like test files |
 | `retryRate` | Percentage of tool calls that errored |
 | `prUrl` | Only a pull request belonging to this session's own repo |
+| `tz` | The machine's IANA time zone (`America/Bogota`), so sessions land in your own day and hour |
+| `facets` | What kind of work it was, as **counts only** — see below |
+
+`facets` is counts and categories, never a path, file name or command. Everything
+in it is computed in the same single pass over the transcript:
+
+| Facet | Notes |
+| --- | --- |
+| `languages` | Edited files per language, by extension (`TypeScript`, `Python`, `Dockerfile`, … unknown is `Other`) |
+| `fileKinds` | Edited files that are tests, docs, ADRs, CI, config, migrations, dependency manifests or infra. A file can count as several |
+| `tools` | Tool calls by category — edit, shell, read, search, web, subagent, plan, mcp, other — the same vocabulary for Claude Code and Codex |
+| `toolUses`, `toolErrors` | Tool calls, and how many of them failed |
+| `linesAdded`, `linesRemoved` | From edits whose result confirmed they landed |
+| `commits`, `prsOpened` | Successful `git commit` and `gh pr create` calls |
+| `testRuns` | Test-runner calls (`vitest`, `jest`, `pytest`, `go test`, `npm test`, …) that passed and failed |
+
+A facet that cannot be computed never costs the report: `facets` is simply left
+out. **Incognito sends usage only, plus the time zone** — never `facets`.
 
 Three of those are deliberate and were measured rather than guessed:
 

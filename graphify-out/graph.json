@@ -47,6 +47,30 @@
       "source_location": "L22"
     },
     {
+      "id": "plugins_pravex_scripts_report_session_activeminutes",
+      "label": "activeMinutes()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "Plugin Session Reporter",
+      "file_type": "code",
+      "norm_label": "activeminutes()",
+      "source_file": "plugins/pravex/scripts/report-session.js",
+      "source_location": "L537"
+    },
+    {
+      "id": "plugins_pravex_scripts_report_session_addusage",
+      "label": "addUsage()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "Plugin Session Reporter",
+      "file_type": "code",
+      "norm_label": "addusage()",
+      "source_file": "plugins/pravex/scripts/report-session.js",
+      "source_location": "L826"
+    },
+    {
       "id": "plugins_pravex_scripts_report_session_agentfrom",
       "label": "agentFrom()",
       "_callable": true,
@@ -56,7 +80,19 @@
       "file_type": "code",
       "norm_label": "agentfrom()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L315"
+      "source_location": "L316"
+    },
+    {
+      "id": "plugins_pravex_scripts_report_session_aggregate",
+      "label": "aggregate()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "Plugin Session Reporter",
+      "file_type": "code",
+      "norm_label": "aggregate()",
+      "source_file": "plugins/pravex/scripts/report-session.js",
+      "source_location": "L670"
     },
     {
       "id": "plugins_pravex_scripts_report_session_aggregatefor",
@@ -68,7 +104,7 @@
       "file_type": "code",
       "norm_label": "aggregatefor()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L820"
+      "source_location": "L839"
     },
     {
       "id": "plugins_pravex_scripts_report_session_apiurl",
@@ -80,7 +116,7 @@
       "file_type": "code",
       "norm_label": "apiurl()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1119"
+      "source_location": "L1173"
     },
     {
       "id": "plugins_pravex_scripts_report_session_buildbody",
@@ -92,7 +128,55 @@
       "file_type": "code",
       "norm_label": "buildbody()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1019"
+      "source_location": "L1065"
+    },
+    {
+      "id": "plugins_pravex_scripts_report_session_clamptext",
+      "label": "clampText()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "Plugin Session Reporter",
+      "file_type": "code",
+      "norm_label": "clamptext()",
+      "source_file": "plugins/pravex/scripts/report-session.js",
+      "source_location": "L634"
+    },
+    {
+      "id": "plugins_pravex_scripts_report_session_collectprurls",
+      "label": "collectPrUrls()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "Plugin Session Reporter",
+      "file_type": "code",
+      "norm_label": "collectprurls()",
+      "source_file": "plugins/pravex/scripts/report-session.js",
+      "source_location": "L478"
+    },
+    {
+      "id": "plugins_pravex_scripts_report_session_extractturn",
+      "label": "extractTurn()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "Plugin Session Reporter",
+      "file_type": "code",
+      "norm_label": "extractturn()",
+      "source_file": "plugins/pravex/scripts/report-session.js",
+      "source_location": "L596"
+    },
+    {
+      "id": "plugins_pravex_scripts_report_session_facetsof",
+      "label": "facetsOf()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "Plugin Session Reporter",
+      "file_type": "code",
+      "norm_label": "facetsof()",
+      "source_file": "plugins/pravex/scripts/report-session.js",
+      "source_location": "L1055"
     },
     {
       "id": "plugins_pravex_scripts_report_session_findcodexrollouts",
@@ -104,7 +188,7 @@
       "file_type": "code",
       "norm_label": "findcodexrollouts()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L367"
+      "source_location": "L368"
     },
     {
       "id": "plugins_pravex_scripts_report_session_findtranscript",
@@ -116,7 +200,7 @@
       "file_type": "code",
       "norm_label": "findtranscript()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L384"
+      "source_location": "L385"
     },
     {
       "id": "plugins_pravex_scripts_report_session_findunreported",
@@ -128,7 +212,7 @@
       "file_type": "code",
       "norm_label": "findunreported()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L903"
+      "source_location": "L922"
     },
     {
       "id": "plugins_pravex_scripts_report_session_flagvalue",
@@ -140,7 +224,7 @@
       "file_type": "code",
       "norm_label": "flagvalue()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1165"
+      "source_location": "L1219"
     },
     {
       "id": "plugins_pravex_scripts_report_session_flushspool",
@@ -152,7 +236,7 @@
       "file_type": "code",
       "norm_label": "flushspool()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1087"
+      "source_location": "L1141"
     },
     {
       "id": "plugins_pravex_scripts_report_session_git",
@@ -164,7 +248,7 @@
       "file_type": "code",
       "norm_label": "git()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L419"
+      "source_location": "L420"
     },
     {
       "id": "plugins_pravex_scripts_report_session_goincognito",
@@ -176,7 +260,7 @@
       "file_type": "code",
       "norm_label": "goincognito()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1188"
+      "source_location": "L1242"
     },
     {
       "id": "plugins_pravex_scripts_report_session_incognitomarker",
@@ -188,7 +272,7 @@
       "file_type": "code",
       "norm_label": "incognitomarker()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L205"
+      "source_location": "L206"
     },
     {
       "id": "plugins_pravex_scripts_report_session_isincognito",
@@ -200,7 +284,7 @@
       "file_type": "code",
       "norm_label": "isincognito()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L210"
+      "source_location": "L211"
     },
     {
       "id": "plugins_pravex_scripts_report_session_loadconfig",
@@ -212,7 +296,7 @@
       "file_type": "code",
       "norm_label": "loadconfig()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L192"
+      "source_location": "L193"
     },
     {
       "id": "plugins_pravex_scripts_report_session_log",
@@ -224,7 +308,7 @@
       "file_type": "code",
       "norm_label": "log()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L183"
+      "source_location": "L184"
     },
     {
       "id": "plugins_pravex_scripts_report_session_main",
@@ -236,7 +320,7 @@
       "file_type": "code",
       "norm_label": "main()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1211"
+      "source_location": "L1265"
     },
     {
       "id": "plugins_pravex_scripts_report_session_markincognito",
@@ -248,7 +332,7 @@
       "file_type": "code",
       "norm_label": "markincognito()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L216"
+      "source_location": "L217"
     },
     {
       "id": "plugins_pravex_scripts_report_session_modefrom",
@@ -260,7 +344,19 @@
       "file_type": "code",
       "norm_label": "modefrom()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1156"
+      "source_location": "L1210"
+    },
+    {
+      "id": "plugins_pravex_scripts_report_session_packtranscript",
+      "label": "packTranscript()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "Plugin Session Reporter",
+      "file_type": "code",
+      "norm_label": "packtranscript()",
+      "source_file": "plugins/pravex/scripts/report-session.js",
+      "source_location": "L649"
     },
     {
       "id": "plugins_pravex_scripts_report_session_post",
@@ -272,7 +368,7 @@
       "file_type": "code",
       "norm_label": "post()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1125"
+      "source_location": "L1179"
     },
     {
       "id": "plugins_pravex_scripts_report_session_pruneincognito",
@@ -284,7 +380,7 @@
       "file_type": "code",
       "norm_label": "pruneincognito()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L224"
+      "source_location": "L225"
     },
     {
       "id": "plugins_pravex_scripts_report_session_readprogress",
@@ -296,7 +392,7 @@
       "file_type": "code",
       "norm_label": "readprogress()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L882"
+      "source_location": "L901"
     },
     {
       "id": "plugins_pravex_scripts_report_session_readreported",
@@ -308,7 +404,7 @@
       "file_type": "code",
       "norm_label": "readreported()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L861"
+      "source_location": "L880"
     },
     {
       "id": "plugins_pravex_scripts_report_session_readstdin",
@@ -320,7 +416,19 @@
       "file_type": "code",
       "norm_label": "readstdin()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L407"
+      "source_location": "L408"
+    },
+    {
+      "id": "plugins_pravex_scripts_report_session_redact",
+      "label": "redact()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "Plugin Session Reporter",
+      "file_type": "code",
+      "norm_label": "redact()",
+      "source_file": "plugins/pravex/scripts/report-session.js",
+      "source_location": "L575"
     },
     {
       "id": "plugins_pravex_scripts_report_session_refreshcodexcopy",
@@ -332,7 +440,7 @@
       "file_type": "code",
       "norm_label": "refreshcodexcopy()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L303"
+      "source_location": "L304"
     },
     {
       "id": "plugins_pravex_scripts_report_session_refreshstatusline",
@@ -344,7 +452,7 @@
       "file_type": "code",
       "norm_label": "refreshstatusline()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L289"
+      "source_location": "L290"
     },
     {
       "id": "plugins_pravex_scripts_report_session_rememberreported",
@@ -356,7 +464,7 @@
       "file_type": "code",
       "norm_label": "rememberreported()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L870"
+      "source_location": "L889"
     },
     {
       "id": "plugins_pravex_scripts_report_session_reposlug",
@@ -368,7 +476,7 @@
       "file_type": "code",
       "norm_label": "reposlug()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L429"
+      "source_location": "L430"
     },
     {
       "id": "plugins_pravex_scripts_report_session_shouldsendprogress",
@@ -380,7 +488,7 @@
       "file_type": "code",
       "norm_label": "shouldsendprogress()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L831"
+      "source_location": "L850"
     },
     {
       "id": "plugins_pravex_scripts_report_session_spawndetached",
@@ -392,7 +500,7 @@
       "file_type": "code",
       "norm_label": "spawndetached()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L266"
+      "source_location": "L267"
     },
     {
       "id": "plugins_pravex_scripts_report_session_spawndetachedend",
@@ -404,7 +512,7 @@
       "file_type": "code",
       "norm_label": "spawndetachedend()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1176"
+      "source_location": "L1230"
     },
     {
       "id": "plugins_pravex_scripts_report_session_spawnupdatecheck",
@@ -416,7 +524,7 @@
       "file_type": "code",
       "norm_label": "spawnupdatecheck()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L281"
+      "source_location": "L282"
     },
     {
       "id": "plugins_pravex_scripts_report_session_spool",
@@ -428,7 +536,7 @@
       "file_type": "code",
       "norm_label": "spool()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1065"
+      "source_location": "L1119"
     },
     {
       "id": "plugins_pravex_scripts_report_session_startmessage",
@@ -440,7 +548,7 @@
       "file_type": "code",
       "norm_label": "startmessage()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L248"
+      "source_location": "L249"
     },
     {
       "id": "plugins_pravex_scripts_report_session_sweepunreported",
@@ -452,7 +560,31 @@
       "file_type": "code",
       "norm_label": "sweepunreported()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L974"
+      "source_location": "L993"
+    },
+    {
+      "id": "plugins_pravex_scripts_report_session_textof",
+      "label": "textOf()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "Plugin Session Reporter",
+      "file_type": "code",
+      "norm_label": "textof()",
+      "source_file": "plugins/pravex/scripts/report-session.js",
+      "source_location": "L470"
+    },
+    {
+      "id": "plugins_pravex_scripts_report_session_timezone",
+      "label": "timeZone()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "Plugin Session Reporter",
+      "file_type": "code",
+      "norm_label": "timezone()",
+      "source_file": "plugins/pravex/scripts/report-session.js",
+      "source_location": "L1043"
     },
     {
       "id": "plugins_pravex_scripts_report_session_transcriptcwd",
@@ -464,7 +596,7 @@
       "file_type": "code",
       "norm_label": "transcriptcwd()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L444"
+      "source_location": "L445"
     },
     {
       "id": "plugins_pravex_scripts_report_session_walkcodexrollouts",
@@ -476,7 +608,7 @@
       "file_type": "code",
       "norm_label": "walkcodexrollouts()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L341"
+      "source_location": "L342"
     },
     {
       "id": "plugins_pravex_scripts_sweep_repo_test_captureserver",
@@ -568,11 +700,11 @@
       "_callable": true,
       "_origin": "ast",
       "community": 12,
-      "community_name": "Codex Rollout Parser",
+      "community_name": "codex-rollout.js",
       "file_type": "code",
       "norm_label": "aggregate()",
       "source_file": "plugins/pravex/scripts/codex-rollout.js",
-      "source_location": "L133"
+      "source_location": "L136"
     },
     {
       "id": "plugins_pravex_scripts_codex_rollout_isrollout",
@@ -580,11 +712,11 @@
       "_callable": true,
       "_origin": "ast",
       "community": 12,
-      "community_name": "Codex Rollout Parser",
+      "community_name": "codex-rollout.js",
       "file_type": "code",
       "norm_label": "isrollout()",
       "source_file": "plugins/pravex/scripts/codex-rollout.js",
-      "source_location": "L65"
+      "source_location": "L68"
     },
     {
       "id": "plugins_pravex_scripts_codex_rollout_outputfailed",
@@ -592,11 +724,11 @@
       "_callable": true,
       "_origin": "ast",
       "community": 12,
-      "community_name": "Codex Rollout Parser",
+      "community_name": "codex-rollout.js",
       "file_type": "code",
       "norm_label": "outputfailed()",
       "source_file": "plugins/pravex/scripts/codex-rollout.js",
-      "source_location": "L111"
+      "source_location": "L114"
     },
     {
       "id": "plugins_pravex_scripts_codex_rollout_patchpaths",
@@ -604,11 +736,11 @@
       "_callable": true,
       "_origin": "ast",
       "community": 12,
-      "community_name": "Codex Rollout Parser",
+      "community_name": "codex-rollout.js",
       "file_type": "code",
       "norm_label": "patchpaths()",
       "source_file": "plugins/pravex/scripts/codex-rollout.js",
-      "source_location": "L81"
+      "source_location": "L84"
     },
     {
       "id": "plugins_pravex_scripts_codex_rollout_shellcommand",
@@ -616,11 +748,11 @@
       "_callable": true,
       "_origin": "ast",
       "community": 12,
-      "community_name": "Codex Rollout Parser",
+      "community_name": "codex-rollout.js",
       "file_type": "code",
       "norm_label": "shellcommand()",
       "source_file": "plugins/pravex/scripts/codex-rollout.js",
-      "source_location": "L91"
+      "source_location": "L94"
     },
     {
       "id": "plugins_pravex_scripts_codex_rollout_tokenusagetomodelusage",
@@ -628,11 +760,11 @@
       "_callable": true,
       "_origin": "ast",
       "community": 12,
-      "community_name": "Codex Rollout Parser",
+      "community_name": "codex-rollout.js",
       "file_type": "code",
       "norm_label": "tokenusagetomodelusage()",
       "source_file": "plugins/pravex/scripts/codex-rollout.js",
-      "source_location": "L51"
+      "source_location": "L54"
     },
     {
       "id": "plugins_pravex_scripts_codex_report_test_writerollout",
@@ -647,6 +779,18 @@
       "source_location": "L19"
     },
     {
+      "id": "plugins_pravex_scripts_test_support_captureserver",
+      "label": "captureServer()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "Codex Report Tests",
+      "file_type": "code",
+      "norm_label": "captureserver()",
+      "source_file": "plugins/pravex/scripts/test-support.js",
+      "source_location": "L45"
+    },
+    {
       "id": "plugins_pravex_scripts_test_support_envfor",
       "label": "envFor()",
       "_callable": true,
@@ -657,6 +801,18 @@
       "norm_label": "envfor()",
       "source_file": "plugins/pravex/scripts/test-support.js",
       "source_location": "L19"
+    },
+    {
+      "id": "plugins_pravex_scripts_test_support_runhook",
+      "label": "runHook()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "Codex Report Tests",
+      "file_type": "code",
+      "norm_label": "runhook()",
+      "source_file": "plugins/pravex/scripts/test-support.js",
+      "source_location": "L34"
     },
     {
       "id": "plugins_pravex_scripts_test_support_temphome",
@@ -671,28 +827,208 @@
       "source_location": "L16"
     },
     {
-      "id": "plugins_pravex_scripts_test_support_captureserver",
-      "label": "captureServer()",
+      "id": "plugins_pravex_scripts_session_facets_classifyshell",
+      "label": "classifyShell()",
       "_callable": true,
       "_origin": "ast",
       "community": 14,
       "community_name": "Plugin Test Support",
       "file_type": "code",
-      "norm_label": "captureserver()",
-      "source_file": "plugins/pravex/scripts/test-support.js",
-      "source_location": "L45"
+      "norm_label": "classifyshell()",
+      "source_file": "plugins/pravex/scripts/session-facets.js",
+      "source_location": "L250"
     },
     {
-      "id": "plugins_pravex_scripts_test_support_runhook",
-      "label": "runHook()",
+      "id": "plugins_pravex_scripts_session_facets_claudeeditlines",
+      "label": "claudeEditLines()",
       "_callable": true,
       "_origin": "ast",
       "community": 14,
       "community_name": "Plugin Test Support",
       "file_type": "code",
-      "norm_label": "runhook()",
-      "source_file": "plugins/pravex/scripts/test-support.js",
-      "source_location": "L34"
+      "norm_label": "claudeeditlines()",
+      "source_file": "plugins/pravex/scripts/session-facets.js",
+      "source_location": "L202"
+    },
+    {
+      "id": "plugins_pravex_scripts_session_facets_claudetoolcategory",
+      "label": "claudeToolCategory()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "Plugin Test Support",
+      "file_type": "code",
+      "norm_label": "claudetoolcategory()",
+      "source_file": "plugins/pravex/scripts/session-facets.js",
+      "source_location": "L163"
+    },
+    {
+      "id": "plugins_pravex_scripts_session_facets_codextoolcategory",
+      "label": "codexToolCategory()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "Plugin Test Support",
+      "file_type": "code",
+      "norm_label": "codextoolcategory()",
+      "source_file": "plugins/pravex/scripts/session-facets.js",
+      "source_location": "L178"
+    },
+    {
+      "id": "plugins_pravex_scripts_session_facets_countlines",
+      "label": "countLines()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "Plugin Test Support",
+      "file_type": "code",
+      "norm_label": "countlines()",
+      "source_file": "plugins/pravex/scripts/session-facets.js",
+      "source_location": "L189"
+    },
+    {
+      "id": "plugins_pravex_scripts_session_facets_createfacets",
+      "label": "createFacets()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "Plugin Test Support",
+      "file_type": "code",
+      "norm_label": "createfacets()",
+      "source_file": "plugins/pravex/scripts/session-facets.js",
+      "source_location": "L268"
+    },
+    {
+      "id": "plugins_pravex_scripts_session_facets_filekindsof",
+      "label": "fileKindsOf()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "Plugin Test Support",
+      "file_type": "code",
+      "norm_label": "filekindsof()",
+      "source_file": "plugins/pravex/scripts/session-facets.js",
+      "source_location": "L124"
+    },
+    {
+      "id": "plugins_pravex_scripts_session_facets_languageof",
+      "label": "languageOf()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "Plugin Test Support",
+      "file_type": "code",
+      "norm_label": "languageof()",
+      "source_file": "plugins/pravex/scripts/session-facets.js",
+      "source_location": "L91"
+    },
+    {
+      "id": "plugins_pravex_scripts_session_facets_normalise",
+      "label": "normalise()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "Plugin Test Support",
+      "file_type": "code",
+      "norm_label": "normalise()",
+      "source_file": "plugins/pravex/scripts/session-facets.js",
+      "source_location": "L85"
+    },
+    {
+      "id": "plugins_pravex_scripts_session_facets_patchlines",
+      "label": "patchLines()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "Plugin Test Support",
+      "file_type": "code",
+      "norm_label": "patchlines()",
+      "source_file": "plugins/pravex/scripts/session-facets.js",
+      "source_location": "L220"
+    },
+    {
+      "id": "plugins_pravex_scripts_session_facets_test_assistant",
+      "label": "assistant()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "Plugin Test Support",
+      "file_type": "code",
+      "norm_label": "assistant()",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L220"
+    },
+    {
+      "id": "plugins_pravex_scripts_session_facets_test_baseagg",
+      "label": "baseAgg()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "Plugin Test Support",
+      "file_type": "code",
+      "norm_label": "baseagg()",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L327"
+    },
+    {
+      "id": "plugins_pravex_scripts_session_facets_test_get",
+      "label": "get()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "Plugin Test Support",
+      "file_type": "code",
+      "norm_label": "get()",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L344"
+    },
+    {
+      "id": "plugins_pravex_scripts_session_facets_test_results",
+      "label": "results()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "Plugin Test Support",
+      "file_type": "code",
+      "norm_label": "results()",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L221"
+    },
+    {
+      "id": "plugins_pravex_scripts_session_facets_test_tostring",
+      "label": "toString()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "Plugin Test Support",
+      "file_type": "code",
+      "norm_label": "tostring()",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L207"
+    },
+    {
+      "id": "plugins_pravex_scripts_session_facets_test_use",
+      "label": "use()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "Plugin Test Support",
+      "file_type": "code",
+      "norm_label": "use()",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L222"
+    },
+    {
+      "id": "plugins_pravex_scripts_session_facets_test_writelines",
+      "label": "writeLines()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "Plugin Test Support",
+      "file_type": "code",
+      "norm_label": "writelines()",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L213"
     },
     {
       "id": "packages_pravex_codex_cli_main",
@@ -700,7 +1036,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 15,
-      "community_name": "Codex CLI Entry",
+      "community_name": "ref_node_path",
       "file_type": "code",
       "norm_label": "main()",
       "source_file": "packages/pravex-codex/cli.js",
@@ -712,11 +1048,95 @@
       "_callable": true,
       "_origin": "ast",
       "community": 15,
-      "community_name": "Codex CLI Entry",
+      "community_name": "ref_node_path",
       "file_type": "code",
       "norm_label": "usage()",
       "source_file": "packages/pravex-codex/cli.js",
       "source_location": "L21"
+    },
+    {
+      "id": "plugins_pravex_scripts_codex_rollout_test_assistantmsg",
+      "label": "assistantMsg()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 19,
+      "community_name": "codex-rollout.test.js",
+      "file_type": "code",
+      "norm_label": "assistantmsg()",
+      "source_file": "plugins/pravex/scripts/codex-rollout.test.js",
+      "source_location": "L48"
+    },
+    {
+      "id": "plugins_pravex_scripts_codex_rollout_test_meta",
+      "label": "meta()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 19,
+      "community_name": "codex-rollout.test.js",
+      "file_type": "code",
+      "norm_label": "meta()",
+      "source_file": "plugins/pravex/scripts/codex-rollout.test.js",
+      "source_location": "L35"
+    },
+    {
+      "id": "plugins_pravex_scripts_codex_rollout_test_record",
+      "label": "record()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 19,
+      "community_name": "codex-rollout.test.js",
+      "file_type": "code",
+      "norm_label": "record()",
+      "source_file": "plugins/pravex/scripts/codex-rollout.test.js",
+      "source_location": "L42"
+    },
+    {
+      "id": "plugins_pravex_scripts_codex_rollout_test_turn",
+      "label": "turn()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 19,
+      "community_name": "codex-rollout.test.js",
+      "file_type": "code",
+      "norm_label": "turn()",
+      "source_file": "plugins/pravex/scripts/codex-rollout.test.js",
+      "source_location": "L40"
+    },
+    {
+      "id": "plugins_pravex_scripts_codex_rollout_test_usage",
+      "label": "usage()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 19,
+      "community_name": "codex-rollout.test.js",
+      "file_type": "code",
+      "norm_label": "usage()",
+      "source_file": "plugins/pravex/scripts/codex-rollout.test.js",
+      "source_location": "L41"
+    },
+    {
+      "id": "plugins_pravex_scripts_codex_rollout_test_usermsg",
+      "label": "userMsg()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 19,
+      "community_name": "codex-rollout.test.js",
+      "file_type": "code",
+      "norm_label": "usermsg()",
+      "source_file": "plugins/pravex/scripts/codex-rollout.test.js",
+      "source_location": "L47"
+    },
+    {
+      "id": "plugins_pravex_scripts_codex_rollout_test_writerollout",
+      "label": "writeRollout()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 19,
+      "community_name": "codex-rollout.test.js",
+      "file_type": "code",
+      "norm_label": "writerollout()",
+      "source_file": "plugins/pravex/scripts/codex-rollout.test.js",
+      "source_location": "L28"
     },
     {
       "id": "plugins_pravex_scripts_login_deviceflow",
@@ -863,42 +1283,6 @@
       "source_location": "L70"
     },
     {
-      "id": "plugins_pravex_scripts_report_session_activeminutes",
-      "label": "activeMinutes()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "Transcript Parsing Helpers",
-      "file_type": "code",
-      "norm_label": "activeminutes()",
-      "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L536"
-    },
-    {
-      "id": "plugins_pravex_scripts_report_session_addusage",
-      "label": "addUsage()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "Transcript Parsing Helpers",
-      "file_type": "code",
-      "norm_label": "addusage()",
-      "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L807"
-    },
-    {
-      "id": "plugins_pravex_scripts_report_session_aggregate",
-      "label": "aggregate()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "Transcript Parsing Helpers",
-      "file_type": "code",
-      "norm_label": "aggregate()",
-      "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L669"
-    },
-    {
       "id": "plugins_pravex_scripts_report_session_bashwrites",
       "label": "bashWrites()",
       "_callable": true,
@@ -908,55 +1292,7 @@
       "file_type": "code",
       "norm_label": "bashwrites()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L555"
-    },
-    {
-      "id": "plugins_pravex_scripts_report_session_clamptext",
-      "label": "clampText()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "Transcript Parsing Helpers",
-      "file_type": "code",
-      "norm_label": "clamptext()",
-      "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L633"
-    },
-    {
-      "id": "plugins_pravex_scripts_report_session_collectprurls",
-      "label": "collectPrUrls()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "Transcript Parsing Helpers",
-      "file_type": "code",
-      "norm_label": "collectprurls()",
-      "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L477"
-    },
-    {
-      "id": "plugins_pravex_scripts_report_session_extractturn",
-      "label": "extractTurn()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "Transcript Parsing Helpers",
-      "file_type": "code",
-      "norm_label": "extractturn()",
-      "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L595"
-    },
-    {
-      "id": "plugins_pravex_scripts_report_session_packtranscript",
-      "label": "packTranscript()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "Transcript Parsing Helpers",
-      "file_type": "code",
-      "norm_label": "packtranscript()",
-      "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L648"
+      "source_location": "L556"
     },
     {
       "id": "plugins_pravex_scripts_report_session_prurlmatchesrepo",
@@ -968,7 +1304,7 @@
       "file_type": "code",
       "norm_label": "prurlmatchesrepo()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L520"
+      "source_location": "L521"
     },
     {
       "id": "plugins_pravex_scripts_report_session_prurlslug",
@@ -980,19 +1316,7 @@
       "file_type": "code",
       "norm_label": "prurlslug()",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L492"
-    },
-    {
-      "id": "plugins_pravex_scripts_report_session_redact",
-      "label": "redact()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "Transcript Parsing Helpers",
-      "file_type": "code",
-      "norm_label": "redact()",
-      "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L574"
+      "source_location": "L493"
     },
     {
       "id": "plugins_pravex_scripts_report_session_test_at",
@@ -1040,7 +1364,7 @@
       "file_type": "code",
       "norm_label": "unpack()",
       "source_file": "plugins/pravex/scripts/report-session.test.js",
-      "source_location": "L394"
+      "source_location": "L398"
     },
     {
       "id": "plugins_pravex_scripts_report_session_test_writes",
@@ -1067,112 +1391,16 @@
       "source_location": "L119"
     },
     {
-      "id": "plugins_pravex_scripts_report_session_textof",
-      "label": "textOf()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "Transcript Parsing Helpers",
-      "file_type": "code",
-      "norm_label": "textof()",
-      "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L469"
-    },
-    {
       "id": "packages_pravex_codex_sync_scripts_sync",
       "label": "sync()",
       "_callable": true,
       "_origin": "ast",
       "community": 4,
-      "community_name": "Codex CLI Tests",
+      "community_name": "cli.test.js",
       "file_type": "code",
       "norm_label": "sync()",
       "source_file": "packages/pravex-codex/sync-scripts.js",
       "source_location": "L19"
-    },
-    {
-      "id": "plugins_pravex_scripts_codex_rollout_test_assistantmsg",
-      "label": "assistantMsg()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 4,
-      "community_name": "Codex CLI Tests",
-      "file_type": "code",
-      "norm_label": "assistantmsg()",
-      "source_file": "plugins/pravex/scripts/codex-rollout.test.js",
-      "source_location": "L48"
-    },
-    {
-      "id": "plugins_pravex_scripts_codex_rollout_test_meta",
-      "label": "meta()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 4,
-      "community_name": "Codex CLI Tests",
-      "file_type": "code",
-      "norm_label": "meta()",
-      "source_file": "plugins/pravex/scripts/codex-rollout.test.js",
-      "source_location": "L35"
-    },
-    {
-      "id": "plugins_pravex_scripts_codex_rollout_test_record",
-      "label": "record()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 4,
-      "community_name": "Codex CLI Tests",
-      "file_type": "code",
-      "norm_label": "record()",
-      "source_file": "plugins/pravex/scripts/codex-rollout.test.js",
-      "source_location": "L42"
-    },
-    {
-      "id": "plugins_pravex_scripts_codex_rollout_test_turn",
-      "label": "turn()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 4,
-      "community_name": "Codex CLI Tests",
-      "file_type": "code",
-      "norm_label": "turn()",
-      "source_file": "plugins/pravex/scripts/codex-rollout.test.js",
-      "source_location": "L40"
-    },
-    {
-      "id": "plugins_pravex_scripts_codex_rollout_test_usage",
-      "label": "usage()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 4,
-      "community_name": "Codex CLI Tests",
-      "file_type": "code",
-      "norm_label": "usage()",
-      "source_file": "plugins/pravex/scripts/codex-rollout.test.js",
-      "source_location": "L41"
-    },
-    {
-      "id": "plugins_pravex_scripts_codex_rollout_test_usermsg",
-      "label": "userMsg()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 4,
-      "community_name": "Codex CLI Tests",
-      "file_type": "code",
-      "norm_label": "usermsg()",
-      "source_file": "plugins/pravex/scripts/codex-rollout.test.js",
-      "source_location": "L47"
-    },
-    {
-      "id": "plugins_pravex_scripts_codex_rollout_test_writerollout",
-      "label": "writeRollout()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 4,
-      "community_name": "Codex CLI Tests",
-      "file_type": "code",
-      "norm_label": "writerollout()",
-      "source_file": "plugins/pravex/scripts/codex-rollout.test.js",
-      "source_location": "L28"
     },
     {
       "id": "plugins_pravex_scripts_incognito_statusline_test_captureserver",
@@ -1208,7 +1436,7 @@
       "file_type": "code",
       "norm_label": "fakeclaude()",
       "source_file": "plugins/pravex/scripts/incognito-statusline.test.js",
-      "source_location": "L311"
+      "source_location": "L314"
     },
     {
       "id": "plugins_pravex_scripts_incognito_statusline_test_run",
@@ -1619,18 +1847,6 @@
       "source_location": "L157"
     },
     {
-      "id": "plugins_pravex_scripts_codex_install_test_ourentries",
-      "label": "ourEntries()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 7,
-      "community_name": "Codex Installer",
-      "file_type": "code",
-      "norm_label": "ourentries()",
-      "source_file": "plugins/pravex/scripts/codex-install.test.js",
-      "source_location": "L26"
-    },
-    {
       "id": "plugins_pravex_scripts_codex_install_uninstall",
       "label": "uninstall()",
       "_callable": true,
@@ -1691,6 +1907,18 @@
       "source_location": "L24"
     },
     {
+      "id": "plugins_pravex_scripts_codex_install_test_ourentries",
+      "label": "ourEntries()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 9,
+      "community_name": "Codex Installer Tests",
+      "file_type": "code",
+      "norm_label": "ourentries()",
+      "source_file": "plugins/pravex/scripts/codex-install.test.js",
+      "source_location": "L26"
+    },
+    {
       "id": "plugins_pravex_scripts_codex_install_test_readhooks",
       "label": "readHooks()",
       "_callable": true,
@@ -1734,7 +1962,7 @@
       "file_type": "code",
       "norm_label": "agents",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L58"
+      "source_location": "L59"
     },
     {
       "id": "plugins_pravex_scripts_report_session_bash_write_res",
@@ -1745,7 +1973,7 @@
       "file_type": "code",
       "norm_label": "bash_write_res",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L147"
+      "source_location": "L148"
     },
     {
       "id": "plugins_pravex_scripts_report_session_codex",
@@ -1767,7 +1995,7 @@
       "file_type": "code",
       "norm_label": "codex_helpers",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L817"
+      "source_location": "L836"
     },
     {
       "id": "plugins_pravex_scripts_report_session_codex_sessions_dir",
@@ -1778,7 +2006,7 @@
       "file_type": "code",
       "norm_label": "codex_sessions_dir",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L56"
+      "source_location": "L57"
     },
     {
       "id": "plugins_pravex_scripts_report_session_config_dir",
@@ -1789,7 +2017,7 @@
       "file_type": "code",
       "norm_label": "config_dir",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L39"
+      "source_location": "L40"
     },
     {
       "id": "plugins_pravex_scripts_report_session_config_file",
@@ -1800,18 +2028,7 @@
       "file_type": "code",
       "norm_label": "config_file",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L47"
-    },
-    {
-      "id": "plugins_pravex_scripts_report_session_edit_tools",
-      "label": "EDIT_TOOLS",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "Plugin Session Reporter",
-      "file_type": "code",
-      "norm_label": "edit_tools",
-      "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L131"
+      "source_location": "L48"
     },
     {
       "id": "plugins_pravex_scripts_report_session_execfilesync_spawn",
@@ -1823,6 +2040,17 @@
       "norm_label": "{ execfilesync, spawn }",
       "source_file": "plugins/pravex/scripts/report-session.js",
       "source_location": "L36"
+    },
+    {
+      "id": "plugins_pravex_scripts_report_session_facetslib",
+      "label": "facetsLib",
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "Plugin Session Reporter",
+      "file_type": "code",
+      "norm_label": "facetslib",
+      "source_file": "plugins/pravex/scripts/report-session.js",
+      "source_location": "L38"
     },
     {
       "id": "plugins_pravex_scripts_report_session_fs",
@@ -1866,7 +2094,7 @@
       "file_type": "code",
       "norm_label": "incognito_dir",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L111"
+      "source_location": "L112"
     },
     {
       "id": "plugins_pravex_scripts_report_session_log_file",
@@ -1877,7 +2105,7 @@
       "file_type": "code",
       "norm_label": "log_file",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L48"
+      "source_location": "L49"
     },
     {
       "id": "plugins_pravex_scripts_report_session_os",
@@ -1910,7 +2138,7 @@
       "file_type": "code",
       "norm_label": "plugin_version",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L40"
+      "source_location": "L41"
     },
     {
       "id": "plugins_pravex_scripts_report_session_progress_file",
@@ -1921,7 +2149,7 @@
       "file_type": "code",
       "norm_label": "progress_file",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L102"
+      "source_location": "L103"
     },
     {
       "id": "plugins_pravex_scripts_report_session_projects_dir",
@@ -1932,7 +2160,7 @@
       "file_type": "code",
       "norm_label": "projects_dir",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L54"
+      "source_location": "L55"
     },
     {
       "id": "plugins_pravex_scripts_report_session_readline",
@@ -1954,7 +2182,7 @@
       "file_type": "code",
       "norm_label": "reported_file",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L60"
+      "source_location": "L61"
     },
     {
       "id": "plugins_pravex_scripts_report_session_spool_dir",
@@ -1965,7 +2193,7 @@
       "file_type": "code",
       "norm_label": "spool_dir",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L49"
+      "source_location": "L50"
     },
     {
       "id": "plugins_pravex_scripts_report_session_zlib",
@@ -2148,18 +2376,29 @@
       "label": "codex-rollout.js",
       "_origin": "ast",
       "community": 12,
-      "community_name": "Codex Rollout Parser",
+      "community_name": "codex-rollout.js",
       "file_type": "code",
       "norm_label": "codex-rollout.js",
       "source_file": "plugins/pravex/scripts/codex-rollout.js",
       "source_location": "L1"
     },
     {
+      "id": "plugins_pravex_scripts_codex_rollout_facetslib",
+      "label": "facetsLib",
+      "_origin": "ast",
+      "community": 12,
+      "community_name": "codex-rollout.js",
+      "file_type": "code",
+      "norm_label": "facetslib",
+      "source_file": "plugins/pravex/scripts/codex-rollout.js",
+      "source_location": "L45"
+    },
+    {
       "id": "plugins_pravex_scripts_codex_rollout_fs",
       "label": "fs",
       "_origin": "ast",
       "community": 12,
-      "community_name": "Codex Rollout Parser",
+      "community_name": "codex-rollout.js",
       "file_type": "code",
       "norm_label": "fs",
       "source_file": "plugins/pravex/scripts/codex-rollout.js",
@@ -2170,7 +2409,7 @@
       "label": "readline",
       "_origin": "ast",
       "community": 12,
-      "community_name": "Codex Rollout Parser",
+      "community_name": "codex-rollout.js",
       "file_type": "code",
       "norm_label": "readline",
       "source_file": "plugins/pravex/scripts/codex-rollout.js",
@@ -2257,8 +2496,8 @@
       "id": "plugins_pravex_scripts_test_support",
       "label": "test-support.js",
       "_origin": "ast",
-      "community": 14,
-      "community_name": "Plugin Test Support",
+      "community": 13,
+      "community_name": "Codex Report Tests",
       "file_type": "code",
       "norm_label": "test-support.js",
       "source_file": "plugins/pravex/scripts/test-support.js",
@@ -2268,8 +2507,8 @@
       "id": "plugins_pravex_scripts_test_support_fs",
       "label": "fs",
       "_origin": "ast",
-      "community": 14,
-      "community_name": "Plugin Test Support",
+      "community": 13,
+      "community_name": "Codex Report Tests",
       "file_type": "code",
       "norm_label": "fs",
       "source_file": "plugins/pravex/scripts/test-support.js",
@@ -2279,8 +2518,8 @@
       "id": "plugins_pravex_scripts_test_support_http",
       "label": "http",
       "_origin": "ast",
-      "community": 14,
-      "community_name": "Plugin Test Support",
+      "community": 13,
+      "community_name": "Codex Report Tests",
       "file_type": "code",
       "norm_label": "http",
       "source_file": "plugins/pravex/scripts/test-support.js",
@@ -2290,8 +2529,8 @@
       "id": "plugins_pravex_scripts_test_support_os",
       "label": "os",
       "_origin": "ast",
-      "community": 14,
-      "community_name": "Plugin Test Support",
+      "community": 13,
+      "community_name": "Codex Report Tests",
       "file_type": "code",
       "norm_label": "os",
       "source_file": "plugins/pravex/scripts/test-support.js",
@@ -2301,8 +2540,8 @@
       "id": "plugins_pravex_scripts_test_support_path",
       "label": "path",
       "_origin": "ast",
-      "community": 14,
-      "community_name": "Plugin Test Support",
+      "community": 13,
+      "community_name": "Codex Report Tests",
       "file_type": "code",
       "norm_label": "path",
       "source_file": "plugins/pravex/scripts/test-support.js",
@@ -2312,8 +2551,8 @@
       "id": "plugins_pravex_scripts_test_support_report",
       "label": "REPORT",
       "_origin": "ast",
-      "community": 14,
-      "community_name": "Plugin Test Support",
+      "community": 13,
+      "community_name": "Codex Report Tests",
       "file_type": "code",
       "norm_label": "report",
       "source_file": "plugins/pravex/scripts/test-support.js",
@@ -2323,19 +2562,173 @@
       "id": "plugins_pravex_scripts_test_support_spawn",
       "label": "{ spawn }",
       "_origin": "ast",
-      "community": 14,
-      "community_name": "Plugin Test Support",
+      "community": 13,
+      "community_name": "Codex Report Tests",
       "file_type": "code",
       "norm_label": "{ spawn }",
       "source_file": "plugins/pravex/scripts/test-support.js",
       "source_location": "L11"
     },
     {
+      "id": "plugins_pravex_scripts_session_facets",
+      "label": "session-facets.js",
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "Plugin Test Support",
+      "file_type": "code",
+      "norm_label": "session-facets.js",
+      "source_file": "plugins/pravex/scripts/session-facets.js",
+      "source_location": "L1"
+    },
+    {
+      "id": "plugins_pravex_scripts_session_facets_claude_tools",
+      "label": "CLAUDE_TOOLS",
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "Plugin Test Support",
+      "file_type": "code",
+      "norm_label": "claude_tools",
+      "source_file": "plugins/pravex/scripts/session-facets.js",
+      "source_location": "L152"
+    },
+    {
+      "id": "plugins_pravex_scripts_session_facets_deps_files",
+      "label": "DEPS_FILES",
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "Plugin Test Support",
+      "file_type": "code",
+      "norm_label": "deps_files",
+      "source_file": "plugins/pravex/scripts/session-facets.js",
+      "source_location": "L101"
+    },
+    {
+      "id": "plugins_pravex_scripts_session_facets_language_by_ext",
+      "label": "LANGUAGE_BY_EXT",
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "Plugin Test Support",
+      "file_type": "code",
+      "norm_label": "language_by_ext",
+      "source_file": "plugins/pravex/scripts/session-facets.js",
+      "source_location": "L29"
+    },
+    {
+      "id": "plugins_pravex_scripts_session_facets_test",
+      "label": "session-facets.test.js",
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "Plugin Test Support",
+      "file_type": "code",
+      "norm_label": "session-facets.test.js",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L1"
+    },
+    {
+      "id": "plugins_pravex_scripts_session_facets_test_aggregate_aggregatefor_buildbody_timezone",
+      "label": "{ aggregate, aggregateFor, buildBody, timeZone }",
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "Plugin Test Support",
+      "file_type": "code",
+      "norm_label": "{ aggregate, aggregatefor, buildbody, timezone }",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L25"
+    },
+    {
+      "id": "plugins_pravex_scripts_session_facets_test_assert",
+      "label": "assert",
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "Plugin Test Support",
+      "file_type": "code",
+      "norm_label": "assert",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L9"
+    },
+    {
+      "id": "plugins_pravex_scripts_session_facets_test_claudeeditlines_claudetoolcategory_classifyshell_codextoolcategory_countlines_createfacets_filekindsof_languageof_patchlines",
+      "label": "{\n  claudeEditLines,\n  claudeToolCategory,\n  classifyShell,\n  codexToolCategory,\n  countLines,\n  createFacets,\n  fileKindsOf,\n  languageOf,\n  patchLines,\n}",
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "Plugin Test Support",
+      "file_type": "code",
+      "norm_label": "{\n  claudeeditlines,\n  claudetoolcategory,\n  classifyshell,\n  codextoolcategory,\n  countlines,\n  createfacets,\n  filekindsof,\n  languageof,\n  patchlines,\n}",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L14"
+    },
+    {
+      "id": "plugins_pravex_scripts_session_facets_test_facets",
+      "label": "FACETS",
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "Plugin Test Support",
+      "file_type": "code",
+      "norm_label": "facets",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L326"
+    },
+    {
+      "id": "plugins_pravex_scripts_session_facets_test_fs",
+      "label": "fs",
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "Plugin Test Support",
+      "file_type": "code",
+      "norm_label": "fs",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L10"
+    },
+    {
+      "id": "plugins_pravex_scripts_session_facets_test_os",
+      "label": "os",
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "Plugin Test Support",
+      "file_type": "code",
+      "norm_label": "os",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L11"
+    },
+    {
+      "id": "plugins_pravex_scripts_session_facets_test_path",
+      "label": "path",
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "Plugin Test Support",
+      "file_type": "code",
+      "norm_label": "path",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L12"
+    },
+    {
+      "id": "plugins_pravex_scripts_session_facets_test_run_res",
+      "label": "TEST_RUN_RES",
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "Plugin Test Support",
+      "file_type": "code",
+      "norm_label": "test_run_res",
+      "source_file": "plugins/pravex/scripts/session-facets.js",
+      "source_location": "L237"
+    },
+    {
+      "id": "plugins_pravex_scripts_session_facets_test_test",
+      "label": "test",
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "Plugin Test Support",
+      "file_type": "code",
+      "norm_label": "test",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L8"
+    },
+    {
       "id": "packages_pravex_codex_cli",
       "label": "cli.js",
       "_origin": "ast",
       "community": 15,
-      "community_name": "Codex CLI Entry",
+      "community_name": "ref_node_path",
       "file_type": "code",
       "norm_label": "cli.js",
       "source_file": "packages/pravex-codex/cli.js",
@@ -2346,7 +2739,7 @@
       "label": "path",
       "_origin": "ast",
       "community": 15,
-      "community_name": "Codex CLI Entry",
+      "community_name": "ref_node_path",
       "file_type": "code",
       "norm_label": "path",
       "source_file": "packages/pravex-codex/cli.js",
@@ -2357,7 +2750,7 @@
       "label": "SCRIPT_FOR",
       "_origin": "ast",
       "community": 15,
-      "community_name": "Codex CLI Entry",
+      "community_name": "ref_node_path",
       "file_type": "code",
       "norm_label": "script_for",
       "source_file": "packages/pravex-codex/cli.js",
@@ -2368,7 +2761,7 @@
       "label": "SCRIPTS",
       "_origin": "ast",
       "community": 15,
-      "community_name": "Codex CLI Entry",
+      "community_name": "ref_node_path",
       "file_type": "code",
       "norm_label": "scripts",
       "source_file": "packages/pravex-codex/cli.js",
@@ -2379,11 +2772,99 @@
       "label": "{ spawnSync }",
       "_origin": "ast",
       "community": 15,
-      "community_name": "Codex CLI Entry",
+      "community_name": "ref_node_path",
       "file_type": "code",
       "norm_label": "{ spawnsync }",
       "source_file": "packages/pravex-codex/cli.js",
       "source_location": "L17"
+    },
+    {
+      "id": "plugins_pravex_scripts_codex_rollout_test",
+      "label": "codex-rollout.test.js",
+      "_origin": "ast",
+      "community": 19,
+      "community_name": "codex-rollout.test.js",
+      "file_type": "code",
+      "norm_label": "codex-rollout.test.js",
+      "source_file": "plugins/pravex/scripts/codex-rollout.test.js",
+      "source_location": "L1"
+    },
+    {
+      "id": "plugins_pravex_scripts_codex_rollout_test_aggregatefor",
+      "label": "{ aggregateFor }",
+      "_origin": "ast",
+      "community": 19,
+      "community_name": "codex-rollout.test.js",
+      "file_type": "code",
+      "norm_label": "{ aggregatefor }",
+      "source_file": "plugins/pravex/scripts/codex-rollout.test.js",
+      "source_location": "L19"
+    },
+    {
+      "id": "plugins_pravex_scripts_codex_rollout_test_assert",
+      "label": "assert",
+      "_origin": "ast",
+      "community": 19,
+      "community_name": "codex-rollout.test.js",
+      "file_type": "code",
+      "norm_label": "assert",
+      "source_file": "plugins/pravex/scripts/codex-rollout.test.js",
+      "source_location": "L13"
+    },
+    {
+      "id": "plugins_pravex_scripts_codex_rollout_test_codex",
+      "label": "codex",
+      "_origin": "ast",
+      "community": 19,
+      "community_name": "codex-rollout.test.js",
+      "file_type": "code",
+      "norm_label": "codex",
+      "source_file": "plugins/pravex/scripts/codex-rollout.test.js",
+      "source_location": "L18"
+    },
+    {
+      "id": "plugins_pravex_scripts_codex_rollout_test_fs",
+      "label": "fs",
+      "_origin": "ast",
+      "community": 19,
+      "community_name": "codex-rollout.test.js",
+      "file_type": "code",
+      "norm_label": "fs",
+      "source_file": "plugins/pravex/scripts/codex-rollout.test.js",
+      "source_location": "L14"
+    },
+    {
+      "id": "plugins_pravex_scripts_codex_rollout_test_os",
+      "label": "os",
+      "_origin": "ast",
+      "community": 19,
+      "community_name": "codex-rollout.test.js",
+      "file_type": "code",
+      "norm_label": "os",
+      "source_file": "plugins/pravex/scripts/codex-rollout.test.js",
+      "source_location": "L15"
+    },
+    {
+      "id": "plugins_pravex_scripts_codex_rollout_test_path",
+      "label": "path",
+      "_origin": "ast",
+      "community": 19,
+      "community_name": "codex-rollout.test.js",
+      "file_type": "code",
+      "norm_label": "path",
+      "source_file": "plugins/pravex/scripts/codex-rollout.test.js",
+      "source_location": "L16"
+    },
+    {
+      "id": "plugins_pravex_scripts_codex_rollout_test_test",
+      "label": "test",
+      "_origin": "ast",
+      "community": 19,
+      "community_name": "codex-rollout.test.js",
+      "file_type": "code",
+      "norm_label": "test",
+      "source_file": "plugins/pravex/scripts/codex-rollout.test.js",
+      "source_location": "L12"
     },
     {
       "id": "plugins_pravex_scripts_login",
@@ -2595,6 +3076,66 @@
       "source_location": "L10"
     },
     {
+      "id": "githooks_post_checkout",
+      "label": "post-checkout",
+      "_origin": "ast",
+      "community": 20,
+      "community_name": "post-checkout",
+      "file_type": "code",
+      "metadata": {
+        "language": "bash",
+        "kind": "file"
+      },
+      "norm_label": "post-checkout",
+      "source_file": ".githooks/post-checkout",
+      "source_location": "L1"
+    },
+    {
+      "id": "githooks_post_checkout__entry",
+      "label": "post-checkout script",
+      "_origin": "ast",
+      "community": 20,
+      "community_name": "post-checkout",
+      "file_type": "code",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_entrypoint"
+      },
+      "norm_label": "post-checkout script",
+      "source_file": ".githooks/post-checkout",
+      "source_location": "L1"
+    },
+    {
+      "id": "githooks_post_commit",
+      "label": "post-commit",
+      "_origin": "ast",
+      "community": 21,
+      "community_name": "post-commit",
+      "file_type": "code",
+      "metadata": {
+        "language": "bash",
+        "kind": "file"
+      },
+      "norm_label": "post-commit",
+      "source_file": ".githooks/post-commit",
+      "source_location": "L1"
+    },
+    {
+      "id": "githooks_post_commit__entry",
+      "label": "post-commit script",
+      "_origin": "ast",
+      "community": 21,
+      "community_name": "post-commit",
+      "file_type": "code",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_entrypoint"
+      },
+      "norm_label": "post-commit script",
+      "source_file": ".githooks/post-commit",
+      "source_location": "L1"
+    },
+    {
       "id": "plugins_pravex_scripts_report_session_test",
       "label": "report-session.test.js",
       "_origin": "ast",
@@ -2625,7 +3166,7 @@
       "file_type": "code",
       "norm_label": "{ buildbody, findunreported, modefrom, readreported, rememberreported }",
       "source_file": "plugins/pravex/scripts/report-session.test.js",
-      "source_location": "L540"
+      "source_location": "L544"
     },
     {
       "id": "plugins_pravex_scripts_report_session_test_fs",
@@ -2680,7 +3221,7 @@
       "file_type": "code",
       "norm_label": "{ randombytes }",
       "source_file": "plugins/pravex/scripts/report-session.test.js",
-      "source_location": "L391"
+      "source_location": "L395"
     },
     {
       "id": "plugins_pravex_scripts_report_session_test_secret_re_activeminutes_aggregate_bashwrites_prurlmatchesrepo_prurlslug_redact",
@@ -2724,7 +3265,7 @@
       "file_type": "code",
       "norm_label": "{ transcript_format, transcript_max_text, clamptext, extractturn, packtranscript }",
       "source_file": "plugins/pravex/scripts/report-session.test.js",
-      "source_location": "L392"
+      "source_location": "L396"
     },
     {
       "id": "plugins_pravex_scripts_report_session_test_zlib",
@@ -2735,14 +3276,14 @@
       "file_type": "code",
       "norm_label": "zlib",
       "source_file": "plugins/pravex/scripts/report-session.test.js",
-      "source_location": "L390"
+      "source_location": "L394"
     },
     {
       "id": "packages_pravex_codex_cli_test",
       "label": "cli.test.js",
       "_origin": "ast",
       "community": 4,
-      "community_name": "Codex CLI Tests",
+      "community_name": "cli.test.js",
       "file_type": "code",
       "norm_label": "cli.test.js",
       "source_file": "packages/pravex-codex/cli.test.js",
@@ -2753,7 +3294,7 @@
       "label": "assert",
       "_origin": "ast",
       "community": 4,
-      "community_name": "Codex CLI Tests",
+      "community_name": "cli.test.js",
       "file_type": "code",
       "norm_label": "assert",
       "source_file": "packages/pravex-codex/cli.test.js",
@@ -2764,7 +3305,7 @@
       "label": "CLI",
       "_origin": "ast",
       "community": 4,
-      "community_name": "Codex CLI Tests",
+      "community_name": "cli.test.js",
       "file_type": "code",
       "norm_label": "cli",
       "source_file": "packages/pravex-codex/cli.test.js",
@@ -2775,7 +3316,7 @@
       "label": "fs",
       "_origin": "ast",
       "community": 4,
-      "community_name": "Codex CLI Tests",
+      "community_name": "cli.test.js",
       "file_type": "code",
       "norm_label": "fs",
       "source_file": "packages/pravex-codex/cli.test.js",
@@ -2786,7 +3327,7 @@
       "label": "os",
       "_origin": "ast",
       "community": 4,
-      "community_name": "Codex CLI Tests",
+      "community_name": "cli.test.js",
       "file_type": "code",
       "norm_label": "os",
       "source_file": "packages/pravex-codex/cli.test.js",
@@ -2797,7 +3338,7 @@
       "label": "path",
       "_origin": "ast",
       "community": 4,
-      "community_name": "Codex CLI Tests",
+      "community_name": "cli.test.js",
       "file_type": "code",
       "norm_label": "path",
       "source_file": "packages/pravex-codex/cli.test.js",
@@ -2808,7 +3349,7 @@
       "label": "{ spawnSync }",
       "_origin": "ast",
       "community": 4,
-      "community_name": "Codex CLI Tests",
+      "community_name": "cli.test.js",
       "file_type": "code",
       "norm_label": "{ spawnsync }",
       "source_file": "packages/pravex-codex/cli.test.js",
@@ -2819,7 +3360,7 @@
       "label": "{ sync }",
       "_origin": "ast",
       "community": 4,
-      "community_name": "Codex CLI Tests",
+      "community_name": "cli.test.js",
       "file_type": "code",
       "norm_label": "{ sync }",
       "source_file": "packages/pravex-codex/cli.test.js",
@@ -2830,7 +3371,7 @@
       "label": "test",
       "_origin": "ast",
       "community": 4,
-      "community_name": "Codex CLI Tests",
+      "community_name": "cli.test.js",
       "file_type": "code",
       "norm_label": "test",
       "source_file": "packages/pravex-codex/cli.test.js",
@@ -2841,7 +3382,7 @@
       "label": "sync-scripts.js",
       "_origin": "ast",
       "community": 4,
-      "community_name": "Codex CLI Tests",
+      "community_name": "cli.test.js",
       "file_type": "code",
       "norm_label": "sync-scripts.js",
       "source_file": "packages/pravex-codex/sync-scripts.js",
@@ -2852,7 +3393,7 @@
       "label": "fs",
       "_origin": "ast",
       "community": 4,
-      "community_name": "Codex CLI Tests",
+      "community_name": "cli.test.js",
       "file_type": "code",
       "norm_label": "fs",
       "source_file": "packages/pravex-codex/sync-scripts.js",
@@ -2863,7 +3404,7 @@
       "label": "path",
       "_origin": "ast",
       "community": 4,
-      "community_name": "Codex CLI Tests",
+      "community_name": "cli.test.js",
       "file_type": "code",
       "norm_label": "path",
       "source_file": "packages/pravex-codex/sync-scripts.js",
@@ -2874,99 +3415,11 @@
       "label": "PLUGIN",
       "_origin": "ast",
       "community": 4,
-      "community_name": "Codex CLI Tests",
+      "community_name": "cli.test.js",
       "file_type": "code",
       "norm_label": "plugin",
       "source_file": "packages/pravex-codex/sync-scripts.js",
       "source_location": "L15"
-    },
-    {
-      "id": "plugins_pravex_scripts_codex_rollout_test",
-      "label": "codex-rollout.test.js",
-      "_origin": "ast",
-      "community": 4,
-      "community_name": "Codex CLI Tests",
-      "file_type": "code",
-      "norm_label": "codex-rollout.test.js",
-      "source_file": "plugins/pravex/scripts/codex-rollout.test.js",
-      "source_location": "L1"
-    },
-    {
-      "id": "plugins_pravex_scripts_codex_rollout_test_aggregatefor",
-      "label": "{ aggregateFor }",
-      "_origin": "ast",
-      "community": 4,
-      "community_name": "Codex CLI Tests",
-      "file_type": "code",
-      "norm_label": "{ aggregatefor }",
-      "source_file": "plugins/pravex/scripts/codex-rollout.test.js",
-      "source_location": "L19"
-    },
-    {
-      "id": "plugins_pravex_scripts_codex_rollout_test_assert",
-      "label": "assert",
-      "_origin": "ast",
-      "community": 4,
-      "community_name": "Codex CLI Tests",
-      "file_type": "code",
-      "norm_label": "assert",
-      "source_file": "plugins/pravex/scripts/codex-rollout.test.js",
-      "source_location": "L13"
-    },
-    {
-      "id": "plugins_pravex_scripts_codex_rollout_test_codex",
-      "label": "codex",
-      "_origin": "ast",
-      "community": 4,
-      "community_name": "Codex CLI Tests",
-      "file_type": "code",
-      "norm_label": "codex",
-      "source_file": "plugins/pravex/scripts/codex-rollout.test.js",
-      "source_location": "L18"
-    },
-    {
-      "id": "plugins_pravex_scripts_codex_rollout_test_fs",
-      "label": "fs",
-      "_origin": "ast",
-      "community": 4,
-      "community_name": "Codex CLI Tests",
-      "file_type": "code",
-      "norm_label": "fs",
-      "source_file": "plugins/pravex/scripts/codex-rollout.test.js",
-      "source_location": "L14"
-    },
-    {
-      "id": "plugins_pravex_scripts_codex_rollout_test_os",
-      "label": "os",
-      "_origin": "ast",
-      "community": 4,
-      "community_name": "Codex CLI Tests",
-      "file_type": "code",
-      "norm_label": "os",
-      "source_file": "plugins/pravex/scripts/codex-rollout.test.js",
-      "source_location": "L15"
-    },
-    {
-      "id": "plugins_pravex_scripts_codex_rollout_test_path",
-      "label": "path",
-      "_origin": "ast",
-      "community": 4,
-      "community_name": "Codex CLI Tests",
-      "file_type": "code",
-      "norm_label": "path",
-      "source_file": "plugins/pravex/scripts/codex-rollout.test.js",
-      "source_location": "L16"
-    },
-    {
-      "id": "plugins_pravex_scripts_codex_rollout_test_test",
-      "label": "test",
-      "_origin": "ast",
-      "community": 4,
-      "community_name": "Codex CLI Tests",
-      "file_type": "code",
-      "norm_label": "test",
-      "source_file": "plugins/pravex/scripts/codex-rollout.test.js",
-      "source_location": "L12"
     },
     {
       "id": "plugins_pravex_scripts_incognito_statusline_test",
@@ -3741,6 +4194,7 @@
     {
       "id": "_github_workflows_validate_plugins_check_duplicates",
       "label": "check-duplicates job",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -3755,6 +4209,7 @@
     {
       "id": "_github_workflows_validate_plugins_pravex_scripts",
       "label": "pravex-scripts job (parse, lint, test)",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -3769,6 +4224,7 @@
     {
       "id": "_github_workflows_validate_plugins_publish_codex_package",
       "label": "publish-codex-package job",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -3784,6 +4240,7 @@
     {
       "id": "_github_workflows_validate_plugins_stdlib_only_assertion",
       "label": "Stdlib-only require() assertion",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -3799,6 +4256,7 @@
     {
       "id": "_github_workflows_validate_plugins_validate_marketplace_plugins",
       "label": "validate-marketplace-plugins job",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -3813,6 +4271,7 @@
     {
       "id": "_github_workflows_validate_plugins_validate_plugins_job",
       "label": "validate-plugins job",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -3827,6 +4286,7 @@
     {
       "id": "_github_workflows_validate_plugins_validate_plugins_workflow",
       "label": "Validate Plugins Workflow",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -3841,6 +4301,7 @@
     {
       "id": "_github_workflows_validate_plugins_validate_structure",
       "label": "validate-structure job",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -3855,6 +4316,7 @@
     {
       "id": "_github_workflows_validate_plugins_marketplace_json",
       "label": "marketplace.json (.claude-plugin)",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -3869,6 +4331,7 @@
     {
       "id": "_github_workflows_validate_plugins_plugin_json",
       "label": "plugin.json",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -3883,6 +4346,7 @@
     {
       "id": "packages_pravex_codex_readme_codex_hooks_json",
       "label": "Codex hooks (~/.codex/hooks.json: SessionStart, Stop, SessionEnd)",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -3897,6 +4361,7 @@
     {
       "id": "packages_pravex_codex_readme_openai_codex_cli",
       "label": "OpenAI Codex CLI",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -3911,6 +4376,7 @@
     {
       "id": "plugins_pravex_commands_login_pravex_login_command",
       "label": "/pravex:login command",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -3925,6 +4391,7 @@
     {
       "id": "plugins_pravex_readme_api_sessions_endpoint",
       "label": "POST /api/sessions",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -3939,6 +4406,7 @@
     {
       "id": "plugins_pravex_readme_codex_cli_support",
       "label": "Codex CLI support",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -3954,6 +4422,7 @@
     {
       "id": "plugins_pravex_readme_idempotent_ingest",
       "label": "Idempotent ingest on externalId",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -3968,6 +4437,7 @@
     {
       "id": "plugins_pravex_readme_session_lifecycle_hooks",
       "label": "Session lifecycle hooks (SessionStart / Stop / SessionEnd)",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -3982,6 +4452,7 @@
     {
       "id": "plugins_pravex_readme_spool",
       "label": "Report spool (~/.pravex/spool, max 50)",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -3997,6 +4468,7 @@
     {
       "id": "plugins_pravex_readme_title_redaction",
       "label": "Title / key-shaped token redaction",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -4011,6 +4483,7 @@
     {
       "id": "readme_incognito_mode",
       "label": "Incognito sessions",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -4025,6 +4498,7 @@
     {
       "id": "readme_offline_spool",
       "label": "Offline report spool (~/.pravex/spool)",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -4039,6 +4513,7 @@
     {
       "id": "readme_pravex_config",
       "label": "Pravex config (PRAVEX_API_KEY / PRAVEX_API_HOST / ~/.pravex/config.json)",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -4053,6 +4528,7 @@
     {
       "id": "readme_session_report_payload",
       "label": "Session report payload (metrics only)",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -4068,6 +4544,7 @@
     {
       "id": "readme_statusline_indicator",
       "label": "Pravex status line indicator",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -4083,6 +4560,7 @@
     {
       "id": "readme_update_check",
       "label": "Background update check",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -4098,6 +4576,7 @@
     {
       "id": "packages_pravex_codex_readme_pravex_codex_package",
       "label": "@meeteam/pravex-codex npm package",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -4112,6 +4591,7 @@
     {
       "id": "plugins_pravex_commands_codex_codexcommand",
       "label": "/pravex:codex command",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -4127,6 +4607,7 @@
     {
       "id": "plugins_pravex_commands_login",
       "label": "login.md",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -4141,6 +4622,7 @@
     {
       "id": "plugins_pravex_readme_pravex_plugin",
       "label": "pravex Claude Code plugin",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -4155,6 +4637,7 @@
     {
       "id": "readme_pravex_plugin",
       "label": "Pravex plugin for Claude Code",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -4169,6 +4652,7 @@
     {
       "id": "packages_pravex_codex_readme_detached_sessionend_child",
       "label": "Detached child for SessionEnd (3s cap)",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -4184,6 +4668,7 @@
     {
       "id": "plugins_pravex_readme_extracted_transcript",
       "label": "Extracted transcript (tool names only, redacted, gzip, 1MB cap)",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -4199,6 +4684,7 @@
     {
       "id": "plugins_pravex_readme_files_touched_undercount",
       "label": "filesTouched undercounts on purpose",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -4214,6 +4700,7 @@
     {
       "id": "plugins_pravex_readme_sessionstart_sweep",
       "label": "SessionStart sweep for unreported sessions",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -4229,6 +4716,7 @@
     {
       "id": "readme_active_duration",
       "label": "Active duration (gaps > 5 min dropped)",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -4244,6 +4732,7 @@
     {
       "id": "readme_device_authorization_grant",
       "label": "OAuth 2.0 Device Authorization Grant (RFC 8628)",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -4259,6 +4748,7 @@
     {
       "id": "readme_files_touched_confirmed",
       "label": "filesTouched counts only confirmed edits",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -4273,6 +4763,7 @@
     {
       "id": "readme_pr_url_repo_check",
       "label": "prUrl must belong to session repo",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -4288,6 +4779,7 @@
     {
       "id": "readme_zero_dependencies",
       "label": "No dependencies by design",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 1,
@@ -4303,6 +4795,7 @@
     {
       "id": "plugins_pravex_commands_update_pravex_update_command",
       "label": "/pravex:update command",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 11,
@@ -4317,6 +4810,7 @@
     {
       "id": "plugins_pravex_commands_update",
       "label": "update.md",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 11,
@@ -4331,10 +4825,11 @@
     {
       "id": "plugins_pravex_readme_codex_token_semantics",
       "label": "Codex token semantics",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 12,
-      "community_name": "Codex Rollout Parser",
+      "community_name": "codex-rollout.js",
       "contributor": null,
       "file_type": "rationale",
       "norm_label": "codex token semantics",
@@ -4346,6 +4841,7 @@
     {
       "id": "_github_dependabot",
       "label": "dependabot.yml",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 16,
@@ -4360,6 +4856,7 @@
     {
       "id": "_github_dependabot_github_actions_weekly_updates",
       "label": "Dependabot GitHub Actions weekly updates",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 16,
@@ -4374,6 +4871,7 @@
     {
       "id": "plugins_pravex_commands_incognito_pravex_incognito_command",
       "label": "/pravex:incognito command",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 17,
@@ -4388,6 +4886,7 @@
     {
       "id": "plugins_pravex_commands_incognito",
       "label": "incognito.md",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 17,
@@ -4402,6 +4901,7 @@
     {
       "id": "plugins_pravex_commands_status_pravex_status_command",
       "label": "/pravex:status command",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 18,
@@ -4416,6 +4916,7 @@
     {
       "id": "plugins_pravex_commands_status",
       "label": "status.md",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 18,
@@ -4430,6 +4931,7 @@
     {
       "id": "plugins_pravex_commands_statusline_pravex_statusline_command",
       "label": "/pravex:statusline command",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 6,
@@ -4444,6 +4946,7 @@
     {
       "id": "plugins_pravex_commands_statusline",
       "label": "statusline.md",
+      "_origin": "semantic",
       "author": null,
       "captured_at": null,
       "community": 6,
@@ -4458,6 +4961,7 @@
     {
       "id": "ref_zlib",
       "label": "ref_zlib",
+      "_origin": "semantic",
       "community": 0,
       "community_name": "Plugin Session Reporter",
       "external": true,
@@ -4469,6 +4973,7 @@
     {
       "id": "ref_node_os",
       "label": "ref_node_os",
+      "_origin": "semantic",
       "community": 11,
       "community_name": "Plugin Update Command",
       "external": true,
@@ -4480,8 +4985,9 @@
     {
       "id": "ref_fs",
       "label": "ref_fs",
+      "_origin": "semantic",
       "community": 12,
-      "community_name": "Codex Rollout Parser",
+      "community_name": "codex-rollout.js",
       "external": true,
       "file_type": "concept",
       "norm_label": "ref_fs",
@@ -4491,8 +4997,9 @@
     {
       "id": "ref_readline",
       "label": "ref_readline",
+      "_origin": "semantic",
       "community": 12,
-      "community_name": "Codex Rollout Parser",
+      "community_name": "codex-rollout.js",
       "external": true,
       "file_type": "concept",
       "norm_label": "ref_readline",
@@ -4500,10 +5007,23 @@
       "type": "external"
     },
     {
+      "id": "ref_node_assert",
+      "label": "ref_node_assert",
+      "_origin": "semantic",
+      "community": 13,
+      "community_name": "Codex Report Tests",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "ref_node_assert",
+      "source_file": "",
+      "type": "external"
+    },
+    {
       "id": "ref_node_http",
       "label": "ref_node_http",
-      "community": 14,
-      "community_name": "Plugin Test Support",
+      "_origin": "semantic",
+      "community": 13,
+      "community_name": "Codex Report Tests",
       "external": true,
       "file_type": "concept",
       "norm_label": "ref_node_http",
@@ -4513,8 +5033,9 @@
     {
       "id": "ref_node_child_process",
       "label": "ref_node_child_process",
+      "_origin": "semantic",
       "community": 15,
-      "community_name": "Codex CLI Entry",
+      "community_name": "ref_node_path",
       "external": true,
       "file_type": "concept",
       "norm_label": "ref_node_child_process",
@@ -4524,8 +5045,9 @@
     {
       "id": "ref_node_path",
       "label": "ref_node_path",
+      "_origin": "semantic",
       "community": 15,
-      "community_name": "Codex CLI Entry",
+      "community_name": "ref_node_path",
       "external": true,
       "file_type": "concept",
       "norm_label": "ref_node_path",
@@ -4535,6 +5057,7 @@
     {
       "id": "ref_child_process",
       "label": "ref_child_process",
+      "_origin": "semantic",
       "community": 2,
       "community_name": "Plugin Login & Device Flow",
       "external": true,
@@ -4546,6 +5069,7 @@
     {
       "id": "ref_http",
       "label": "ref_http",
+      "_origin": "semantic",
       "community": 2,
       "community_name": "Plugin Login & Device Flow",
       "external": true,
@@ -4557,6 +5081,7 @@
     {
       "id": "ref_https",
       "label": "ref_https",
+      "_origin": "semantic",
       "community": 2,
       "community_name": "Plugin Login & Device Flow",
       "external": true,
@@ -4568,6 +5093,7 @@
     {
       "id": "ref_os",
       "label": "ref_os",
+      "_origin": "semantic",
       "community": 2,
       "community_name": "Plugin Login & Device Flow",
       "external": true,
@@ -4579,6 +5105,7 @@
     {
       "id": "ref_path",
       "label": "ref_path",
+      "_origin": "semantic",
       "community": 2,
       "community_name": "Plugin Login & Device Flow",
       "external": true,
@@ -4590,6 +5117,7 @@
     {
       "id": "plugins_pravex_scripts_report_session_secret_re",
       "label": "plugins_pravex_scripts_report_session_secret_re",
+      "_origin": "semantic",
       "community": 3,
       "community_name": "Transcript Parsing Helpers",
       "external": true,
@@ -4601,6 +5129,7 @@
     {
       "id": "plugins_pravex_scripts_report_session_transcript_format",
       "label": "plugins_pravex_scripts_report_session_transcript_format",
+      "_origin": "semantic",
       "community": 3,
       "community_name": "Transcript Parsing Helpers",
       "external": true,
@@ -4612,6 +5141,7 @@
     {
       "id": "plugins_pravex_scripts_report_session_transcript_max_text",
       "label": "plugins_pravex_scripts_report_session_transcript_max_text",
+      "_origin": "semantic",
       "community": 3,
       "community_name": "Transcript Parsing Helpers",
       "external": true,
@@ -4623,6 +5153,7 @@
     {
       "id": "ref_node_crypto",
       "label": "ref_node_crypto",
+      "_origin": "semantic",
       "community": 3,
       "community_name": "Transcript Parsing Helpers",
       "external": true,
@@ -4634,6 +5165,7 @@
     {
       "id": "ref_node_zlib",
       "label": "ref_node_zlib",
+      "_origin": "semantic",
       "community": 3,
       "community_name": "Transcript Parsing Helpers",
       "external": true,
@@ -4643,21 +5175,11 @@
       "type": "external"
     },
     {
-      "id": "ref_node_assert",
-      "label": "ref_node_assert",
-      "community": 4,
-      "community_name": "Codex CLI Tests",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "ref_node_assert",
-      "source_file": "",
-      "type": "external"
-    },
-    {
       "id": "ref_node_fs",
       "label": "ref_node_fs",
+      "_origin": "semantic",
       "community": 4,
-      "community_name": "Codex CLI Tests",
+      "community_name": "cli.test.js",
       "external": true,
       "file_type": "concept",
       "norm_label": "ref_node_fs",
@@ -4665,24 +5187,26 @@
       "type": "external"
     },
     {
+      "id": "ref_node_test",
+      "label": "ref_node_test",
+      "_origin": "semantic",
+      "community": 4,
+      "community_name": "cli.test.js",
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "ref_node_test",
+      "source_file": "",
+      "type": "external"
+    },
+    {
       "id": "ref_node_https",
       "label": "ref_node_https",
+      "_origin": "semantic",
       "community": 5,
       "community_name": "Plugin Incognito & Statusline Tests",
       "external": true,
       "file_type": "concept",
       "norm_label": "ref_node_https",
-      "source_file": "",
-      "type": "external"
-    },
-    {
-      "id": "ref_node_test",
-      "label": "ref_node_test",
-      "community": 9,
-      "community_name": "Codex Installer Tests",
-      "external": true,
-      "file_type": "concept",
-      "norm_label": "ref_node_test",
       "source_file": "",
       "type": "external"
     }
@@ -4901,7 +5425,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/codex-rollout.js",
-      "source_location": "L204",
+      "source_location": "L211",
       "weight": 1.0
     },
     {
@@ -4913,7 +5437,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/codex-rollout.js",
-      "source_location": "L243",
+      "source_location": "L252",
       "weight": 1.0
     },
     {
@@ -4925,7 +5449,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/codex-rollout.js",
-      "source_location": "L246",
+      "source_location": "L255",
       "weight": 1.0
     },
     {
@@ -4937,7 +5461,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/codex-rollout.js",
-      "source_location": "L253",
+      "source_location": "L274",
       "weight": 1.0
     },
     {
@@ -5105,7 +5629,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L316",
+      "source_location": "L317",
       "weight": 1.0
     },
     {
@@ -5117,7 +5641,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L729",
+      "source_location": "L737",
       "weight": 1.0
     },
     {
@@ -5129,7 +5653,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L732",
+      "source_location": "L741",
       "weight": 1.0
     },
     {
@@ -5141,7 +5665,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L747",
+      "source_location": "L764",
       "weight": 1.0
     },
     {
@@ -5153,7 +5677,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L762",
+      "source_location": "L779",
       "weight": 1.0
     },
     {
@@ -5165,36 +5689,12 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L769",
+      "source_location": "L786",
       "weight": 1.0
     },
     {
       "source": "plugins_pravex_scripts_report_session_aggregate",
       "target": "plugins_pravex_scripts_report_session_redact",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L782",
-      "weight": 1.0
-    },
-    {
-      "source": "plugins_pravex_scripts_report_session_aggregate",
-      "target": "plugins_pravex_scripts_report_session_prurlmatchesrepo",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L784",
-      "weight": 1.0
-    },
-    {
-      "source": "plugins_pravex_scripts_report_session_aggregate",
-      "target": "plugins_pravex_scripts_report_session_activeminutes",
       "relation": "calls",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -5206,6 +5706,30 @@
     },
     {
       "source": "plugins_pravex_scripts_report_session_aggregate",
+      "target": "plugins_pravex_scripts_report_session_prurlmatchesrepo",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "plugins/pravex/scripts/report-session.js",
+      "source_location": "L801",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_report_session_aggregate",
+      "target": "plugins_pravex_scripts_report_session_activeminutes",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "plugins/pravex/scripts/report-session.js",
+      "source_location": "L816",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_report_session_aggregate",
       "target": "plugins_pravex_scripts_report_session_packtranscript",
       "relation": "calls",
       "_origin": "ast",
@@ -5213,7 +5737,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L802",
+      "source_location": "L819",
       "weight": 1.0
     },
     {
@@ -5225,7 +5749,19 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L821",
+      "source_location": "L840",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_report_session_buildbody",
+      "target": "plugins_pravex_scripts_report_session_timezone",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "plugins/pravex/scripts/report-session.js",
+      "source_location": "L1083",
       "weight": 1.0
     },
     {
@@ -5237,7 +5773,19 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1042",
+      "source_location": "L1092",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_report_session_buildbody",
+      "target": "plugins_pravex_scripts_report_session_facetsof",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "plugins/pravex/scripts/report-session.js",
+      "source_location": "L1106",
       "weight": 1.0
     },
     {
@@ -5249,7 +5797,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L634",
+      "source_location": "L635",
       "weight": 1.0
     },
     {
@@ -5261,7 +5809,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L601",
+      "source_location": "L602",
       "weight": 1.0
     },
     {
@@ -5273,7 +5821,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L604",
+      "source_location": "L605",
       "weight": 1.0
     },
     {
@@ -5285,7 +5833,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L369",
+      "source_location": "L370",
       "weight": 1.0
     },
     {
@@ -5297,7 +5845,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L388",
+      "source_location": "L389",
       "weight": 1.0
     },
     {
@@ -5309,7 +5857,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L904",
+      "source_location": "L923",
       "weight": 1.0
     },
     {
@@ -5321,7 +5869,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L906",
+      "source_location": "L925",
       "weight": 1.0
     },
     {
@@ -5333,7 +5881,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L935",
+      "source_location": "L954",
       "weight": 1.0
     },
     {
@@ -5345,7 +5893,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1104",
+      "source_location": "L1158",
       "weight": 1.0
     },
     {
@@ -5357,7 +5905,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1106",
+      "source_location": "L1160",
       "weight": 1.0
     },
     {
@@ -5369,7 +5917,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1189",
+      "source_location": "L1243",
       "weight": 1.0
     },
     {
@@ -5381,7 +5929,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1190",
+      "source_location": "L1244",
       "weight": 1.0
     },
     {
@@ -5393,7 +5941,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1197",
+      "source_location": "L1251",
       "weight": 1.0
     },
     {
@@ -5405,7 +5953,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1198",
+      "source_location": "L1252",
       "weight": 1.0
     },
     {
@@ -5417,7 +5965,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1201",
+      "source_location": "L1255",
       "weight": 1.0
     },
     {
@@ -5429,7 +5977,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1203",
+      "source_location": "L1257",
       "weight": 1.0
     },
     {
@@ -5441,7 +5989,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1203",
+      "source_location": "L1257",
       "weight": 1.0
     },
     {
@@ -5453,7 +6001,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L211",
+      "source_location": "L212",
       "weight": 1.0
     },
     {
@@ -5465,7 +6013,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1213",
+      "source_location": "L1267",
       "weight": 1.0
     },
     {
@@ -5477,7 +6025,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1215",
+      "source_location": "L1269",
       "weight": 1.0
     },
     {
@@ -5489,7 +6037,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1215",
+      "source_location": "L1269",
       "weight": 1.0
     },
     {
@@ -5501,7 +6049,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1215",
+      "source_location": "L1269",
       "weight": 1.0
     },
     {
@@ -5513,7 +6061,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1222",
+      "source_location": "L1276",
       "weight": 1.0
     },
     {
@@ -5525,7 +6073,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1224",
+      "source_location": "L1278",
       "weight": 1.0
     },
     {
@@ -5537,7 +6085,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1230",
+      "source_location": "L1284",
       "weight": 1.0
     },
     {
@@ -5549,7 +6097,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1234",
+      "source_location": "L1288",
       "weight": 1.0
     },
     {
@@ -5561,7 +6109,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1238",
+      "source_location": "L1292",
       "weight": 1.0
     },
     {
@@ -5573,7 +6121,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1240",
+      "source_location": "L1294",
       "weight": 1.0
     },
     {
@@ -5585,7 +6133,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1247",
+      "source_location": "L1301",
       "weight": 1.0
     },
     {
@@ -5597,7 +6145,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1248",
+      "source_location": "L1302",
       "weight": 1.0
     },
     {
@@ -5609,7 +6157,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1249",
+      "source_location": "L1303",
       "weight": 1.0
     },
     {
@@ -5621,7 +6169,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1250",
+      "source_location": "L1304",
       "weight": 1.0
     },
     {
@@ -5633,7 +6181,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1266",
+      "source_location": "L1320",
       "weight": 1.0
     },
     {
@@ -5645,7 +6193,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1271",
+      "source_location": "L1325",
       "weight": 1.0
     },
     {
@@ -5657,7 +6205,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1276",
+      "source_location": "L1330",
       "weight": 1.0
     },
     {
@@ -5669,7 +6217,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1288",
+      "source_location": "L1342",
       "weight": 1.0
     },
     {
@@ -5681,7 +6229,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1301",
+      "source_location": "L1355",
       "weight": 1.0
     },
     {
@@ -5693,7 +6241,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1306",
+      "source_location": "L1360",
       "weight": 1.0
     },
     {
@@ -5705,7 +6253,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1310",
+      "source_location": "L1364",
       "weight": 1.0
     },
     {
@@ -5717,7 +6265,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1313",
+      "source_location": "L1367",
       "weight": 1.0
     },
     {
@@ -5729,7 +6277,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1319",
+      "source_location": "L1373",
       "weight": 1.0
     },
     {
@@ -5741,7 +6289,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L217",
+      "source_location": "L218",
       "weight": 1.0
     },
     {
@@ -5753,7 +6301,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1127",
+      "source_location": "L1181",
       "weight": 1.0
     },
     {
@@ -5765,7 +6313,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L521",
+      "source_location": "L522",
       "weight": 1.0
     },
     {
@@ -5777,7 +6325,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L307",
+      "source_location": "L308",
       "weight": 1.0
     },
     {
@@ -5789,7 +6337,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L294",
+      "source_location": "L295",
       "weight": 1.0
     },
     {
@@ -5801,7 +6349,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L872",
+      "source_location": "L891",
       "weight": 1.0
     },
     {
@@ -5813,7 +6361,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L430",
+      "source_location": "L431",
       "weight": 1.0
     },
     {
@@ -5825,7 +6373,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L834",
+      "source_location": "L853",
       "weight": 1.0
     },
     {
@@ -5837,7 +6385,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L276",
+      "source_location": "L277",
       "weight": 1.0
     },
     {
@@ -5849,7 +6397,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1177",
+      "source_location": "L1231",
       "weight": 1.0
     },
     {
@@ -5861,7 +6409,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1178",
+      "source_location": "L1232",
       "weight": 1.0
     },
     {
@@ -5873,55 +6421,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L282",
-      "weight": 1.0
-    },
-    {
-      "source": "plugins_pravex_scripts_report_session_sweepunreported",
-      "target": "plugins_pravex_scripts_report_session_buildbody",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1001",
-      "weight": 1.0
-    },
-    {
-      "source": "plugins_pravex_scripts_report_session_sweepunreported",
-      "target": "plugins_pravex_scripts_report_session_post",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1001",
-      "weight": 1.0
-    },
-    {
-      "source": "plugins_pravex_scripts_report_session_sweepunreported",
-      "target": "plugins_pravex_scripts_report_session_findunreported",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L975",
-      "weight": 1.0
-    },
-    {
-      "source": "plugins_pravex_scripts_report_session_sweepunreported",
-      "target": "plugins_pravex_scripts_report_session_log",
-      "relation": "calls",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "call",
-      "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L978",
+      "source_location": "L283",
       "weight": 1.0
     },
     {
@@ -5933,7 +6433,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L991",
+      "source_location": "L1010",
       "weight": 1.0
     },
     {
@@ -5945,7 +6445,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L992",
+      "source_location": "L1011",
       "weight": 1.0
     },
     {
@@ -5957,7 +6457,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L993",
+      "source_location": "L1012",
       "weight": 1.0
     },
     {
@@ -5969,7 +6469,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L993",
+      "source_location": "L1012",
       "weight": 1.0
     },
     {
@@ -5981,7 +6481,55 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L998",
+      "source_location": "L1017",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_report_session_sweepunreported",
+      "target": "plugins_pravex_scripts_report_session_buildbody",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "plugins/pravex/scripts/report-session.js",
+      "source_location": "L1020",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_report_session_sweepunreported",
+      "target": "plugins_pravex_scripts_report_session_post",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "plugins/pravex/scripts/report-session.js",
+      "source_location": "L1020",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_report_session_sweepunreported",
+      "target": "plugins_pravex_scripts_report_session_findunreported",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "plugins/pravex/scripts/report-session.js",
+      "source_location": "L994",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_report_session_sweepunreported",
+      "target": "plugins_pravex_scripts_report_session_log",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "plugins/pravex/scripts/report-session.js",
+      "source_location": "L997",
       "weight": 1.0
     },
     {
@@ -5994,6 +6542,42 @@
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.test.js",
       "source_location": "L103",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_claudeeditlines",
+      "target": "plugins_pravex_scripts_session_facets_countlines",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "plugins/pravex/scripts/session-facets.js",
+      "source_location": "L204",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_filekindsof",
+      "target": "plugins_pravex_scripts_session_facets_normalise",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "plugins/pravex/scripts/session-facets.js",
+      "source_location": "L125",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_languageof",
+      "target": "plugins_pravex_scripts_session_facets_normalise",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "plugins/pravex/scripts/session-facets.js",
+      "source_location": "L92",
       "weight": 1.0
     },
     {
@@ -6497,7 +7081,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/incognito-statusline.test.js",
-      "source_location": "L311",
+      "source_location": "L314",
       "weight": 1.0
     },
     {
@@ -6557,7 +7141,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L183",
+      "source_location": "L184",
       "weight": 1.0
     },
     {
@@ -6617,7 +7201,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.test.js",
-      "source_location": "L394",
+      "source_location": "L398",
       "weight": 1.0
     },
     {
@@ -6630,6 +7214,66 @@
       "context": "call",
       "source_file": "plugins/pravex/scripts/report-session.test.js",
       "source_location": "L85",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "plugins_pravex_scripts_session_facets_test_writelines",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L213",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "plugins_pravex_scripts_session_facets_test_assistant",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L220",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "plugins_pravex_scripts_session_facets_test_results",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L221",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "plugins_pravex_scripts_session_facets_test_use",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L222",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "plugins_pravex_scripts_session_facets_test_baseagg",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L327",
       "weight": 1.0
     },
     {
@@ -6785,7 +7429,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "plugins/pravex/scripts/incognito-statusline.test.js",
-      "source_location": "L239",
+      "source_location": "L242",
       "weight": 1.0
     },
     {
@@ -6797,7 +7441,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "plugins/pravex/scripts/incognito-statusline.test.js",
-      "source_location": "L247",
+      "source_location": "L250",
       "weight": 1.0
     },
     {
@@ -6809,7 +7453,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "plugins/pravex/scripts/incognito-statusline.test.js",
-      "source_location": "L256",
+      "source_location": "L259",
       "weight": 1.0
     },
     {
@@ -6821,7 +7465,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "plugins/pravex/scripts/incognito-statusline.test.js",
-      "source_location": "L280",
+      "source_location": "L283",
       "weight": 1.0
     },
     {
@@ -6977,7 +7621,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "plugins/pravex/scripts/report-session.test.js",
-      "source_location": "L392",
+      "source_location": "L396",
       "weight": 1.0
     },
     {
@@ -6989,7 +7633,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "plugins/pravex/scripts/report-session.test.js",
-      "source_location": "L392",
+      "source_location": "L396",
       "weight": 1.0
     },
     {
@@ -7001,7 +7645,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "plugins/pravex/scripts/report-session.test.js",
-      "source_location": "L392",
+      "source_location": "L396",
       "weight": 1.0
     },
     {
@@ -7013,7 +7657,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "plugins/pravex/scripts/report-session.test.js",
-      "source_location": "L392",
+      "source_location": "L396",
       "weight": 1.0
     },
     {
@@ -7025,7 +7669,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "plugins/pravex/scripts/report-session.test.js",
-      "source_location": "L392",
+      "source_location": "L396",
       "weight": 1.0
     },
     {
@@ -7037,7 +7681,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "plugins/pravex/scripts/report-session.test.js",
-      "source_location": "L540",
+      "source_location": "L544",
       "weight": 1.0
     },
     {
@@ -7049,7 +7693,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "plugins/pravex/scripts/report-session.test.js",
-      "source_location": "L540",
+      "source_location": "L544",
       "weight": 1.0
     },
     {
@@ -7061,7 +7705,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "plugins/pravex/scripts/report-session.test.js",
-      "source_location": "L540",
+      "source_location": "L544",
       "weight": 1.0
     },
     {
@@ -7073,7 +7717,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "plugins/pravex/scripts/report-session.test.js",
-      "source_location": "L540",
+      "source_location": "L544",
       "weight": 1.0
     },
     {
@@ -7085,7 +7729,163 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "plugins/pravex/scripts/report-session.test.js",
-      "source_location": "L540",
+      "source_location": "L544",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "plugins_pravex_scripts_session_facets_classifyshell",
+      "relation": "imports",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L14",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "plugins_pravex_scripts_session_facets_claudeeditlines",
+      "relation": "imports",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L14",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "plugins_pravex_scripts_session_facets_claudetoolcategory",
+      "relation": "imports",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L14",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "plugins_pravex_scripts_session_facets_codextoolcategory",
+      "relation": "imports",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L14",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "plugins_pravex_scripts_session_facets_countlines",
+      "relation": "imports",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L14",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "plugins_pravex_scripts_session_facets_createfacets",
+      "relation": "imports",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L14",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "plugins_pravex_scripts_session_facets_filekindsof",
+      "relation": "imports",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L14",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "plugins_pravex_scripts_session_facets_languageof",
+      "relation": "imports",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L14",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "plugins_pravex_scripts_session_facets_patchlines",
+      "relation": "imports",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L14",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "plugins_pravex_scripts_report_session_aggregate",
+      "relation": "imports",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L25",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "plugins_pravex_scripts_report_session_aggregatefor",
+      "relation": "imports",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L25",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "plugins_pravex_scripts_report_session_buildbody",
+      "relation": "imports",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L25",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "plugins_pravex_scripts_report_session_timezone",
+      "relation": "imports",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L25",
       "weight": 1.0
     },
     {
@@ -7461,6 +8261,18 @@
       "weight": 1.0
     },
     {
+      "source": "plugins_pravex_scripts_codex_rollout",
+      "target": "plugins_pravex_scripts_session_facets",
+      "relation": "imports_from",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "plugins/pravex/scripts/codex-rollout.js",
+      "source_location": "L45",
+      "weight": 1.0
+    },
+    {
       "source": "plugins_pravex_scripts_codex_rollout_test",
       "target": "ref_node_test",
       "relation": "imports_from",
@@ -7613,7 +8425,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "plugins/pravex/scripts/incognito-statusline.test.js",
-      "source_location": "L256",
+      "source_location": "L259",
       "weight": 1.0
     },
     {
@@ -7625,7 +8437,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "plugins/pravex/scripts/incognito-statusline.test.js",
-      "source_location": "L280",
+      "source_location": "L283",
       "weight": 1.0
     },
     {
@@ -7929,6 +8741,18 @@
       "weight": 1.0
     },
     {
+      "source": "plugins_pravex_scripts_report_session",
+      "target": "plugins_pravex_scripts_session_facets",
+      "relation": "imports_from",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "plugins/pravex/scripts/report-session.js",
+      "source_location": "L38",
+      "weight": 1.0
+    },
+    {
       "source": "plugins_pravex_scripts_report_session_refreshstatusline",
       "target": "plugins_pravex_scripts_statusline",
       "relation": "imports_from",
@@ -7937,7 +8761,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L291",
+      "source_location": "L292",
       "weight": 1.0
     },
     {
@@ -8033,7 +8857,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "plugins/pravex/scripts/report-session.test.js",
-      "source_location": "L390",
+      "source_location": "L394",
       "weight": 1.0
     },
     {
@@ -8045,7 +8869,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "plugins/pravex/scripts/report-session.test.js",
-      "source_location": "L391",
+      "source_location": "L395",
       "weight": 1.0
     },
     {
@@ -8057,7 +8881,91 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "plugins/pravex/scripts/report-session.test.js",
-      "source_location": "L540",
+      "source_location": "L544",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "ref_node_fs",
+      "relation": "imports_from",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L10",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "ref_node_os",
+      "relation": "imports_from",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L11",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "ref_node_path",
+      "relation": "imports_from",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L12",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "plugins_pravex_scripts_session_facets",
+      "relation": "imports_from",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L14",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "plugins_pravex_scripts_report_session",
+      "relation": "imports_from",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L25",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "ref_node_test",
+      "relation": "imports_from",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L8",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "ref_node_assert",
+      "relation": "imports_from",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L9",
       "weight": 1.0
     },
     {
@@ -8369,6 +9277,28 @@
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/login.js",
       "source_location": "L10",
+      "weight": 1.0
+    },
+    {
+      "source": "githooks_post_checkout",
+      "target": "githooks_post_checkout__entry",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".githooks/post-checkout",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "githooks_post_commit",
+      "target": "githooks_post_commit__entry",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".githooks/post-commit",
+      "source_location": "L1",
       "weight": 1.0
     },
     {
@@ -9105,7 +10035,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/codex-rollout.js",
-      "source_location": "L111",
+      "source_location": "L114",
       "weight": 1.0
     },
     {
@@ -9132,13 +10062,24 @@
     },
     {
       "source": "plugins_pravex_scripts_codex_rollout",
+      "target": "plugins_pravex_scripts_codex_rollout_facetslib",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "plugins/pravex/scripts/codex-rollout.js",
+      "source_location": "L45",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_codex_rollout",
       "target": "plugins_pravex_scripts_codex_rollout_patchpaths",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/codex-rollout.js",
-      "source_location": "L81",
+      "source_location": "L84",
       "weight": 1.0
     },
     {
@@ -9149,7 +10090,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/codex-rollout.js",
-      "source_location": "L91",
+      "source_location": "L94",
       "weight": 1.0
     },
     {
@@ -9556,7 +10497,18 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L102",
+      "source_location": "L103",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_report_session",
+      "target": "plugins_pravex_scripts_report_session_facetsof",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "plugins/pravex/scripts/report-session.js",
+      "source_location": "L1055",
       "weight": 1.0
     },
     {
@@ -9567,18 +10519,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1065",
-      "weight": 1.0
-    },
-    {
-      "source": "plugins_pravex_scripts_report_session",
-      "target": "plugins_pravex_scripts_report_session_flushspool",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1087",
+      "source_location": "L1119",
       "weight": 1.0
     },
     {
@@ -9589,7 +10530,18 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L111",
+      "source_location": "L112",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_report_session",
+      "target": "plugins_pravex_scripts_report_session_flushspool",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "plugins/pravex/scripts/report-session.js",
+      "source_location": "L1141",
       "weight": 1.0
     },
     {
@@ -9600,7 +10552,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1119",
+      "source_location": "L1173",
       "weight": 1.0
     },
     {
@@ -9611,7 +10563,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1125",
+      "source_location": "L1179",
       "weight": 1.0
     },
     {
@@ -9622,7 +10574,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1176",
+      "source_location": "L1230",
       "weight": 1.0
     },
     {
@@ -9633,7 +10585,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1188",
+      "source_location": "L1242",
       "weight": 1.0
     },
     {
@@ -9644,18 +10596,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1211",
-      "weight": 1.0
-    },
-    {
-      "source": "plugins_pravex_scripts_report_session",
-      "target": "plugins_pravex_scripts_report_session_edit_tools",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L131",
+      "source_location": "L1265",
       "weight": 1.0
     },
     {
@@ -9666,7 +10607,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L147",
+      "source_location": "L148",
       "weight": 1.0
     },
     {
@@ -9677,7 +10618,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L192",
+      "source_location": "L193",
       "weight": 1.0
     },
     {
@@ -9688,7 +10629,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L205",
+      "source_location": "L206",
       "weight": 1.0
     },
     {
@@ -9699,7 +10640,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L266",
+      "source_location": "L267",
       "weight": 1.0
     },
     {
@@ -9710,18 +10651,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L281",
-      "weight": 1.0
-    },
-    {
-      "source": "plugins_pravex_scripts_report_session",
-      "target": "plugins_pravex_scripts_report_session_refreshstatusline",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L289",
+      "source_location": "L282",
       "weight": 1.0
     },
     {
@@ -9733,6 +10663,17 @@
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/report-session.js",
       "source_location": "L29",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_report_session",
+      "target": "plugins_pravex_scripts_report_session_refreshstatusline",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "plugins/pravex/scripts/report-session.js",
+      "source_location": "L290",
       "weight": 1.0
     },
     {
@@ -9754,7 +10695,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L303",
+      "source_location": "L304",
       "weight": 1.0
     },
     {
@@ -9809,7 +10750,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L341",
+      "source_location": "L342",
       "weight": 1.0
     },
     {
@@ -9847,18 +10788,18 @@
     },
     {
       "source": "plugins_pravex_scripts_report_session",
-      "target": "plugins_pravex_scripts_report_session_config_dir",
+      "target": "plugins_pravex_scripts_report_session_facetslib",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L39",
+      "source_location": "L38",
       "weight": 1.0
     },
     {
       "source": "plugins_pravex_scripts_report_session",
-      "target": "plugins_pravex_scripts_report_session_plugin_version",
+      "target": "plugins_pravex_scripts_report_session_config_dir",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -9875,7 +10816,18 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L407",
+      "source_location": "L408",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_report_session",
+      "target": "plugins_pravex_scripts_report_session_plugin_version",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "plugins/pravex/scripts/report-session.js",
+      "source_location": "L41",
       "weight": 1.0
     },
     {
@@ -9886,7 +10838,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L419",
+      "source_location": "L420",
       "weight": 1.0
     },
     {
@@ -9897,7 +10849,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L47",
+      "source_location": "L48",
       "weight": 1.0
     },
     {
@@ -9908,7 +10860,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L48",
+      "source_location": "L49",
       "weight": 1.0
     },
     {
@@ -9919,7 +10871,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L49",
+      "source_location": "L50",
       "weight": 1.0
     },
     {
@@ -9930,7 +10882,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L54",
+      "source_location": "L55",
       "weight": 1.0
     },
     {
@@ -9941,7 +10893,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L56",
+      "source_location": "L57",
       "weight": 1.0
     },
     {
@@ -9952,7 +10904,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L58",
+      "source_location": "L59",
       "weight": 1.0
     },
     {
@@ -9963,7 +10915,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L60",
+      "source_location": "L61",
       "weight": 1.0
     },
     {
@@ -9974,7 +10926,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L817",
+      "source_location": "L836",
       "weight": 1.0
     },
     {
@@ -9985,7 +10937,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L974",
+      "source_location": "L993",
       "weight": 1.0
     },
     {
@@ -10084,7 +11036,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/report-session.test.js",
-      "source_location": "L390",
+      "source_location": "L394",
       "weight": 1.0
     },
     {
@@ -10095,7 +11047,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/report-session.test.js",
-      "source_location": "L391",
+      "source_location": "L395",
       "weight": 1.0
     },
     {
@@ -10106,7 +11058,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/report-session.test.js",
-      "source_location": "L392",
+      "source_location": "L396",
       "weight": 1.0
     },
     {
@@ -10117,7 +11069,172 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/scripts/report-session.test.js",
-      "source_location": "L540",
+      "source_location": "L544",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets",
+      "target": "plugins_pravex_scripts_session_facets_deps_files",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "plugins/pravex/scripts/session-facets.js",
+      "source_location": "L101",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets",
+      "target": "plugins_pravex_scripts_session_facets_claude_tools",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "plugins/pravex/scripts/session-facets.js",
+      "source_location": "L152",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets",
+      "target": "plugins_pravex_scripts_session_facets_test_run_res",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "plugins/pravex/scripts/session-facets.js",
+      "source_location": "L237",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets",
+      "target": "plugins_pravex_scripts_session_facets_language_by_ext",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "plugins/pravex/scripts/session-facets.js",
+      "source_location": "L29",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets",
+      "target": "plugins_pravex_scripts_session_facets_normalise",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "plugins/pravex/scripts/session-facets.js",
+      "source_location": "L85",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "plugins_pravex_scripts_session_facets_test_fs",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L10",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "plugins_pravex_scripts_session_facets_test_os",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L11",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "plugins_pravex_scripts_session_facets_test_path",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L12",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "plugins_pravex_scripts_session_facets_test_claudeeditlines_claudetoolcategory_classifyshell_codextoolcategory_countlines_createfacets_filekindsof_languageof_patchlines",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L14",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "plugins_pravex_scripts_session_facets_test_tostring",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L207",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "plugins_pravex_scripts_session_facets_test_aggregate_aggregatefor_buildbody_timezone",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L25",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "plugins_pravex_scripts_session_facets_test_facets",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L326",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "plugins_pravex_scripts_session_facets_test_get",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L344",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "plugins_pravex_scripts_session_facets_test_test",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L8",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets_test",
+      "target": "plugins_pravex_scripts_session_facets_test_assert",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "plugins/pravex/scripts/session-facets.test.js",
+      "source_location": "L9",
       "weight": 1.0
     },
     {
@@ -10649,6 +11766,17 @@
       "weight": 1.0
     },
     {
+      "source": "plugins_pravex_readme_pravex_plugin",
+      "target": "packages_pravex_codex_readme_pravex_codex_package",
+      "relation": "references",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "plugins/pravex/README.md",
+      "source_location": "L107",
+      "weight": 1.0
+    },
+    {
       "source": "plugins_pravex_scripts_codex_install_status",
       "target": "plugins_pravex_scripts_codex_install_isours",
       "relation": "indirect_call",
@@ -10681,7 +11809,7 @@
       "confidence_score": 0.85,
       "context": "argument",
       "source_file": "plugins/pravex/scripts/incognito-statusline.test.js",
-      "source_location": "L332",
+      "source_location": "L335",
       "weight": 1.0
     },
     {
@@ -10693,7 +11821,7 @@
       "confidence_score": 0.85,
       "context": "argument",
       "source_file": "plugins/pravex/scripts/report-session.test.js",
-      "source_location": "L403",
+      "source_location": "L407",
       "weight": 1.0
     },
     {
@@ -10801,7 +11929,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "plugins/pravex/scripts/codex-rollout.js",
-      "source_location": "L295",
+      "source_location": "L325",
       "weight": 1.0
     },
     {
@@ -10813,7 +11941,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "plugins/pravex/scripts/codex-rollout.js",
-      "source_location": "L295",
+      "source_location": "L325",
       "weight": 1.0
     },
     {
@@ -10825,7 +11953,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "plugins/pravex/scripts/codex-rollout.js",
-      "source_location": "L295",
+      "source_location": "L325",
       "weight": 1.0
     },
     {
@@ -10909,7 +12037,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1341",
+      "source_location": "L1395",
       "weight": 1.0
     },
     {
@@ -10921,7 +12049,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1342",
+      "source_location": "L1396",
       "weight": 1.0
     },
     {
@@ -10933,7 +12061,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1343",
+      "source_location": "L1397",
       "weight": 1.0
     },
     {
@@ -10945,7 +12073,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1344",
+      "source_location": "L1398",
       "weight": 1.0
     },
     {
@@ -10957,7 +12085,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1346",
+      "source_location": "L1400",
       "weight": 1.0
     },
     {
@@ -10969,7 +12097,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1347",
+      "source_location": "L1401",
       "weight": 1.0
     },
     {
@@ -10981,7 +12109,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1348",
+      "source_location": "L1402",
       "weight": 1.0
     },
     {
@@ -10993,7 +12121,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1349",
+      "source_location": "L1403",
       "weight": 1.0
     },
     {
@@ -11005,7 +12133,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1350",
+      "source_location": "L1404",
       "weight": 1.0
     },
     {
@@ -11017,7 +12145,19 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1352",
+      "source_location": "L1406",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_report_session",
+      "target": "plugins_pravex_scripts_report_session_timezone",
+      "relation": "indirect_call",
+      "_origin": "ast",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "context": "collection",
+      "source_file": "plugins/pravex/scripts/report-session.js",
+      "source_location": "L1407",
       "weight": 1.0
     },
     {
@@ -11029,7 +12169,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1353",
+      "source_location": "L1408",
       "weight": 1.0
     },
     {
@@ -11041,7 +12181,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1354",
+      "source_location": "L1409",
       "weight": 1.0
     },
     {
@@ -11053,7 +12193,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1355",
+      "source_location": "L1410",
       "weight": 1.0
     },
     {
@@ -11065,7 +12205,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1356",
+      "source_location": "L1411",
       "weight": 1.0
     },
     {
@@ -11077,7 +12217,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1357",
+      "source_location": "L1412",
       "weight": 1.0
     },
     {
@@ -11089,7 +12229,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1358",
+      "source_location": "L1413",
       "weight": 1.0
     },
     {
@@ -11101,7 +12241,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1363",
+      "source_location": "L1418",
       "weight": 1.0
     },
     {
@@ -11113,7 +12253,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1366",
+      "source_location": "L1421",
       "weight": 1.0
     },
     {
@@ -11125,7 +12265,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1370",
+      "source_location": "L1425",
       "weight": 1.0
     },
     {
@@ -11137,7 +12277,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1372",
+      "source_location": "L1427",
       "weight": 1.0
     },
     {
@@ -11149,7 +12289,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L1373",
+      "source_location": "L1428",
       "weight": 1.0
     },
     {
@@ -11161,7 +12301,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L817",
+      "source_location": "L836",
       "weight": 1.0
     },
     {
@@ -11173,7 +12313,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L817",
+      "source_location": "L836",
       "weight": 1.0
     },
     {
@@ -11185,7 +12325,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L817",
+      "source_location": "L836",
       "weight": 1.0
     },
     {
@@ -11197,7 +12337,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L817",
+      "source_location": "L836",
       "weight": 1.0
     },
     {
@@ -11209,7 +12349,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L817",
+      "source_location": "L836",
       "weight": 1.0
     },
     {
@@ -11221,7 +12361,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L817",
+      "source_location": "L836",
       "weight": 1.0
     },
     {
@@ -11233,7 +12373,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L817",
+      "source_location": "L836",
       "weight": 1.0
     },
     {
@@ -11245,7 +12385,7 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L817",
+      "source_location": "L836",
       "weight": 1.0
     },
     {
@@ -11257,7 +12397,115 @@
       "confidence_score": 0.85,
       "context": "collection",
       "source_file": "plugins/pravex/scripts/report-session.js",
-      "source_location": "L817",
+      "source_location": "L836",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets",
+      "target": "plugins_pravex_scripts_session_facets_claudeeditlines",
+      "relation": "indirect_call",
+      "_origin": "ast",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "context": "collection",
+      "source_file": "plugins/pravex/scripts/session-facets.js",
+      "source_location": "L342",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets",
+      "target": "plugins_pravex_scripts_session_facets_claudetoolcategory",
+      "relation": "indirect_call",
+      "_origin": "ast",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "context": "collection",
+      "source_file": "plugins/pravex/scripts/session-facets.js",
+      "source_location": "L343",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets",
+      "target": "plugins_pravex_scripts_session_facets_classifyshell",
+      "relation": "indirect_call",
+      "_origin": "ast",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "context": "collection",
+      "source_file": "plugins/pravex/scripts/session-facets.js",
+      "source_location": "L344",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets",
+      "target": "plugins_pravex_scripts_session_facets_codextoolcategory",
+      "relation": "indirect_call",
+      "_origin": "ast",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "context": "collection",
+      "source_file": "plugins/pravex/scripts/session-facets.js",
+      "source_location": "L345",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets",
+      "target": "plugins_pravex_scripts_session_facets_countlines",
+      "relation": "indirect_call",
+      "_origin": "ast",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "context": "collection",
+      "source_file": "plugins/pravex/scripts/session-facets.js",
+      "source_location": "L346",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets",
+      "target": "plugins_pravex_scripts_session_facets_createfacets",
+      "relation": "indirect_call",
+      "_origin": "ast",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "context": "collection",
+      "source_file": "plugins/pravex/scripts/session-facets.js",
+      "source_location": "L347",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets",
+      "target": "plugins_pravex_scripts_session_facets_filekindsof",
+      "relation": "indirect_call",
+      "_origin": "ast",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "context": "collection",
+      "source_file": "plugins/pravex/scripts/session-facets.js",
+      "source_location": "L348",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets",
+      "target": "plugins_pravex_scripts_session_facets_languageof",
+      "relation": "indirect_call",
+      "_origin": "ast",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "context": "collection",
+      "source_file": "plugins/pravex/scripts/session-facets.js",
+      "source_location": "L349",
+      "weight": 1.0
+    },
+    {
+      "source": "plugins_pravex_scripts_session_facets",
+      "target": "plugins_pravex_scripts_session_facets_patchlines",
+      "relation": "indirect_call",
+      "_origin": "ast",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "context": "collection",
+      "source_file": "plugins/pravex/scripts/session-facets.js",
+      "source_location": "L350",
       "weight": 1.0
     },
     {
@@ -11480,6 +12728,7 @@
       "source": "readme_device_authorization_grant",
       "target": "plugins_pravex_scripts_login",
       "relation": "implements",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "README.md",
@@ -11490,6 +12739,7 @@
       "source": "plugins_pravex_readme_idempotent_ingest",
       "target": "plugins_pravex_readme_sessionstart_sweep",
       "relation": "rationale_for",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/README.md",
@@ -11500,6 +12750,7 @@
       "source": "plugins_pravex_readme_idempotent_ingest",
       "target": "plugins_pravex_readme_spool",
       "relation": "rationale_for",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/README.md",
@@ -11510,6 +12761,7 @@
       "source": "plugins_pravex_readme_sessionstart_sweep",
       "target": "plugins_pravex_readme_session_lifecycle_hooks",
       "relation": "rationale_for",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/README.md",
@@ -11520,6 +12772,7 @@
       "source": "readme_active_duration",
       "target": "readme_session_report_payload",
       "relation": "rationale_for",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "README.md",
@@ -11530,6 +12783,7 @@
       "source": "readme_files_touched_confirmed",
       "target": "readme_session_report_payload",
       "relation": "rationale_for",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "README.md",
@@ -11540,6 +12794,7 @@
       "source": "readme_pr_url_repo_check",
       "target": "readme_session_report_payload",
       "relation": "rationale_for",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "README.md",
@@ -11550,6 +12805,7 @@
       "source": "readme_zero_dependencies",
       "target": "_github_workflows_validate_plugins_stdlib_only_assertion",
       "relation": "rationale_for",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "README.md",
@@ -11560,6 +12816,7 @@
       "source": "_github_dependabot",
       "target": "_github_dependabot_github_actions_weekly_updates",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": ".github/dependabot.yml",
@@ -11570,6 +12827,7 @@
       "source": "_github_workflows_validate_plugins_check_duplicates",
       "target": "_github_workflows_validate_plugins_marketplace_json",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": ".github/workflows/validate-plugins.yml",
@@ -11580,6 +12838,7 @@
       "source": "_github_workflows_validate_plugins_pravex_scripts",
       "target": "_github_workflows_validate_plugins_stdlib_only_assertion",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": ".github/workflows/validate-plugins.yml",
@@ -11590,6 +12849,7 @@
       "source": "_github_workflows_validate_plugins_pravex_scripts",
       "target": "packages_pravex_codex_cli",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": ".github/workflows/validate-plugins.yml",
@@ -11600,6 +12860,7 @@
       "source": "_github_workflows_validate_plugins_pravex_scripts",
       "target": "packages_pravex_codex_sync_scripts",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": ".github/workflows/validate-plugins.yml",
@@ -11610,6 +12871,7 @@
       "source": "_github_workflows_validate_plugins_pravex_scripts",
       "target": "plugins_pravex_scripts_codex_install",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": ".github/workflows/validate-plugins.yml",
@@ -11620,6 +12882,7 @@
       "source": "_github_workflows_validate_plugins_pravex_scripts",
       "target": "plugins_pravex_scripts_codex_rollout",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": ".github/workflows/validate-plugins.yml",
@@ -11630,6 +12893,7 @@
       "source": "_github_workflows_validate_plugins_pravex_scripts",
       "target": "plugins_pravex_scripts_login",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": ".github/workflows/validate-plugins.yml",
@@ -11640,6 +12904,7 @@
       "source": "_github_workflows_validate_plugins_pravex_scripts",
       "target": "plugins_pravex_scripts_report_session",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": ".github/workflows/validate-plugins.yml",
@@ -11650,6 +12915,7 @@
       "source": "_github_workflows_validate_plugins_pravex_scripts",
       "target": "plugins_pravex_scripts_statusline",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": ".github/workflows/validate-plugins.yml",
@@ -11660,6 +12926,7 @@
       "source": "_github_workflows_validate_plugins_pravex_scripts",
       "target": "plugins_pravex_scripts_update",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": ".github/workflows/validate-plugins.yml",
@@ -11670,6 +12937,7 @@
       "source": "_github_workflows_validate_plugins_pravex_scripts",
       "target": "plugins_pravex_scripts_update_check",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": ".github/workflows/validate-plugins.yml",
@@ -11680,6 +12948,7 @@
       "source": "_github_workflows_validate_plugins_publish_codex_package",
       "target": "_github_workflows_validate_plugins_pravex_scripts",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": ".github/workflows/validate-plugins.yml",
@@ -11690,6 +12959,7 @@
       "source": "_github_workflows_validate_plugins_publish_codex_package",
       "target": "packages_pravex_codex_readme_pravex_codex_package",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": ".github/workflows/validate-plugins.yml",
@@ -11700,6 +12970,7 @@
       "source": "_github_workflows_validate_plugins_validate_marketplace_plugins",
       "target": "_github_workflows_validate_plugins_marketplace_json",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": ".github/workflows/validate-plugins.yml",
@@ -11710,6 +12981,7 @@
       "source": "_github_workflows_validate_plugins_validate_plugins_job",
       "target": "_github_workflows_validate_plugins_marketplace_json",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": ".github/workflows/validate-plugins.yml",
@@ -11720,6 +12992,7 @@
       "source": "_github_workflows_validate_plugins_validate_plugins_job",
       "target": "_github_workflows_validate_plugins_plugin_json",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": ".github/workflows/validate-plugins.yml",
@@ -11730,6 +13003,7 @@
       "source": "_github_workflows_validate_plugins_validate_plugins_workflow",
       "target": "_github_workflows_validate_plugins_check_duplicates",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": ".github/workflows/validate-plugins.yml",
@@ -11740,6 +13014,7 @@
       "source": "_github_workflows_validate_plugins_validate_plugins_workflow",
       "target": "_github_workflows_validate_plugins_pravex_scripts",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": ".github/workflows/validate-plugins.yml",
@@ -11750,6 +13025,7 @@
       "source": "_github_workflows_validate_plugins_validate_plugins_workflow",
       "target": "_github_workflows_validate_plugins_publish_codex_package",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": ".github/workflows/validate-plugins.yml",
@@ -11760,6 +13036,7 @@
       "source": "_github_workflows_validate_plugins_validate_plugins_workflow",
       "target": "_github_workflows_validate_plugins_validate_marketplace_plugins",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": ".github/workflows/validate-plugins.yml",
@@ -11770,6 +13047,7 @@
       "source": "_github_workflows_validate_plugins_validate_plugins_workflow",
       "target": "_github_workflows_validate_plugins_validate_plugins_job",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": ".github/workflows/validate-plugins.yml",
@@ -11780,6 +13058,7 @@
       "source": "_github_workflows_validate_plugins_validate_plugins_workflow",
       "target": "_github_workflows_validate_plugins_validate_structure",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": ".github/workflows/validate-plugins.yml",
@@ -11790,6 +13069,7 @@
       "source": "_github_workflows_validate_plugins_validate_structure",
       "target": "_github_workflows_validate_plugins_marketplace_json",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": ".github/workflows/validate-plugins.yml",
@@ -11800,6 +13080,7 @@
       "source": "packages_pravex_codex_readme_pravex_codex_package",
       "target": "packages_pravex_codex_readme_codex_hooks_json",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "packages/pravex-codex/README.md",
@@ -11810,6 +13091,7 @@
       "source": "packages_pravex_codex_readme_pravex_codex_package",
       "target": "packages_pravex_codex_readme_detached_sessionend_child",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "packages/pravex-codex/README.md",
@@ -11820,6 +13102,7 @@
       "source": "packages_pravex_codex_readme_pravex_codex_package",
       "target": "packages_pravex_codex_readme_openai_codex_cli",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "packages/pravex-codex/README.md",
@@ -11830,6 +13113,7 @@
       "source": "packages_pravex_codex_readme_pravex_codex_package",
       "target": "packages_pravex_codex_sync_scripts",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "packages/pravex-codex/README.md",
@@ -11840,6 +13124,7 @@
       "source": "packages_pravex_codex_readme_pravex_codex_package",
       "target": "plugins_pravex_commands_codex_codexcommand",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "packages/pravex-codex/README.md",
@@ -11850,6 +13135,7 @@
       "source": "plugins_pravex_commands_codex_codexcommand",
       "target": "plugins_pravex_scripts_codex_install",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/commands/codex.md",
@@ -11860,6 +13146,7 @@
       "source": "plugins_pravex_commands_incognito",
       "target": "plugins_pravex_commands_incognito_pravex_incognito_command",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/commands/incognito.md",
@@ -11870,6 +13157,7 @@
       "source": "plugins_pravex_commands_login",
       "target": "plugins_pravex_commands_login_pravex_login_command",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/commands/login.md",
@@ -11880,6 +13168,7 @@
       "source": "plugins_pravex_commands_status",
       "target": "plugins_pravex_commands_status_pravex_status_command",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/commands/status.md",
@@ -11890,6 +13179,7 @@
       "source": "plugins_pravex_commands_statusline",
       "target": "plugins_pravex_commands_statusline_pravex_statusline_command",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/commands/statusline.md",
@@ -11900,6 +13190,7 @@
       "source": "plugins_pravex_commands_statusline_pravex_statusline_command",
       "target": "plugins_pravex_scripts_statusline",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/commands/statusline.md",
@@ -11910,6 +13201,7 @@
       "source": "plugins_pravex_commands_update",
       "target": "plugins_pravex_commands_update_pravex_update_command",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/commands/update.md",
@@ -11920,6 +13212,7 @@
       "source": "plugins_pravex_commands_update_pravex_update_command",
       "target": "plugins_pravex_scripts_update",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/commands/update.md",
@@ -11930,6 +13223,7 @@
       "source": "plugins_pravex_readme_api_sessions_endpoint",
       "target": "plugins_pravex_scripts_report_session",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/README.md",
@@ -11940,6 +13234,7 @@
       "source": "plugins_pravex_readme_codex_cli_support",
       "target": "packages_pravex_codex_readme_pravex_codex_package",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/README.md",
@@ -11950,6 +13245,7 @@
       "source": "plugins_pravex_readme_codex_cli_support",
       "target": "plugins_pravex_commands_codex_codexcommand",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/README.md",
@@ -11960,6 +13256,7 @@
       "source": "plugins_pravex_readme_codex_cli_support",
       "target": "plugins_pravex_readme_codex_token_semantics",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/README.md",
@@ -11970,6 +13267,7 @@
       "source": "plugins_pravex_readme_codex_token_semantics",
       "target": "plugins_pravex_scripts_codex_rollout",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/README.md",
@@ -11980,6 +13278,7 @@
       "source": "plugins_pravex_readme_pravex_plugin",
       "target": "plugins_pravex_readme_api_sessions_endpoint",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/README.md",
@@ -11990,6 +13289,7 @@
       "source": "plugins_pravex_readme_pravex_plugin",
       "target": "plugins_pravex_readme_codex_cli_support",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/README.md",
@@ -12000,6 +13300,7 @@
       "source": "plugins_pravex_readme_pravex_plugin",
       "target": "plugins_pravex_readme_extracted_transcript",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/README.md",
@@ -12010,6 +13311,7 @@
       "source": "plugins_pravex_readme_pravex_plugin",
       "target": "plugins_pravex_readme_files_touched_undercount",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/README.md",
@@ -12020,6 +13322,7 @@
       "source": "plugins_pravex_readme_pravex_plugin",
       "target": "plugins_pravex_readme_idempotent_ingest",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/README.md",
@@ -12030,6 +13333,7 @@
       "source": "plugins_pravex_readme_pravex_plugin",
       "target": "plugins_pravex_readme_session_lifecycle_hooks",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/README.md",
@@ -12040,6 +13344,7 @@
       "source": "plugins_pravex_readme_pravex_plugin",
       "target": "plugins_pravex_readme_spool",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/README.md",
@@ -12050,6 +13355,7 @@
       "source": "plugins_pravex_readme_pravex_plugin",
       "target": "plugins_pravex_readme_title_redaction",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/README.md",
@@ -12060,6 +13366,7 @@
       "source": "plugins_pravex_readme_session_lifecycle_hooks",
       "target": "plugins_pravex_scripts_report_session",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "plugins/pravex/README.md",
@@ -12070,6 +13377,7 @@
       "source": "readme_pravex_plugin",
       "target": "packages_pravex_codex_readme_pravex_codex_package",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "README.md",
@@ -12080,6 +13388,7 @@
       "source": "readme_pravex_plugin",
       "target": "plugins_pravex_commands_codex_codexcommand",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "README.md",
@@ -12090,6 +13399,7 @@
       "source": "readme_pravex_plugin",
       "target": "plugins_pravex_scripts_login",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "README.md",
@@ -12100,6 +13410,7 @@
       "source": "readme_pravex_plugin",
       "target": "plugins_pravex_scripts_report_session",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "README.md",
@@ -12110,6 +13421,7 @@
       "source": "readme_pravex_plugin",
       "target": "readme_device_authorization_grant",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "README.md",
@@ -12120,6 +13432,7 @@
       "source": "readme_pravex_plugin",
       "target": "readme_incognito_mode",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "README.md",
@@ -12130,6 +13443,7 @@
       "source": "readme_pravex_plugin",
       "target": "readme_offline_spool",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "README.md",
@@ -12140,6 +13454,7 @@
       "source": "readme_pravex_plugin",
       "target": "readme_pravex_config",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "README.md",
@@ -12150,6 +13465,7 @@
       "source": "readme_pravex_plugin",
       "target": "readme_session_report_payload",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "README.md",
@@ -12160,6 +13476,7 @@
       "source": "readme_pravex_plugin",
       "target": "readme_statusline_indicator",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "README.md",
@@ -12170,6 +13487,7 @@
       "source": "readme_pravex_plugin",
       "target": "readme_update_check",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "README.md",
@@ -12180,6 +13498,7 @@
       "source": "readme_pravex_plugin",
       "target": "readme_zero_dependencies",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "README.md",
@@ -12190,6 +13509,7 @@
       "source": "_github_workflows_validate_plugins_validate_plugins_job",
       "target": "plugins_pravex_commands_codex_codexcommand",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "INFERRED",
       "confidence_score": 0.75,
       "source_file": ".github/workflows/validate-plugins.yml",
@@ -12200,6 +13520,7 @@
       "source": "plugins_pravex_commands_codex_codexcommand",
       "target": "readme_device_authorization_grant",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "INFERRED",
       "confidence_score": 0.75,
       "source_file": "plugins/pravex/commands/codex.md",
@@ -12210,6 +13531,7 @@
       "source": "packages_pravex_codex_readme_detached_sessionend_child",
       "target": "plugins_pravex_readme_session_lifecycle_hooks",
       "relation": "conceptually_related_to",
+      "_origin": "semantic",
       "confidence": "INFERRED",
       "confidence_score": 0.85,
       "source_file": "packages/pravex-codex/README.md",
@@ -12220,6 +13542,7 @@
       "source": "plugins_pravex_readme_title_redaction",
       "target": "plugins_pravex_readme_extracted_transcript",
       "relation": "conceptually_related_to",
+      "_origin": "semantic",
       "confidence": "INFERRED",
       "confidence_score": 0.85,
       "source_file": "plugins/pravex/README.md",
@@ -12230,6 +13553,7 @@
       "source": "plugins_pravex_commands_codex_codexcommand",
       "target": "packages_pravex_codex_readme_codex_hooks_json",
       "relation": "shares_data_with",
+      "_origin": "semantic",
       "confidence": "INFERRED",
       "confidence_score": 0.85,
       "source_file": "plugins/pravex/commands/codex.md",
@@ -12240,6 +13564,7 @@
       "source": "plugins_pravex_commands_login_pravex_login_command",
       "target": "readme_device_authorization_grant",
       "relation": "implements",
+      "_origin": "semantic",
       "confidence": "INFERRED",
       "confidence_score": 0.95,
       "source_file": "plugins/pravex/commands/login.md",
@@ -12250,6 +13575,7 @@
       "source": "packages_pravex_codex_readme_pravex_codex_package",
       "target": "packages_pravex_codex_cli",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "INFERRED",
       "confidence_score": 0.95,
       "source_file": "packages/pravex-codex/README.md",
@@ -12260,6 +13586,7 @@
       "source": "readme_statusline_indicator",
       "target": "plugins_pravex_scripts_statusline",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "INFERRED",
       "confidence_score": 0.95,
       "source_file": "README.md",
@@ -12270,6 +13597,7 @@
       "source": "readme_update_check",
       "target": "plugins_pravex_scripts_update_check",
       "relation": "references",
+      "_origin": "semantic",
       "confidence": "INFERRED",
       "confidence_score": 0.95,
       "source_file": "README.md",
@@ -12280,6 +13608,7 @@
       "source": "plugins_pravex_readme_files_touched_undercount",
       "target": "readme_files_touched_confirmed",
       "relation": "semantically_similar_to",
+      "_origin": "semantic",
       "confidence": "INFERRED",
       "confidence_score": 0.95,
       "source_file": "plugins/pravex/README.md",
@@ -12290,6 +13619,7 @@
       "source": "plugins_pravex_readme_pravex_plugin",
       "target": "readme_pravex_plugin",
       "relation": "semantically_similar_to",
+      "_origin": "semantic",
       "confidence": "INFERRED",
       "confidence_score": 0.95,
       "source_file": "plugins/pravex/README.md",
@@ -12300,6 +13630,7 @@
       "source": "plugins_pravex_readme_spool",
       "target": "readme_offline_spool",
       "relation": "semantically_similar_to",
+      "_origin": "semantic",
       "confidence": "INFERRED",
       "confidence_score": 0.95,
       "source_file": "plugins/pravex/README.md",
@@ -12310,6 +13641,7 @@
       "source": "plugins_pravex_readme_codex_cli_support",
       "target": "packages_pravex_codex_readme_codex_hooks_json",
       "relation": "shares_data_with",
+      "_origin": "semantic",
       "confidence": "INFERRED",
       "confidence_score": 0.95,
       "source_file": "plugins/pravex/README.md",
@@ -12347,5 +13679,5 @@
       "source_file": "plugins/pravex/README.md"
     }
   ],
-  "built_at_commit": "3eff61790c98ef3d660addf46e3a646b6c7b63c5"
+  "built_at_commit": "a231781d1dad6baaed1aee8cf15568d2b8d3e94d"
 }

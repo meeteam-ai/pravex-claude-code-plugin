@@ -35,6 +35,7 @@ const readline = require('readline');
 const zlib = require('zlib');
 const { execFileSync, spawn } = require('child_process');
 const codex = require('./codex-rollout.js');
+const facetsLib = require('./session-facets.js');
 
 const CONFIG_DIR = path.join(os.homedir(), '.pravex');
 const PLUGIN_VERSION = (() => {
@@ -128,7 +129,6 @@ const INCOGNITO_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
  */
 const PROGRESS_MIN_INTERVAL_MS = 90_000;
 
-const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 // Claude Code writes placeholder assistant turns (API errors, interrupts) as `<synthetic>`
 // with an all-zero usage block. They are not a model and must never reach the dashboard.
 const SYNTHETIC_MODEL = '<synthetic>';
@@ -136,7 +136,8 @@ const SYNTHETIC_MODEL = '<synthetic>';
 // that looks like a key before it leaves the machine.
 const SECRET_RE =
   /\b(?:[A-Za-z0-9]{2,10}[_-])?(?=[A-Za-z0-9_-]*\d)(?=[A-Za-z0-9_-]*[A-Za-z])[A-Za-z0-9_-]{20,}\b/g;
-const TEST_FILE_RE = /(\.test\.|\.spec\.|_test\.|(^|\/)test_|\/tests?\/|__tests__\/)/;
+// Lives in session-facets.js so `testsAdded` and `facets.fileKinds.test` cannot disagree.
+const { TEST_FILE_RE } = facetsLib;
 // Gaps longer than this are somebody walking away, not working. Measured across real
 // transcripts the curve flattens between 5 and 10 minutes, and one session left open
 // overnight reported 7,237 wall-clock minutes against ~110 minutes of actual activity.
@@ -668,9 +669,13 @@ function packTranscript(turns) {
  */
 async function aggregate(transcriptPath, repo, { wantTranscript = true } = {}) {
   const byMessage = new Map(); // message.id -> { model, usage }
-  // tool_use.id -> file path, resolved to a real edit only once its result says it
-  // succeeded. A denied or failed edit never touched the file.
+  // tool_use.id -> { file path, lines }, resolved to a real edit only once its result
+  // says it succeeded. A denied or failed edit never touched the file.
   const pendingEdits = new Map();
+  // tool_use.id -> what a Bash command was (commit, PR, test run) — flags, never the
+  // command — held until its result says whether it worked.
+  const pendingShells = new Map();
+  const facets = facetsLib.createFacets();
   const files = new Set();
   const bashFiles = new Set();
   const prUrls = new Set();
@@ -722,11 +727,15 @@ async function aggregate(transcriptPath, repo, { wantTranscript = true } = {}) {
           if (!b) continue;
           if (b.type === 'tool_use') {
             toolUses += 1;
+            facets.tool(facetsLib.claudeToolCategory(b.name));
             const fp = b.input && (b.input.file_path || b.input.notebook_path);
             // Held until the matching tool_result confirms it landed.
-            if (EDIT_TOOLS.has(b.name) && typeof fp === 'string' && b.id) pendingEdits.set(b.id, fp);
+            if (facetsLib.claudeToolCategory(b.name) === 'edit' && typeof fp === 'string' && b.id) {
+              pendingEdits.set(b.id, { fp, lines: facetsLib.claudeEditLines(b.name, b.input) });
+            }
             if (b.name === 'Bash' && b.input && typeof b.input.command === 'string') {
               for (const f of bashWrites(b.input.command)) bashFiles.add(f);
+              if (b.id) pendingShells.set(b.id, facetsLib.classifyShell(b.input.command));
             }
           } else if (b.type === 'text') {
             collectPrUrls(b.text, prUrls);
@@ -739,10 +748,18 @@ async function aggregate(transcriptPath, repo, { wantTranscript = true } = {}) {
           if (!b) continue;
           if (b.type === 'tool_result') {
             if (b.is_error) toolErrors += 1;
-            const fp = pendingEdits.get(b.tool_use_id);
-            if (fp !== undefined) {
-              if (!b.is_error) files.add(fp);
+            const edit = pendingEdits.get(b.tool_use_id);
+            if (edit !== undefined) {
+              if (!b.is_error) {
+                files.add(edit.fp);
+                facets.edit(edit.lines);
+              }
               pendingEdits.delete(b.tool_use_id);
+            }
+            const shell = pendingShells.get(b.tool_use_id);
+            if (shell !== undefined) {
+              facets.shell(shell, !b.is_error);
+              pendingShells.delete(b.tool_use_id);
             }
             collectPrUrls(textOf(b.content), prUrls);
           }
@@ -800,6 +817,8 @@ async function aggregate(transcriptPath, repo, { wantTranscript = true } = {}) {
     filesTouchedFromShell: bashFiles.size,
     assistantMessages: byMessage.size,
     transcript: wantTranscript ? packTranscript(turns) : undefined,
+    // Undefined when anything in it failed; buildBody then sends the report without it.
+    facets: facets.result(files, toolUses, toolErrors),
   };
 }
 
@@ -814,7 +833,7 @@ function addUsage(byModel, u) {
 }
 
 /** The utilities `codex-rollout.js` borrows, so the two parsers cannot drift on redaction, PR rules or the usage shape. */
-const CODEX_HELPERS = { addUsage, bashWrites, collectPrUrls, prUrlMatchesRepo, activeMinutes, clampText, packTranscript, redact, textOf, TEST_FILE_RE };
+const CODEX_HELPERS = { addUsage, bashWrites, collectPrUrls, prUrlMatchesRepo, activeMinutes, clampText, packTranscript, redact, textOf };
 
 /** `aggregate()` for whichever agent wrote the file; the rest of the reporter never asks. */
 function aggregateFor(agent, transcriptPath, repo, opts) {
@@ -1015,6 +1034,33 @@ async function sweepUnreported(apiHost, apiKey, currentSessionId) {
   }
 }
 
+/**
+ * The machine's IANA time zone (`America/Bogota`), or undefined when the runtime
+ * cannot say. Sent so the server can bucket a session into the developer's own
+ * day and hour rather than UTC's; a zone name identifies a region, not a person,
+ * which is why incognito sends it too.
+ */
+function timeZone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The aggregate's facets, if there are any worth sending. Read defensively:
+ * whatever went wrong computing them, the report goes without, never not at all.
+ */
+function facetsOf(agg) {
+  try {
+    const f = agg.facets;
+    return f && typeof f === 'object' && f.v ? f : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** The payload, shared by every report so the three hooks cannot drift apart. */
 function buildBody(sessionId, repo, agg, cwd, status, { incognito = isIncognito(sessionId), agent = 'claude-code' } = {}) {
   if (incognito) {
@@ -1022,6 +1068,9 @@ function buildBody(sessionId, repo, agg, cwd, status, { incognito = isIncognito(
     // no repo or branch, no files, no pull request and never the transcript. The
     // server also scrubs, because progress reports sent before the user went
     // incognito already carried a title.
+    //
+    // ⚠️ Never `facets`: even as counts, languages and file kinds describe the
+    // work, and incognito promises usage only. The time zone is not about the work.
     return {
       externalId: sessionId,
       agent,
@@ -1031,6 +1080,7 @@ function buildBody(sessionId, repo, agg, cwd, status, { incognito = isIncognito(
       durationMinutes: agg.durationMinutes,
       usage: agg.usage,
       status,
+      tz: timeZone(),
     };
   }
   return {
@@ -1050,6 +1100,10 @@ function buildBody(sessionId, repo, agg, cwd, status, { incognito = isIncognito(
     retryRate: agg.retryRate,
     prUrl: agg.prUrl,
     status,
+    tz: timeZone(),
+    // Counts and categories only — no paths, names or commands. Absent when the
+    // parser could not compute them; the rest of the report stands on its own.
+    facets: facetsOf(agg),
     // Extracted and gzipped here so attachments and hook output never leave the
     // machine. Absent rather than null when it could not be packed — the metrics
     // are still worth reporting on their own.
@@ -1350,6 +1404,7 @@ module.exports = {
   startMessage,
   SECRET_RE,
   buildBody,
+  timeZone,
   shouldSendProgress,
   findUnreported,
   modeFrom,

@@ -273,6 +273,7 @@ jobs:
           node --check plugins/pravex/scripts/update-check.js
           node --check plugins/pravex/scripts/update.js
           node --check plugins/pravex/scripts/codex-rollout.js
+          node --check plugins/pravex/scripts/session-facets.js
           node --check plugins/pravex/scripts/codex-install.js
           node --check packages/pravex-codex/cli.js
           node --check packages/pravex-codex/sync-scripts.js
