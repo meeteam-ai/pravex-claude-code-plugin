@@ -104,7 +104,7 @@ test('an incognito body carries usage and cost inputs, and nothing about the wor
 
   const body = buildBody('s1', 'acme/widgets', agg, process.cwd(), 'ended', { incognito: true });
 
-  assert.deepStrictEqual(Object.keys(body).sort(), ['durationMinutes', 'endedAt', 'externalId', 'incognito', 'startedAt', 'status', 'usage']);
+  assert.deepStrictEqual(Object.keys(body).sort(), ['agent', 'durationMinutes', 'endedAt', 'externalId', 'incognito', 'startedAt', 'status', 'usage']);
   assert.strictEqual(body.incognito, true);
 });
 

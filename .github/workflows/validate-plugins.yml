@@ -3,6 +3,7 @@ name: Validate Plugins
 on:
   push:
     branches: [ main, develop ]
+    tags: [ 'v*' ]
   pull_request:
     branches: [ main ]
 
@@ -271,6 +272,10 @@ jobs:
           node --check plugins/pravex/scripts/statusline.js
           node --check plugins/pravex/scripts/update-check.js
           node --check plugins/pravex/scripts/update.js
+          node --check plugins/pravex/scripts/codex-rollout.js
+          node --check plugins/pravex/scripts/codex-install.js
+          node --check packages/pravex-codex/cli.js
+          node --check packages/pravex-codex/sync-scripts.js
 
       # Zero dependencies is a deliberate property of this plugin: it runs inside
       # someone else's session, so it must not pull anything at install time. The tests
@@ -283,7 +288,7 @@ jobs:
           # prefix rather than by name — an explicit list went stale the moment the
           # transcript work added `zlib` and `node:crypto`, and failed CI on main for
           # two modules that were always standard library.
-          bad=$(grep -ohE "require\('[^']+'\)" plugins/pravex/scripts/*.js \
+          bad=$(grep -ohE "require\('[^']+'\)" plugins/pravex/scripts/*.js packages/pravex-codex/*.js \
                 | sed -E "s/require\('(.*)'\)/\1/" | sort -u \
                 | grep -v "^\.\{1,2\}/" \
           | grep -v "^node:" \
@@ -300,3 +305,34 @@ jobs:
       # which could not be run before pushing and reported failures as bash noise.
       - name: Test
         run: node --test plugins/pravex/scripts/*.test.js
+
+      # The npm package ships the same scripts, copied at pack time. Its own test
+      # runs the packed layout end to end, so a broken sync fails here, not on a
+      # developer's machine after `npx`.
+      - name: Test the Codex npm package
+        run: node --test packages/pravex-codex/*.test.js
+
+  publish-codex-package:
+    name: Publish @meeteam/pravex-codex
+    # Only a version tag publishes; PRs and branch pushes just build and test.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [pravex-scripts]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Publish
+        working-directory: packages/pravex-codex
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

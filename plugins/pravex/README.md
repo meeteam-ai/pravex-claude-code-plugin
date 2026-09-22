@@ -1,6 +1,6 @@
 # pravex
 
-Claude Code plugin that reports each finished session to your [Pravex](https://github.com/meeteam-ai) workspace: model mix, tokens, cost, duration, files touched, tests added, tool-error rate and PR link.
+Claude Code plugin that reports each finished session to your [Pravex](https://github.com/meeteam-ai) workspace: model mix, tokens, cost, duration, files touched, tests added, tool-error rate and PR link. It reports [OpenAI Codex CLI](https://github.com/openai/codex) sessions from the same machine too — see [Codex CLI](#codex-cli).
 
 ## Install
 
@@ -71,6 +71,40 @@ session ends and cannot be undone for that session.
 
 Markers live in `~/.pravex/incognito/<session id>` and are pruned after 30 days.
 
+## Codex CLI
+
+The same reporter reads Codex's rollouts (`~/.codex/sessions/`) and reports them
+with `agent: codex`, priced at OpenAI's list prices server-side. Codex has no
+plugin marketplace, so its hooks are entries in `~/.codex/hooks.json`:
+
+```
+/pravex:codex --install      # SessionStart, Stop and SessionEnd hooks
+/pravex:codex --status
+/pravex:codex --uninstall
+```
+
+`--install` copies the scripts to `~/.pravex/codex/` (the plugin's own directory
+changes on every update). Every `SessionStart` of either agent compares that
+copy's version with the running plugin's and recopies on a mismatch, so updating
+this plugin updates the Codex hooks. Existing entries in
+`hooks.json` are kept; ours are the ones pointing into `~/.pravex/codex/`.
+
+Codex caps a `SessionEnd` hook at **three seconds**, not enough to parse a
+rollout and POST it, so that hook hands the report to a detached child and
+returns at once. Like Claude Code, `SessionEnd` does not fire when the terminal
+is closed; the `SessionStart` sweep covers `~/.codex/sessions` as well.
+
+Token semantics differ and are settled once, in `scripts/codex-rollout.js`:
+OpenAI's `cached_input_tokens` is a subset of `input_tokens` (so billable input
+is the difference), `reasoning_output_tokens` is already inside `output_tokens`,
+and there is no cache-write charge. Usage comes from the per-response
+`token_usage_record` lines, deduped on `response_id` and attributed to the
+turn's model; rollouts from CLIs before those existed fall back to the last
+cumulative `token_count`.
+
+A machine without Claude Code installs the same hooks with
+[`npx @meeteam/pravex-codex install`](../../packages/pravex-codex/README.md).
+
 ## Keep it up to date
 
 Claude Code does not auto-update third-party marketplaces by default, so an
@@ -107,7 +141,7 @@ The transcript is sent **only on the final report**. A `Stop` hook fires after
 every assistant turn, and re-uploading tens of kilobytes each time would be pure
 waste — the server summarises once, when the transcript arrives.
 
-- `scripts/report-session.js` serves all three.
+- `scripts/report-session.js` serves all three, for both agents (`--agent codex` or, failing that, whatever the first line of the transcript says).
 - The script parses the session transcript (`transcript_path`), aggregates usage per model (deduped by message id, `<synthetic>` error turns excluded), and grabs any PR URL.
 
 **Duration is active time, not wall clock.** Gaps longer than five minutes are dropped, because the first and last transcript timestamps count a laptop left open overnight as work — one real session measured 7,237 wall-clock minutes against ~110 minutes of activity.
