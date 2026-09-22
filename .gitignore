@@ -50,11 +50,17 @@ temp/
 *.tar.gz
 *.rar
 
-# graphify knowledge graph: machine-local build state (graph.json, report, manifest are committed)
+# graphify knowledge graph — follows graphify's "Team setup" guidance: graph.json,
+# GRAPH_REPORT.md, graph.html and manifest.json are committed so everyone starts with a map.
+# local only: per-developer extraction token spend
+graphify-out/cost.json
+# optional per graphify (commit for speed); skipped to keep the repo small
 graphify-out/cache/
-graphify-out/graph.html
+# (git has no trailing comments — graphify's README snippet puts them inline, which
+# turns each line into a literal pattern that matches nothing)
+# machine-local state graphify writes next to the graph (absolute paths, backups, locks)
 graphify-out/.graphify_python
 graphify-out/.graphify_root
 graphify-out/.graphify_labels.json.sig
-# dated backups graphify writes before a hook rebuild overwrites the curated graph
+graphify-out/.rebuild.lock
 graphify-out/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/
