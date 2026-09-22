@@ -8,7 +8,9 @@
  * A rollout is one JSON object per line, `{ timestamp, type, payload }`, kept
  * under `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`. The lines that matter:
  *
- *   session_meta         once, first: `payload.id`, `payload.cwd`, `payload.git.branch`
+ *   session_meta         once, first: `payload.id` (thread), `payload.session_id`
+ *                        (root thread), `payload.parent_thread_id` (set on a
+ *                        sub-agent's rollout), `payload.cwd`, `payload.git.branch`
  *   turn_context         per turn: `payload.turn_id`, `payload.model` — the model
  *                        every usage record of that turn is attributed to
  *   token_usage_record   per model response: `payload.response_id`,
@@ -147,6 +149,9 @@ async function aggregate(transcriptPath, repo, { wantTranscript = true } = {}, h
   let model = '';
   let branch = '';
   let cwd = '';
+  // A sub-agent spawned by another thread writes its own rollout. Its usage is
+  // real, but it is not a session of its own: the root thread is.
+  let subAgent = false;
   let toolUses = 0;
   let toolErrors = 0;
   let assistantMessages = 0;
@@ -177,6 +182,7 @@ async function aggregate(transcriptPath, repo, { wantTranscript = true } = {}, h
 
     if (o.type === 'session_meta') {
       if (typeof p.cwd === 'string') cwd = p.cwd;
+      if (p.parent_thread_id || (p.session_id && p.id && p.session_id !== p.id)) subAgent = true;
       if (p.git && typeof p.git.branch === 'string' && p.git.branch !== 'HEAD') branch = p.git.branch;
       if (typeof p.model === 'string') model = p.model;
       continue;
@@ -272,6 +278,7 @@ async function aggregate(transcriptPath, repo, { wantTranscript = true } = {}, h
     endedAt: last,
     branch,
     cwd,
+    subAgent,
     title,
     filesTouched: files.size,
     testsAdded,

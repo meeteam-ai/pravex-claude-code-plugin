@@ -16,13 +16,15 @@ const T1 = '2026-09-21T10:05:00.000Z';
 const SESSION = '0f7a5b6c-1d2e-4f30-8a9b-c0d1e2f3a4b5';
 
 /** A rollout under `$HOME/.codex/sessions/YYYY/MM/DD`, the way Codex files them. */
-function writeRollout(home, sessionId, { cwd = '/work/acme', model = 'gpt-5.3-codex', mtime } = {}) {
-  const dir = path.join(home, '.codex', 'sessions', '2026', '09', '21');
+function writeRollout(home, sessionId, { cwd = '/work/acme', model = 'gpt-5.3-codex', mtime, day = '2026/09/21', parent } = {}) {
+  const dir = path.join(home, '.codex', 'sessions', ...day.split('/'));
   fs.mkdirSync(dir, { recursive: true });
-  const file = path.join(dir, `rollout-2026-09-21T10-00-00-${sessionId}.jsonl`);
+  const file = path.join(dir, `rollout-${day.replace(/\//g, '-')}T10-00-00-${sessionId}.jsonl`);
   const u = { input_tokens: 1000, cached_input_tokens: 600, cache_write_input_tokens: 0, output_tokens: 300, reasoning_output_tokens: 100, total_tokens: 1300 };
+  const meta = { id: sessionId, timestamp: T0, cwd, originator: 'codex_cli_rs', cli_version: '0.155.1', model_provider: 'openai' };
+  if (parent) Object.assign(meta, { session_id: parent, parent_thread_id: parent, agent_nickname: 'scout' });
   const lines = [
-    { timestamp: T0, type: 'session_meta', payload: { id: sessionId, timestamp: T0, cwd, originator: 'codex_cli_rs', cli_version: '0.155.1', model_provider: 'openai' } },
+    { timestamp: T0, type: 'session_meta', payload: meta },
     { timestamp: T0, type: 'turn_context', payload: { turn_id: 'turn-1', cwd, model } },
     { timestamp: T0, type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'port the retry middleware' }] } },
     { timestamp: T1, type: 'token_usage_record', payload: { thread_id: sessionId, turn_id: 'turn-1', session_id: sessionId, root_turn_id: 'turn-1', response_id: 'resp-1', usage: u, turn_token_usage: u, thread_token_usage: u } },
@@ -106,6 +108,31 @@ test('SessionStart sweeps unreported rollouts under ~/.codex/sessions, filed und
   const ledger = JSON.parse(fs.readFileSync(path.join(home, '.pravex', 'reported.json'), 'utf8'));
   assert.ok(ledger.includes(forgotten));
   assert.ok(ledger.includes(alreadySent), 'the ledger is shared across agents');
+});
+
+test('the sweep reports a thread resumed this week even though it started months ago, and skips sub-agent rollouts', async () => {
+  const home = tempHome();
+  const { server, nth, listen } = captureServer();
+  const port = await listen();
+  const recent = new Date(Date.now() - 60 * 60 * 1000);
+  const resumed = '11111111-2222-4333-8444-555555555555';
+  const scout = '22222222-3333-4444-8555-666666666666';
+  // Started 30 days ago, so it lives under that day's directory; touched an hour ago.
+  const old = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const day = `${old.getUTCFullYear()}/${String(old.getUTCMonth() + 1).padStart(2, '0')}/${String(old.getUTCDate()).padStart(2, '0')}`;
+  writeRollout(home, resumed, { day, mtime: recent });
+  writeRollout(home, scout, { mtime: recent, parent: resumed });
+
+  await runHook({ session_id: SESSION, transcript_path: path.join(home, 'none.jsonl'), cwd: '/work/acme', source: 'startup' }, envFor(home, port), ['--start', '--agent', 'codex']);
+
+  const bodies = await nth(1);
+  server.close();
+  assert.deepStrictEqual(
+    bodies.map((b) => b.externalId),
+    [resumed]
+  );
+  const ledger = JSON.parse(fs.readFileSync(path.join(home, '.pravex', 'reported.json'), 'utf8'));
+  assert.ok(ledger.includes(scout), 'the sub-agent rollout is remembered so it is not re-read every start');
 });
 
 test('a Claude Code SessionStart sweeps Codex rollouts too', async () => {

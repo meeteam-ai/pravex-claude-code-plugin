@@ -320,6 +320,16 @@ function agentFrom(argv, transcriptPath) {
 }
 
 /**
+ * How far back the sweep opens day directories under `~/.codex/sessions`.
+ *
+ * A rollout lives under the day its thread *started*, and `codex resume` keeps
+ * writing to that same file, so pruning by the sweep window alone would never
+ * look at a thread started earlier and worked on this week. Ninety days is the
+ * longest resume worth caring about; older directories are not opened at all.
+ */
+const CODEX_WALK_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
+
+/**
  * Walk `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`, newest day first, calling
  * `visit(full, sessionId)` per file until it returns true.
  *
@@ -920,7 +930,9 @@ function findUnreported(currentSessionId, now = Date.now()) {
     /* no Claude Code projects directory; Codex rollouts are still worth a look */
   }
   const cutoff = now - SWEEP_MAX_AGE_MS;
-  files = files.map((f) => ({ ...f, agent: 'claude-code' })).concat(findCodexRollouts({ since: cutoff, skip: reported }));
+  files = files
+    .map((f) => ({ ...f, agent: 'claude-code' }))
+    .concat(findCodexRollouts({ since: now - CODEX_WALK_MAX_AGE_MS, skip: reported }));
 
   const idleCutoff = now - SWEEP_MIN_IDLE_MS;
   // A session is eligible when it is: within the sweep window, not already
@@ -979,9 +991,10 @@ async function sweepUnreported(apiHost, apiKey, currentSessionId) {
       const cwd = await transcriptCwd(full);
       const repo = cwd ? repoSlug(cwd) : '';
       const agg = await aggregateFor(agent, full, repo, { wantTranscript: !isIncognito(sessionId) });
-      if (!agg.assistantMessages || !agg.startedAt) {
-        // An empty transcript is not a session. Remembered anyway so the sweep
-        // does not reconsider it on every start for the next week.
+      if (!agg.assistantMessages || !agg.startedAt || agg.subAgent) {
+        // An empty transcript is not a session, and neither is a Codex sub-agent's
+        // rollout (the root thread is). Remembered anyway so the sweep does not
+        // reconsider it on every start for the next week.
         rememberReported(sessionId);
         continue;
       }
@@ -1275,6 +1288,10 @@ async function main() {
   const agg = await aggregateFor(agent, transcriptPath, repo, { wantTranscript: mode === 'end' && !isIncognito(sessionId) });
   if (!agg.assistantMessages || !agg.startedAt) {
     log(`skipped (${mode}) ${sessionId}: empty transcript`);
+    return;
+  }
+  if (agg.subAgent) {
+    log(`skipped (${mode}) ${sessionId}: a sub-agent thread; its root session is the one reported`);
     return;
   }
   if (agg.prUrlsRejected) {

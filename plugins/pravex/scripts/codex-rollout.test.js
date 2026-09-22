@@ -184,6 +184,14 @@ test('aggregate ignores developer messages and the context Codex injects as user
   );
 });
 
+test('a sub-agent rollout is flagged so the reporter can leave it to its root thread', async () => {
+  const child = writeRollout([meta({ id: 'aaaaaaaa-1111-4222-8333-444444444444', session_id: '0f7a5b6c-1d2e-4f30-8a9b-c0d1e2f3a4b5', parent_thread_id: '0f7a5b6c-1d2e-4f30-8a9b-c0d1e2f3a4b5', agent_nickname: 'scout' }), turn('turn-1', 'gpt-5.5'), userMsg('go'), assistantMsg('done')]);
+  const root = writeRollout([meta(), turn('turn-1', 'gpt-5.5'), userMsg('go'), assistantMsg('done')]);
+
+  assert.strictEqual((await aggregate(child, 'acme/api', {})).subAgent, true);
+  assert.strictEqual((await aggregate(root, 'acme/api', {})).subAgent, false);
+});
+
 test('an unknown line type is skipped rather than fatal', async () => {
   const file = writeRollout([meta(), turn('turn-1', 'gpt-5.5'), { timestamp: T0, type: 'world_state', payload: { anything: true } }, userMsg('hi'), assistantMsg('hello')]);
   const agg = await aggregate(file, 'acme/api', {});
