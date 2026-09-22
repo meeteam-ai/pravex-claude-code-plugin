@@ -53,19 +53,7 @@ const SPOOL_MAX = 50;
 /** Where Claude Code keeps transcripts, one directory per project. */
 const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 /** Where Codex CLI keeps rollouts, one directory per day (`YYYY/MM/DD`). */
-const CODEX_SESSIONS_DIR = path.join(os.homedir(), ...codex.SESSIONS_DIR_PARTS);
-/**
- * Where the Codex hooks run this reporter from.
- *
- * Codex has no plugin marketplace: its hooks are entries in `~/.codex/hooks.json`
- * pointing at a script on disk. The plugin's own directory changes on every
- * update, so the installer copies these scripts here and every `SessionStart`
- * refreshes the copy (the same trick `statusline.js` uses). The layout mirrors
- * the plugin's (`scripts/` beside `.claude-plugin/plugin.json`) so the relative
- * requires and the version lookup resolve unchanged.
- */
-const CODEX_COPY_DIR = path.join(CONFIG_DIR, 'codex');
-const CODEX_COPY_FILES = ['report-session.js', 'codex-rollout.js', 'update-check.js', 'statusline.js', 'login.js'];
+const CODEX_SESSIONS_DIR = path.join(os.homedir(), '.codex', 'sessions');
 /** The agents this reporter can read a transcript for. */
 const AGENTS = ['claude-code', 'codex'];
 /** Records which sessions have been reported, so the sweep does not re-send everything. */
@@ -274,17 +262,24 @@ function startMessage({ configured, incognito, source, update }) {
  * output ignored. Its answer lands in a cache file that the next start message and the
  * status line read.
  */
-function spawnUpdateCheck() {
+/** A child that outlives this hook. Never throws: whatever it was for, the session must not wait on it. */
+function spawnDetached(args, label) {
   try {
-    const child = spawn(process.execPath, [path.join(__dirname, 'update-check.js')], {
+    const child = spawn(process.execPath, args, {
       detached: true, // required on Windows for the child to outlive this hook
       stdio: 'ignore',
       windowsHide: true,
     });
     child.unref();
+    return child.pid;
   } catch (err) {
-    log(`update check could not start: ${err && err.message}`);
+    log(`${label} could not start: ${err && err.message}`);
+    return null;
   }
+}
+
+function spawnUpdateCheck() {
+  spawnDetached([path.join(__dirname, 'update-check.js')], 'update check');
 }
 
 /**
@@ -302,27 +297,14 @@ function refreshStatusline() {
 
 /** Where Claude Code keeps a session's transcript, for the command that has only its id. */
 /**
- * Keep the copy the Codex hooks run current.
- *
- * Opt-in: nothing is copied until `codex-install.js` has run once. After that,
- * every session start of either agent refreshes it, so updating the Claude Code
- * plugin updates the Codex hooks too. A no-op when this file *is* the copy.
+ * Keep the copy the Codex hooks run from current, once `codex-install.js` has
+ * made one. Updating the Claude Code plugin then updates the Codex hooks too.
  */
-function refreshCodexCopy(sourceDir = __dirname) {
-  const target = path.join(CODEX_COPY_DIR, 'scripts');
+function refreshCodexCopy() {
   try {
-    if (path.resolve(sourceDir) === path.resolve(target)) return false;
-    if (!fs.existsSync(path.join(target, 'report-session.js'))) return false;
-    for (const file of CODEX_COPY_FILES) fs.copyFileSync(path.join(sourceDir, file), path.join(target, file));
-    const manifest = path.join(sourceDir, '..', '.claude-plugin', 'plugin.json');
-    if (fs.existsSync(manifest)) {
-      fs.mkdirSync(path.join(CODEX_COPY_DIR, '.claude-plugin'), { recursive: true, mode: 0o700 });
-      fs.copyFileSync(manifest, path.join(CODEX_COPY_DIR, '.claude-plugin', 'plugin.json'));
-    }
-    return true;
+    require('./codex-install.js').refresh(__dirname);
   } catch (err) {
     log(`codex copy not refreshed: ${err && err.message}`);
-    return false;
   }
 }
 
@@ -331,54 +313,74 @@ function refreshCodexCopy(sourceDir = __dirname) {
  * whatever the first line of the file says. Claude Code when there is no file.
  */
 function agentFrom(argv, transcriptPath) {
-  const at = argv.indexOf('--agent');
-  if (at !== -1 && AGENTS.includes(argv[at + 1])) return argv[at + 1];
+  const named = flagValue(argv, '--agent');
+  if (AGENTS.includes(named)) return named;
   if (transcriptPath && codex.isRollout(transcriptPath)) return 'codex';
   return 'claude-code';
 }
 
 /**
- * Every rollout under `~/.codex/sessions`, newest first: `{ full, sessionId, mtime }`.
+ * Walk `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`, newest day first, calling
+ * `visit(full, sessionId)` per file until it returns true.
  *
- * The session id is the uuid the file name ends in
- * (`rollout-2026-09-21T10-00-00-<uuid>.jsonl`), which is what Codex hands the
- * hooks as `session_id`. Bounded to four directory levels: year, month, day and
- * the files, so a stray symlink cannot turn this into a filesystem walk.
+ * The session id is the uuid the file name ends in, which is what Codex hands
+ * the hooks as `session_id`. Day directories older than `since` are not opened:
+ * the path is the date, so a year of history costs nothing to skip. Bounded to
+ * the three date levels, so a stray symlink cannot turn this into a filesystem walk.
  */
-function findCodexRollouts(root = CODEX_SESSIONS_DIR) {
-  const out = [];
-  const walk = (dir, depth) => {
-    let entries;
+function walkCodexRollouts(visit, { root = CODEX_SESSIONS_DIR, since = 0 } = {}) {
+  const sinceDay = since ? new Date(since - 24 * 60 * 60 * 1000).toISOString().slice(0, 10) : '';
+  const list = (dir) => {
     try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
+      return fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? 1 : -1));
     } catch {
-      return;
+      return [];
     }
-    for (const entry of entries) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        if (depth < 3) walk(full, depth + 1);
-        continue;
+  };
+  for (const y of list(root)) {
+    if (!y.isDirectory()) continue;
+    for (const m of list(path.join(root, y.name))) {
+      if (!m.isDirectory()) continue;
+      for (const d of list(path.join(root, y.name, m.name))) {
+        if (!d.isDirectory() || `${y.name}-${m.name}-${d.name}` < sinceDay) continue;
+        for (const f of list(path.join(root, y.name, m.name, d.name))) {
+          if (!f.isFile() || !f.name.endsWith('.jsonl')) continue;
+          const id = /-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/i.exec(f.name);
+          if (visit(path.join(root, y.name, m.name, d.name, f.name), id ? id[1] : f.name.replace(/\.jsonl$/, ''))) return;
+        }
       }
-      if (!entry.isFile() || !entry.name.endsWith('.jsonl')) continue;
-      const m = /-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/i.exec(entry.name);
-      const sessionId = m ? m[1] : entry.name.replace(/\.jsonl$/, '');
+    }
+  }
+}
+
+/** Rollouts worth sweeping: recent, and not already in `skip`. Stat'd only once they pass both. */
+function findCodexRollouts({ since = 0, skip = new Set() } = {}) {
+  const out = [];
+  walkCodexRollouts(
+    (full, sessionId) => {
+      if (skip.has(sessionId)) return false;
       try {
         out.push({ full, sessionId, mtime: fs.statSync(full).mtimeMs, agent: 'codex' });
       } catch {
         /* vanished between readdir and stat */
       }
-    }
-  };
-  walk(root, 0);
-  return out.sort((a, b) => b.mtime - a.mtime);
+      return false;
+    },
+    { since }
+  );
+  return out;
 }
 
 function findTranscript(sessionId, agent = 'claude-code') {
   const clean = String(sessionId).replace(/[^A-Za-z0-9_-]/g, '');
   if (agent === 'codex') {
-    const hit = findCodexRollouts().find((r) => r.sessionId.toLowerCase() === clean.toLowerCase());
-    return hit ? hit.full : null;
+    let hit = null;
+    walkCodexRollouts((full, id) => {
+      if (id.toLowerCase() !== clean.toLowerCase()) return false;
+      hit = full;
+      return true;
+    });
+    return hit;
   }
   const name = `${clean}.jsonl`;
   try {
@@ -458,7 +460,7 @@ function textOf(content) {
   if (typeof content === 'string') return content;
   if (!Array.isArray(content)) return '';
   return content
-    .map((b) => (b && b.type === 'text' ? b.text : typeof b === 'string' ? b : ''))
+    .map((b) => (b && typeof b.text === 'string' ? b.text : typeof b === 'string' ? b : ''))
     .join('\n');
 }
 
@@ -754,19 +756,13 @@ async function aggregate(transcriptPath, repo, { wantTranscript = true } = {}) {
 
   const usageByModel = new Map();
   for (const { model, usage } of byMessage.values()) {
-    const key = model || 'unknown';
-    const u = usageByModel.get(key) || {
-      model: key,
-      inputTokens: 0,
-      outputTokens: 0,
-      cacheReadTokens: 0,
-      cacheWriteTokens: 0,
-    };
-    u.inputTokens += usage.input_tokens || 0;
-    u.outputTokens += usage.output_tokens || 0;
-    u.cacheReadTokens += usage.cache_read_input_tokens || 0;
-    u.cacheWriteTokens += usage.cache_creation_input_tokens || 0;
-    usageByModel.set(key, u);
+    addUsage(usageByModel, {
+      model: model || 'unknown',
+      inputTokens: usage.input_tokens || 0,
+      outputTokens: usage.output_tokens || 0,
+      cacheReadTokens: usage.cache_read_input_tokens || 0,
+      cacheWriteTokens: usage.cache_creation_input_tokens || 0,
+    });
   }
 
   // Shell-written files join the edit-tool files, deduped by path.
@@ -797,8 +793,18 @@ async function aggregate(transcriptPath, repo, { wantTranscript = true } = {}) {
   };
 }
 
-/** The text utilities `codex-rollout.js` borrows, so the two parsers cannot drift on redaction or PR rules. */
-const CODEX_HELPERS = { bashWrites, collectPrUrls, prUrlMatchesRepo, activeMinutes, clampText, packTranscript, redact, TEST_FILE_RE };
+/** Add one model's usage (the `POST /sessions` shape) into a per-model accumulator. */
+function addUsage(byModel, u) {
+  const acc = byModel.get(u.model) || { model: u.model, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
+  acc.inputTokens += u.inputTokens;
+  acc.outputTokens += u.outputTokens;
+  acc.cacheReadTokens += u.cacheReadTokens;
+  acc.cacheWriteTokens += u.cacheWriteTokens;
+  byModel.set(u.model, acc);
+}
+
+/** The utilities `codex-rollout.js` borrows, so the two parsers cannot drift on redaction, PR rules or the usage shape. */
+const CODEX_HELPERS = { addUsage, bashWrites, collectPrUrls, prUrlMatchesRepo, activeMinutes, clampText, packTranscript, redact, textOf, TEST_FILE_RE };
 
 /** `aggregate()` for whichever agent wrote the file; the rest of the reporter never asks. */
 function aggregateFor(agent, transcriptPath, repo, opts) {
@@ -913,9 +919,9 @@ function findUnreported(currentSessionId, now = Date.now()) {
   } catch {
     /* no Claude Code projects directory; Codex rollouts are still worth a look */
   }
-  files = files.map((f) => ({ ...f, agent: 'claude-code' })).concat(findCodexRollouts());
-
   const cutoff = now - SWEEP_MAX_AGE_MS;
+  files = files.map((f) => ({ ...f, agent: 'claude-code' })).concat(findCodexRollouts({ since: cutoff, skip: reported }));
+
   const idleCutoff = now - SWEEP_MIN_IDLE_MS;
   // A session is eligible when it is: within the sweep window, not already
   // reported, not the one starting, AND cold — neither its transcript nor a
@@ -961,7 +967,7 @@ async function sweepUnreported(apiHost, apiKey, currentSessionId) {
   const deadline = Date.now() + SWEEP_BUDGET_MS;
 
   for (let index = 0; index < candidates.length; index += 1) {
-    const { full, sessionId, agent = 'claude-code' } = candidates[index];
+    const { full, sessionId, agent } = candidates[index];
     // Checked before each session rather than after: stopping here leaves the
     // rest for the next session start, and being killed mid-POST does not.
     if (Date.now() > deadline) {
@@ -1151,20 +1157,12 @@ function flagValue(argv, flag) {
 /**
  * Codex caps a `SessionEnd` hook at three seconds, which is not enough to parse a
  * rollout and POST it. So the hook hands the work to a child that outlives it and
- * returns at once; the child gets the payload as arguments, since its stdin is
- * gone. The same `detached` + `unref` pair `spawnUpdateCheck` relies on.
+ * returns at once; the child gets the whole payload as an argument, since its
+ * stdin is gone.
  */
 function spawnDetachedEnd(agent, input) {
-  const args = [__filename, '--end', '--agent', agent, '--session', String(input.session_id || '')];
-  if (input.transcript_path) args.push('--transcript', input.transcript_path);
-  if (input.cwd) args.push('--cwd', input.cwd);
-  try {
-    const child = spawn(process.execPath, args, { detached: true, stdio: 'ignore', windowsHide: true });
-    child.unref();
-    log(`end-detached ${input.session_id}: handed to pid ${child.pid}`);
-  } catch (err) {
-    log(`end-detached ${input.session_id}: could not spawn (${err && err.message})`);
-  }
+  const pid = spawnDetached([__filename, '--end', '--agent', agent, '--input', JSON.stringify(input)], `end-detached ${input.session_id}`);
+  if (pid) log(`end-detached ${input.session_id}: handed to pid ${pid}`);
 }
 
 /**
@@ -1174,7 +1172,7 @@ function spawnDetachedEnd(agent, input) {
  *
  * Prints for a person: the command shows this output verbatim.
  */
-async function goIncognito(sessionId) {
+async function goIncognito(sessionId, agent = 'claude-code') {
   if (!markIncognito(sessionId)) {
     console.log('Pravex: could not tell which session this is, so nothing changed.');
     return;
@@ -1184,12 +1182,12 @@ async function goIncognito(sessionId) {
   console.log('will not be sent; only usage and cost are recorded. This lasts until the session ends.');
 
   const { apiKey, apiHost } = loadConfig();
-  const transcriptPath = findTranscript(sessionId);
+  const transcriptPath = findTranscript(sessionId, agent);
   if (!apiKey || !apiHost || !transcriptPath) return;
   try {
-    const agg = await aggregate(transcriptPath, '', { wantTranscript: false });
+    const agg = await aggregateFor(agent, transcriptPath, '', { wantTranscript: false });
     if (!agg.assistantMessages || !agg.startedAt) return;
-    const res = await post(apiHost, apiKey, buildBody(sessionId, '', agg, process.cwd(), 'active', { incognito: true }));
+    const res = await post(apiHost, apiKey, buildBody(sessionId, '', agg, process.cwd(), 'active', { incognito: true, agent }));
     log(`ok (incognito) ${sessionId} -> ${res.status}`);
   } catch (err) {
     // The marker is what matters; the next Stop or SessionEnd sends the scrubbed report.
@@ -1201,21 +1199,17 @@ async function main() {
   const argv = process.argv.slice(2);
   const mode = modeFrom(argv);
   if (mode === 'incognito') {
-    await goIncognito(argv[argv.indexOf('--incognito') + 1]);
+    await goIncognito(flagValue(argv, '--incognito'), agentFrom(argv));
     return;
   }
 
   let input = {};
-  if (flagValue(argv, '--session') !== undefined) {
-    // A detached child: its parent already read stdin and passed the payload on.
-    input = { session_id: flagValue(argv, '--session'), transcript_path: flagValue(argv, '--transcript'), cwd: flagValue(argv, '--cwd') };
-  } else {
-    try {
-      input = JSON.parse((await readStdin()) || '{}');
-    } catch {
-      log(`skipped (${mode}): could not parse hook stdin`);
-      return;
-    }
+  try {
+    // A detached child gets the payload its parent already read from stdin.
+    input = JSON.parse(flagValue(argv, '--input') || (await readStdin()) || '{}');
+  } catch {
+    log(`skipped (${mode}): could not parse hook stdin`);
+    return;
   }
   const agent = agentFrom(argv, input.transcript_path && input.transcript_path.replace(/^~/, os.homedir()));
 
@@ -1326,15 +1320,11 @@ if (require.main === module) {
 
 module.exports = {
   AGENTS,
-  CODEX_COPY_DIR,
-  CODEX_COPY_FILES,
-  CODEX_SESSIONS_DIR,
   INCOGNITO_DIR,
   agentFrom,
   aggregateFor,
   findCodexRollouts,
   flagValue,
-  refreshCodexCopy,
   PROGRESS_MIN_INTERVAL_MS,
   findTranscript,
   isIncognito,

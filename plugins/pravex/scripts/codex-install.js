@@ -36,7 +36,13 @@ const { spawnSync } = require('node:child_process');
 const CONFIG_DIR = path.join(os.homedir(), '.pravex');
 const COPY_DIR = path.join(CONFIG_DIR, 'codex');
 const COPY_SCRIPTS = path.join(COPY_DIR, 'scripts');
-const COPY_FILES = ['report-session.js', 'codex-rollout.js', 'update-check.js', 'statusline.js', 'login.js'];
+/**
+ * The reporter and everything it requires, including this installer (the copy's
+ * `SessionStart` refreshes itself through it). The one list: `report-session.js`
+ * and the npm package's `sync-scripts.js` both read it from here.
+ */
+const COPY_FILES = ['report-session.js', 'codex-rollout.js', 'codex-install.js', 'update-check.js', 'statusline.js', 'login.js'];
+const COPY_MANIFEST = path.join(COPY_DIR, '.claude-plugin', 'plugin.json');
 const HOOKS_FILE = path.join(os.homedir(), '.codex', 'hooks.json');
 const BACKUP_FILE = `${HOOKS_FILE}.pravex-backup`;
 
@@ -62,9 +68,34 @@ function copyScripts(sourceDir) {
   for (const file of COPY_FILES) fs.copyFileSync(path.join(sourceDir, file), path.join(COPY_SCRIPTS, file));
   const manifest = path.join(sourceDir, '..', '.claude-plugin', 'plugin.json');
   if (fs.existsSync(manifest)) {
-    fs.mkdirSync(path.join(COPY_DIR, '.claude-plugin'), { recursive: true, mode: 0o700 });
-    fs.copyFileSync(manifest, path.join(COPY_DIR, '.claude-plugin', 'plugin.json'));
+    fs.mkdirSync(path.dirname(COPY_MANIFEST), { recursive: true, mode: 0o700 });
+    fs.copyFileSync(manifest, COPY_MANIFEST);
   }
+}
+
+function versionOf(manifest) {
+  try {
+    return JSON.parse(fs.readFileSync(manifest, 'utf8')).version || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Keep an installed copy current, from the plugin's `SessionStart`.
+ *
+ * Opt-in: nothing is copied until `install` has run once. After that a copy is
+ * refreshed only when its manifest version differs from the running plugin's —
+ * one small read per session start rather than six file writes. A no-op when
+ * the caller *is* the copy.
+ */
+function refresh(sourceDir) {
+  if (path.resolve(sourceDir) === path.resolve(COPY_SCRIPTS)) return false;
+  if (!fs.existsSync(path.join(COPY_SCRIPTS, 'report-session.js'))) return false;
+  const running = versionOf(path.join(sourceDir, '..', '.claude-plugin', 'plugin.json'));
+  if (running && running === versionOf(COPY_MANIFEST)) return false;
+  copyScripts(sourceDir);
+  return true;
 }
 
 /** `~/.codex/hooks.json` parsed, `{}` when absent. Throws on invalid JSON so nothing is overwritten. */
@@ -173,4 +204,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { BACKUP_FILE, COPY_DIR, COPY_FILES, COPY_SCRIPTS, HOOKS, HOOKS_FILE, commandFor, install, isOurs, status, uninstall, withoutOurs };
+module.exports = { COPY_FILES, COPY_SCRIPTS, HOOKS_FILE, copyScripts, install, isOurs, refresh, status, uninstall };

@@ -6,17 +6,14 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
-const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
-const { spawn } = require('node:child_process');
 
-const REPORT = path.join(__dirname, 'report-session.js');
+const { captureServer, envFor, runHook, tempHome } = require('./test-support.js');
+
 const T0 = '2026-09-21T10:00:00.000Z';
 const T1 = '2026-09-21T10:05:00.000Z';
 const SESSION = '0f7a5b6c-1d2e-4f30-8a9b-c0d1e2f3a4b5';
-
-const tempHome = () => fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-home-'));
 
 /** A rollout under `$HOME/.codex/sessions/YYYY/MM/DD`, the way Codex files them. */
 function writeRollout(home, sessionId, { cwd = '/work/acme', model = 'gpt-5.3-codex', mtime } = {}) {
@@ -36,49 +33,10 @@ function writeRollout(home, sessionId, { cwd = '/work/acme', model = 'gpt-5.3-co
   return file;
 }
 
-function runHook(input, env, args = []) {
-  return new Promise((resolve, reject) => {
-    const started = Date.now();
-    const child = spawn(process.execPath, [REPORT, ...args], { env: { ...process.env, ...env }, stdio: ['pipe', 'ignore', 'ignore'] });
-    child.on('error', reject);
-    child.on('close', (code) => resolve({ code, ms: Date.now() - started }));
-    child.stdin.end(JSON.stringify(input));
-  });
-}
-
-/** Captures every POST; `nth(i)` resolves once that many have arrived. */
-function captureServer() {
-  const bodies = [];
-  const waiters = [];
-  const server = http.createServer((req, res) => {
-    let body = '';
-    req.on('data', (c) => (body += c));
-    req.on('end', () => {
-      res.writeHead(201, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ status: 201, result: { created: true } }));
-      bodies.push(JSON.parse(body || '{}'));
-      for (const w of waiters.splice(0)) w();
-    });
-  });
-  const nth = (n) =>
-    new Promise((r) => {
-      const check = () => (bodies.length >= n ? r(bodies) : waiters.push(check));
-      check();
-    });
-  return { server, bodies, nth };
-}
-
-async function listen(server) {
-  await new Promise((r) => server.listen(0, '127.0.0.1', r));
-  return server.address().port;
-}
-
-const envFor = (home, port) => ({ HOME: home, USERPROFILE: home, PRAVEX_API_KEY: 'pvx_test', PRAVEX_API_HOST: `http://127.0.0.1:${port}` });
-
 test('a Codex SessionEnd reports the rollout with agent codex and OpenAI token semantics', async () => {
   const home = tempHome();
-  const { server, nth } = captureServer();
-  const port = await listen(server);
+  const { server, nth, listen } = captureServer();
+  const port = await listen();
   const transcript = writeRollout(home, SESSION);
 
   const { code } = await runHook({ session_id: SESSION, transcript_path: transcript, cwd: '/work/acme', hook_event_name: 'SessionEnd', reason: 'other' }, envFor(home, port), ['--agent', 'codex']);
@@ -96,8 +54,8 @@ test('a Codex SessionEnd reports the rollout with agent codex and OpenAI token s
 
 test('a rollout is recognised without the --agent flag', async () => {
   const home = tempHome();
-  const { server, nth } = captureServer();
-  const port = await listen(server);
+  const { server, nth, listen } = captureServer();
+  const port = await listen();
   const transcript = writeRollout(home, SESSION);
 
   await runHook({ session_id: SESSION, transcript_path: transcript, cwd: '/work/acme' }, envFor(home, port));
@@ -109,8 +67,8 @@ test('a rollout is recognised without the --agent flag', async () => {
 
 test('--end-detached returns at once and the child still delivers the report', async () => {
   const home = tempHome();
-  const { server, nth } = captureServer();
-  const port = await listen(server);
+  const { server, nth, listen } = captureServer();
+  const port = await listen();
   const transcript = writeRollout(home, SESSION);
 
   const { code, ms } = await runHook({ session_id: SESSION, transcript_path: transcript, cwd: '/work/acme' }, envFor(home, port), ['--end-detached', '--agent', 'codex']);
@@ -127,8 +85,8 @@ test('--end-detached returns at once and the child still delivers the report', a
 
 test('SessionStart sweeps unreported rollouts under ~/.codex/sessions, filed under their own cwd', async () => {
   const home = tempHome();
-  const { server, nth } = captureServer();
-  const port = await listen(server);
+  const { server, nth, listen } = captureServer();
+  const port = await listen();
   const old = new Date(Date.now() - 60 * 60 * 1000);
   const forgotten = '11111111-2222-4333-8444-555555555555';
   const alreadySent = '66666666-7777-4888-8999-000000000000';
@@ -152,8 +110,8 @@ test('SessionStart sweeps unreported rollouts under ~/.codex/sessions, filed und
 
 test('a Claude Code SessionStart sweeps Codex rollouts too', async () => {
   const home = tempHome();
-  const { server, nth } = captureServer();
-  const port = await listen(server);
+  const { server, nth, listen } = captureServer();
+  const port = await listen();
   const forgotten = '11111111-2222-4333-8444-555555555555';
   writeRollout(home, forgotten, { mtime: new Date(Date.now() - 60 * 60 * 1000) });
 
@@ -167,8 +125,8 @@ test('a Claude Code SessionStart sweeps Codex rollouts too', async () => {
 
 test('a Claude Code report says so', async () => {
   const home = tempHome();
-  const { server, nth } = captureServer();
-  const port = await listen(server);
+  const { server, nth, listen } = captureServer();
+  const port = await listen();
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-'));
   const transcript = path.join(dir, 't.jsonl');
   fs.writeFileSync(

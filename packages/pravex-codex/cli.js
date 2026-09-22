@@ -23,17 +23,15 @@ function usage() {
   return 2;
 }
 
+const SCRIPT_FOR = { install: 'codex-install.js', uninstall: 'codex-install.js', status: 'codex-install.js', login: 'login.js' };
+
 function main(argv) {
   const [cmd, ...rest] = argv;
-  if (cmd === 'install' || cmd === 'uninstall' || cmd === 'status') {
-    const r = spawnSync(process.execPath, [path.join(SCRIPTS, 'codex-install.js'), cmd], { stdio: 'inherit' });
-    return r.status ?? 1;
-  }
-  if (cmd === 'login') {
-    const r = spawnSync(process.execPath, [path.join(SCRIPTS, 'login.js'), ...rest], { stdio: 'inherit' });
-    return r.status ?? 1;
-  }
-  return usage();
+  const script = SCRIPT_FOR[cmd];
+  if (!script) return usage();
+  // codex-install takes the subcommand itself; login takes only its own flags.
+  const args = script === 'login.js' ? rest : [cmd, ...rest];
+  return spawnSync(process.execPath, [path.join(SCRIPTS, script), ...args], { stdio: 'inherit' }).status ?? 1;
 }
 
 if (require.main === module) process.exit(main(process.argv.slice(2)));

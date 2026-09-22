@@ -9,12 +9,13 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
+const { isOurs } = require('./codex-install.js');
+const { tempHome } = require('./test-support.js');
+
 const INSTALLER = path.join(__dirname, 'codex-install.js');
-const tempHome = () => fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-home-'));
 
 function run(home, cmd) {
   return spawnSync(process.execPath, [INSTALLER, cmd], { env: { ...process.env, HOME: home, USERPROFILE: home }, encoding: 'utf8' });
@@ -22,8 +23,7 @@ function run(home, cmd) {
 
 const hooksFile = (home) => path.join(home, '.codex', 'hooks.json');
 const readHooks = (home) => JSON.parse(fs.readFileSync(hooksFile(home), 'utf8'));
-const ourEntries = (doc) =>
-  Object.entries(doc.hooks).flatMap(([event, groups]) => groups.flatMap((g) => g.hooks.filter((h) => h.command.includes('.pravex/codex')).map((h) => [event, h])));
+const ourEntries = (doc) => Object.entries(doc.hooks).flatMap(([event, groups]) => groups.flatMap((g) => g.hooks.filter(isOurs).map((h) => [event, h])));
 
 test('install creates hooks.json when there is none, with one entry per event', () => {
   const home = tempHome();
@@ -111,4 +111,27 @@ test('status tells the three states apart', () => {
   delete doc.hooks.SessionEnd;
   fs.writeFileSync(hooksFile(home), JSON.stringify(doc));
   assert.match(run(home, 'status').stdout, /partly installed/);
+});
+
+test('refresh recopies only when the running plugin version differs from the copy', () => {
+  const home = tempHome();
+  run(home, 'install');
+  const manifest = path.join(home, '.pravex', 'codex', '.claude-plugin', 'plugin.json');
+  const copy = path.join(home, '.pravex', 'codex', 'scripts', 'report-session.js');
+  const probe = (code) =>
+    spawnSync(process.execPath, ['-e', `console.log(require(${JSON.stringify(INSTALLER)}).refresh(${JSON.stringify(__dirname)}))`], {
+      env: { ...process.env, HOME: home, USERPROFILE: home },
+      encoding: 'utf8',
+    }).stdout.trim();
+
+  // Same version: nothing to do, and nothing written.
+  fs.writeFileSync(copy, '// stale');
+  assert.strictEqual(probe(), 'false');
+  assert.strictEqual(fs.readFileSync(copy, 'utf8'), '// stale');
+
+  // The copy claims an older version: everything is copied again.
+  fs.writeFileSync(manifest, JSON.stringify({ version: '0.0.1' }));
+  assert.strictEqual(probe(), 'true');
+  assert.notStrictEqual(fs.readFileSync(copy, 'utf8'), '// stale');
+  assert.notStrictEqual(JSON.parse(fs.readFileSync(manifest, 'utf8')).version, '0.0.1');
 });

@@ -84,8 +84,9 @@ plugin marketplace, so its hooks are entries in `~/.codex/hooks.json`:
 ```
 
 `--install` copies the scripts to `~/.pravex/codex/` (the plugin's own directory
-changes on every update) and every `SessionStart` of either agent refreshes that
-copy, so updating this plugin updates the Codex hooks. Existing entries in
+changes on every update). Every `SessionStart` of either agent compares that
+copy's version with the running plugin's and recopies on a mismatch, so updating
+this plugin updates the Codex hooks. Existing entries in
 `hooks.json` are kept; ours are the ones pointing into `~/.pravex/codex/`.
 
 Codex caps a `SessionEnd` hook at **three seconds**, not enough to parse a

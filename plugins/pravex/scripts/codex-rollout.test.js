@@ -16,18 +16,10 @@ const os = require('node:os');
 const path = require('node:path');
 
 const codex = require('./codex-rollout.js');
-const reporter = require('./report-session.js');
+const { aggregateFor } = require('./report-session.js');
 
-const HELPERS = {
-  bashWrites: reporter.bashWrites,
-  collectPrUrls: reporter.collectPrUrls,
-  prUrlMatchesRepo: reporter.prUrlMatchesRepo,
-  activeMinutes: reporter.activeMinutes,
-  clampText: reporter.clampText,
-  packTranscript: reporter.packTranscript,
-  redact: reporter.redact,
-  TEST_FILE_RE: /(\.test\.|\.spec\.|_test\.|(^|\/)test_|\/tests?\/|__tests__\/)/,
-};
+/** The parser as the reporter runs it, with the reporter's own helpers. */
+const aggregate = (file, repo, opts = {}) => aggregateFor('codex', file, repo, opts);
 
 const T0 = '2026-09-21T10:00:00.000Z';
 const T1 = '2026-09-21T10:01:00.000Z';
@@ -85,7 +77,7 @@ test('aggregate sums usage records per model and dedupes on response_id', async 
     assistantMsg('Done.', T2),
   ]);
 
-  const agg = await codex.aggregate(file, 'acme/api', {}, HELPERS);
+  const agg = await aggregate(file, 'acme/api', {});
 
   assert.deepStrictEqual(agg.usage, [{ model: 'gpt-5.3-codex', inputTokens: 600, outputTokens: 350, cacheReadTokens: 600, cacheWriteTokens: 0 }]);
   assert.strictEqual(agg.assistantMessages, 1);
@@ -108,7 +100,7 @@ test('aggregate attributes each record to the model of its turn', async () => {
     assistantMsg('ok again', T2),
   ]);
 
-  const agg = await codex.aggregate(file, 'acme/api', {}, HELPERS);
+  const agg = await aggregate(file, 'acme/api', {});
 
   assert.deepStrictEqual(
     agg.usage.map((u) => [u.model, u.outputTokens]),
@@ -130,7 +122,7 @@ test('aggregate falls back to the last cumulative token_count when a rollout has
     snapshot(usage({ input_tokens: 300, cached_input_tokens: 100, output_tokens: 40 }), T2),
   ]);
 
-  const agg = await codex.aggregate(file, 'acme/api', {}, HELPERS);
+  const agg = await aggregate(file, 'acme/api', {});
 
   // The last snapshot is the total; summing them would double count.
   assert.deepStrictEqual(agg.usage, [{ model: 'gpt-5-codex', inputTokens: 200, outputTokens: 40, cacheReadTokens: 100, cacheWriteTokens: 0 }]);
@@ -138,7 +130,7 @@ test('aggregate falls back to the last cumulative token_count when a rollout has
 
 test('aggregate reports no usage at all when a rollout carries neither', async () => {
   const file = writeRollout([meta(), turn('turn-1', 'gpt-5.5'), userMsg('hi'), assistantMsg('hello')]);
-  const agg = await codex.aggregate(file, 'acme/api', {}, HELPERS);
+  const agg = await aggregate(file, 'acme/api', {});
   assert.deepStrictEqual(agg.usage, []);
 });
 
@@ -159,7 +151,7 @@ test('aggregate counts an apply_patch only when its output did not fail, and fil
     assistantMsg('Applied.', T2),
   ]);
 
-  const agg = await codex.aggregate(file, 'acme/api', {}, HELPERS);
+  const agg = await aggregate(file, 'acme/api', {});
 
   assert.strictEqual(agg.filesTouched, 3); // a.ts, a.test.ts, notes.md — b.ts failed
   assert.strictEqual(agg.testsAdded, 1);
@@ -179,7 +171,7 @@ test('aggregate ignores developer messages and the context Codex injects as user
     assistantMsg('On it.'),
   ]);
 
-  const agg = await codex.aggregate(file, 'acme/api', { wantTranscript: true }, HELPERS);
+  const agg = await aggregate(file, 'acme/api', { wantTranscript: true });
 
   assert.strictEqual(agg.title, 'real prompt about the billing page');
   const turns = JSON.parse(require('node:zlib').gunzipSync(Buffer.from(agg.transcript.data, 'base64')).toString()).turns;
@@ -194,6 +186,6 @@ test('aggregate ignores developer messages and the context Codex injects as user
 
 test('an unknown line type is skipped rather than fatal', async () => {
   const file = writeRollout([meta(), turn('turn-1', 'gpt-5.5'), { timestamp: T0, type: 'world_state', payload: { anything: true } }, userMsg('hi'), assistantMsg('hello')]);
-  const agg = await codex.aggregate(file, 'acme/api', {}, HELPERS);
+  const agg = await aggregate(file, 'acme/api', {});
   assert.strictEqual(agg.assistantMessages, 1);
 });

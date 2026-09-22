@@ -39,9 +39,6 @@
 const fs = require('fs');
 const readline = require('readline');
 
-/** Where Codex keeps rollouts, one directory per day. */
-const SESSIONS_DIR_PARTS = ['.codex', 'sessions'];
-
 /**
  * A `TokenUsage` as the Codex protocol writes it, in the shape `POST /sessions`
  * takes. `cached_input_tokens` is a subset of `input_tokens`, so billable input is
@@ -60,16 +57,6 @@ function tokenUsageToModelUsage(usage, model) {
     cacheReadTokens: cached,
     cacheWriteTokens: 0,
   };
-}
-
-/** Add one normalised usage into a per-model accumulator. */
-function addUsage(byModel, u) {
-  const acc = byModel.get(u.model) || { model: u.model, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
-  acc.inputTokens += u.inputTokens;
-  acc.outputTokens += u.outputTokens;
-  acc.cacheReadTokens += u.cacheReadTokens;
-  acc.cacheWriteTokens += u.cacheWriteTokens;
-  byModel.set(u.model, acc);
 }
 
 /** Distinguishes a rollout from a Claude Code transcript by its first line. */
@@ -135,15 +122,6 @@ function outputFailed(output) {
   return /^(error|failed)\b/i.test(s);
 }
 
-function contentText(content) {
-  if (typeof content === 'string') return content;
-  if (!Array.isArray(content)) return '';
-  return content
-    .map((b) => (b && typeof b.text === 'string' ? b.text : ''))
-    .filter(Boolean)
-    .join('\n');
-}
-
 /**
  * Reduce a rollout to the reporter's aggregate shape.
  *
@@ -151,7 +129,7 @@ function contentText(content) {
  *   than required, because that file requires this one.
  */
 async function aggregate(transcriptPath, repo, { wantTranscript = true } = {}, helpers) {
-  const { bashWrites, collectPrUrls, prUrlMatchesRepo, activeMinutes, clampText, packTranscript, redact, TEST_FILE_RE } = helpers;
+  const { addUsage, bashWrites, collectPrUrls, prUrlMatchesRepo, activeMinutes, clampText, packTranscript, redact, textOf, TEST_FILE_RE } = helpers;
 
   const files = new Set();
   const bashFiles = new Set();
@@ -230,7 +208,7 @@ async function aggregate(transcriptPath, repo, { wantTranscript = true } = {}, h
     if (o.type !== 'response_item') continue;
 
     if (p.type === 'message') {
-      const text = contentText(p.content).trim();
+      const text = textOf(p.content).trim();
       if (p.role === 'assistant') {
         assistantMessages += 1;
         collectPrUrls(text, prUrls);
@@ -307,4 +285,4 @@ async function aggregate(transcriptPath, repo, { wantTranscript = true } = {}, h
   };
 }
 
-module.exports = { SESSIONS_DIR_PARTS, aggregate, isRollout, outputFailed, patchPaths, shellCommand, tokenUsageToModelUsage };
+module.exports = { aggregate, isRollout, tokenUsageToModelUsage };

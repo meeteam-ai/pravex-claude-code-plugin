@@ -13,7 +13,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const PLUGIN = path.join(__dirname, '..', '..', 'plugins', 'pravex');
-const FILES = ['report-session.js', 'codex-rollout.js', 'codex-install.js', 'login.js', 'update-check.js', 'statusline.js'];
+/** The installer owns the list of what a working copy needs; this package ships exactly that. */
+const FILES = require(path.join(PLUGIN, 'scripts', 'codex-install.js')).COPY_FILES;
 
 function sync() {
   const scripts = path.join(__dirname, 'scripts');
