@@ -129,7 +129,6 @@ const INCOGNITO_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
  */
 const PROGRESS_MIN_INTERVAL_MS = 90_000;
 
-const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 // Claude Code writes placeholder assistant turns (API errors, interrupts) as `<synthetic>`
 // with an all-zero usage block. They are not a model and must never reach the dashboard.
 const SYNTHETIC_MODEL = '<synthetic>';
@@ -731,7 +730,7 @@ async function aggregate(transcriptPath, repo, { wantTranscript = true } = {}) {
             facets.tool(facetsLib.claudeToolCategory(b.name));
             const fp = b.input && (b.input.file_path || b.input.notebook_path);
             // Held until the matching tool_result confirms it landed.
-            if (EDIT_TOOLS.has(b.name) && typeof fp === 'string' && b.id) {
+            if (facetsLib.claudeToolCategory(b.name) === 'edit' && typeof fp === 'string' && b.id) {
               pendingEdits.set(b.id, { fp, lines: facetsLib.claudeEditLines(b.name, b.input) });
             }
             if (b.name === 'Bash' && b.input && typeof b.input.command === 'string') {
@@ -834,7 +833,7 @@ function addUsage(byModel, u) {
 }
 
 /** The utilities `codex-rollout.js` borrows, so the two parsers cannot drift on redaction, PR rules or the usage shape. */
-const CODEX_HELPERS = { addUsage, bashWrites, collectPrUrls, prUrlMatchesRepo, activeMinutes, clampText, packTranscript, redact, textOf, TEST_FILE_RE };
+const CODEX_HELPERS = { addUsage, bashWrites, collectPrUrls, prUrlMatchesRepo, activeMinutes, clampText, packTranscript, redact, textOf };
 
 /** `aggregate()` for whichever agent wrote the file; the rest of the reporter never asks. */
 function aggregateFor(agent, transcriptPath, repo, opts) {

@@ -134,7 +134,8 @@ function outputFailed(output) {
  *   than required, because that file requires this one.
  */
 async function aggregate(transcriptPath, repo, { wantTranscript = true } = {}, helpers) {
-  const { addUsage, bashWrites, collectPrUrls, prUrlMatchesRepo, activeMinutes, clampText, packTranscript, redact, textOf, TEST_FILE_RE } = helpers;
+  const { addUsage, bashWrites, collectPrUrls, prUrlMatchesRepo, activeMinutes, clampText, packTranscript, redact, textOf } = helpers;
+  const { TEST_FILE_RE } = facetsLib;
 
   const files = new Set();
   const bashFiles = new Set();
@@ -265,7 +266,7 @@ async function aggregate(transcriptPath, repo, { wantTranscript = true } = {}, h
     // always read zero for Codex.
     if (p.type === 'web_search_call') {
       toolUses += 1;
-      facets.tool(facetsLib.codexToolCategory('web_search'));
+      facets.tool('web');
       continue;
     }
 
