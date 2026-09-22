@@ -10,6 +10,9 @@
     "url": "git+https://github.com/meeteam-ai/pravex-claude-code-plugin.git",
     "directory": "packages/pravex-codex"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
     "pravex-codex": "cli.js"
   },
