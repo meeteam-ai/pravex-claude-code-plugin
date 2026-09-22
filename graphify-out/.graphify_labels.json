@@ -1,1 +1,24 @@
-{"0": "Plugin Session Reporter", "2": "Plugin Login & Device Flow", "3": "Transcript Parsing Helpers", "5": "Plugin Incognito & Statusline Tests", "6": "Plugin Statusline Script", "10": "Sweep Repo Attribution Tests", "11": "Plugin Update Command", "16": "Plugin Dependabot", "17": "Plugin Incognito/Statusline/Update", "18": "Plugin Status Command", "1": "Plugin Validation CI Jobs", "4": "Codex CLI Tests", "7": "Codex Installer", "8": "Codex npm Package Manifest", "9": "Codex Installer Tests", "12": "Codex Rollout Parser", "13": "Codex Report Tests", "14": "Plugin Test Support", "15": "Codex CLI Entry"}
+{
+  "0": "Plugin Session Reporter",
+  "1": "Plugin Validation CI Jobs",
+  "2": "Plugin Login & Device Flow",
+  "3": "Transcript Parsing Helpers",
+  "4": "cli.test.js",
+  "5": "Plugin Incognito & Statusline Tests",
+  "6": "Plugin Statusline Script",
+  "7": "Codex Installer",
+  "8": "Codex npm Package Manifest",
+  "9": "Codex Installer Tests",
+  "10": "Sweep Repo Attribution Tests",
+  "11": "Plugin Update Command",
+  "12": "codex-rollout.js",
+  "13": "Codex Report Tests",
+  "14": "Plugin Test Support",
+  "15": "ref_node_path",
+  "16": "Plugin Dependabot",
+  "17": "Plugin Incognito/Statusline/Update",
+  "18": "Plugin Status Command",
+  "19": "codex-rollout.test.js",
+  "20": "post-checkout",
+  "21": "post-commit"
+}
