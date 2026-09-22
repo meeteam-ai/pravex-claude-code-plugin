@@ -52,6 +52,8 @@ test('a Codex SessionEnd reports the rollout with agent codex and OpenAI token s
   assert.deepStrictEqual(body.usage, [{ model: 'gpt-5.3-codex', inputTokens: 400, outputTokens: 300, cacheReadTokens: 600, cacheWriteTokens: 0 }]);
   assert.strictEqual(body.title, 'port the retry middleware');
   assert.ok(body.transcript, 'the final report carries the conversation');
+  assert.strictEqual(typeof body.tz, 'string');
+  assert.strictEqual(body.facets.v, 1);
 });
 
 test('a rollout is recognised without the --agent flag', async () => {

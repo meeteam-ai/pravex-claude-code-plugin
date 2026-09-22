@@ -64,9 +64,10 @@ update, and each session start refreshes the copy. Under a managed
 ```
 
 The session still appears in Pravex, labelled incognito, with its **token usage,
-cost, model and duration**. The conversation, title, repository and branch, files
-touched and pull request are not sent, and the command reports straight away so
-the server scrubs what earlier progress reports already sent. It lasts until the
+cost, model and duration**, plus the machine's time zone. The conversation, title,
+repository and branch, files touched, pull request and session facets are not
+sent, and the command reports straight away so the server scrubs what earlier
+progress reports already sent. It lasts until the
 session ends and cannot be undone for that session.
 
 Markers live in `~/.pravex/incognito/<session id>` and are pruned after 30 days.
@@ -193,6 +194,20 @@ environment — from ever leaving the machine.
   "startedAt": "ISO", "endedAt": "ISO",
   "usage": [{ "model": "claude-opus-5", "inputTokens": 0, "outputTokens": 0, "cacheReadTokens": 0, "cacheWriteTokens": 0 }],
   "filesTouched": 0, "testsAdded": 0, "retryRate": 0, "prUrl": "https://github.com/.../pull/1",
+  "tz": "America/Bogota",
+  "facets": {
+    "v": 1,
+    "languages": { "TypeScript": 12, "Python": 3 },
+    "fileKinds": { "test": 4, "docs": 1, "config": 2 },
+    "tools": { "edit": 30, "shell": 12, "read": 40, "search": 9, "mcp": 5 },
+    "toolUses": 96, "toolErrors": 4, "linesAdded": 420, "linesRemoved": 130,
+    "commits": 2, "prsOpened": 1, "testRuns": { "passed": 5, "failed": 2 }
+  },
   "transcript": { "encoding": "gzip+base64", "format": 1, "turns": 847, "dropped": 0, "data": "H4sIA..." }
 }
 ```
+
+`facets` is counts and categories only — no path, file name or command leaves the
+machine — computed in the same pass over the transcript, and simply absent if it
+could not be computed. An incognito report carries `usage`, timing and `tz`, and
+never `facets`. The full field list is in the [root README](../../README.md#what-it-sends).

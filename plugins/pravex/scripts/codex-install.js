@@ -41,7 +41,7 @@ const COPY_SCRIPTS = path.join(COPY_DIR, 'scripts');
  * `SessionStart` refreshes itself through it). The one list: `report-session.js`
  * and the npm package's `sync-scripts.js` both read it from here.
  */
-const COPY_FILES = ['report-session.js', 'codex-rollout.js', 'codex-install.js', 'update-check.js', 'statusline.js', 'login.js'];
+const COPY_FILES = ['report-session.js', 'codex-rollout.js', 'session-facets.js', 'codex-install.js', 'update-check.js', 'statusline.js', 'login.js'];
 const COPY_MANIFEST = path.join(COPY_DIR, '.claude-plugin', 'plugin.json');
 const HOOKS_FILE = path.join(os.homedir(), '.codex', 'hooks.json');
 const BACKUP_FILE = `${HOOKS_FILE}.pravex-backup`;

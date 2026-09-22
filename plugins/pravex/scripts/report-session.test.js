@@ -338,6 +338,10 @@ test('the hook reads stdin, aggregates and posts the session', async () => {
   assert.strictEqual(typeof req.body.durationMinutes, 'number');
   assert.ok(req.body.usage.length > 0);
   assert.ok(!req.body.usage.some((u) => u.model === '<synthetic>'));
+  // Facets and the time zone ride on the real wire, not just out of buildBody.
+  assert.strictEqual(typeof req.body.tz, 'string');
+  assert.deepStrictEqual(req.body.facets.languages, { TypeScript: 1 });
+  assert.deepStrictEqual(req.body.facets.tools, { edit: 1 });
 });
 
 test('the hook exits quietly when it has no credentials', () => {

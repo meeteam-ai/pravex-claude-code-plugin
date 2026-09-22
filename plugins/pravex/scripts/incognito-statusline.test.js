@@ -104,7 +104,8 @@ test('an incognito body carries usage and cost inputs, and nothing about the wor
 
   const body = buildBody('s1', 'acme/widgets', agg, process.cwd(), 'ended', { incognito: true });
 
-  assert.deepStrictEqual(Object.keys(body).sort(), ['agent', 'durationMinutes', 'endedAt', 'externalId', 'incognito', 'startedAt', 'status', 'usage']);
+  // `tz` is the one addition: a region, not the work. `facets` never ride along.
+  assert.deepStrictEqual(Object.keys(body).sort(), ['agent', 'durationMinutes', 'endedAt', 'externalId', 'incognito', 'startedAt', 'status', 'tz', 'usage']);
   assert.strictEqual(body.incognito, true);
 });
 
@@ -154,6 +155,8 @@ test('after /pravex:incognito the end-of-session report sends no transcript', as
   assert.strictEqual(end.incognito, true);
   assert.strictEqual(end.transcript, undefined);
   assert.strictEqual(end.title, undefined);
+  assert.strictEqual(end.facets, undefined);
+  assert.strictEqual(typeof end.tz, 'string');
 });
 
 test('the incognito marker cannot escape its directory', () => {
