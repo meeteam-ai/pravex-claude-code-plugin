@@ -64,6 +64,15 @@ const REPORTED_FILE = path.join(CONFIG_DIR, 'reported.json');
 const SWEEP_MAX_FILES = 40;
 /** Sessions older than this are not worth sweeping for; they are nobody's current work. */
 const SWEEP_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+/**
+ * A transcript touched, or a progress report sent, more recently than this still
+ * belongs to a session that is probably running in another terminal — the sweep
+ * leaves it alone. Matches the server's own `LIVE_GRACE_MS`: below it the server
+ * still counts the session live, so reporting it `ended` from here would fight
+ * that. Whatever is skipped is picked up by a later `SessionStart`, once it is
+ * genuinely cold.
+ */
+const SWEEP_MIN_IDLE_MS = 15 * 60 * 1000;
 /** How many ids to remember. Enough to cover the sweep window several times over. */
 const REPORTED_MAX = 500;
 /**
@@ -746,6 +755,16 @@ function rememberReported(sessionId) {
   }
 }
 
+/** The progress map keyed on session id, or an empty object when unreadable. */
+function readProgress() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
 /**
  * Transcripts for sessions that were never reported.
  *
@@ -758,9 +777,10 @@ function rememberReported(sessionId) {
  * without limit, and a hook that reads two years of history on every session
  * start would be worse than the problem it solves.
  */
-function findUnreported(currentSessionId) {
+function findUnreported(currentSessionId, now = Date.now()) {
   const reported = new Set(readReported());
   reported.add(currentSessionId);
+  const progress = readProgress();
 
   let files = [];
   try {
@@ -787,9 +807,16 @@ function findUnreported(currentSessionId) {
     return [];
   }
 
-  const cutoff = Date.now() - SWEEP_MAX_AGE_MS;
+  const cutoff = now - SWEEP_MAX_AGE_MS;
+  const idleCutoff = now - SWEEP_MIN_IDLE_MS;
   files = files
     .filter((f) => f.mtime >= cutoff && !reported.has(f.sessionId))
+    // Skip anything that still looks live: a transcript written in the last
+    // fifteen minutes, or a session this machine sent a progress report for that
+    // recently. Either way its own `SessionEnd`, or a later cold sweep, reports
+    // it — reporting it `ended` now would flip a running session off the
+    // dashboard and pay to summarise a conversation that is not finished.
+    .filter((f) => f.mtime < idleCutoff && !(progress[f.sessionId] > idleCutoff))
     .sort((a, b) => b.mtime - a.mtime)
     .slice(0, SWEEP_MAX_FILES);
 
@@ -1156,6 +1183,7 @@ module.exports = {
   modeFrom,
   readReported,
   rememberReported,
+  readProgress,
   TRANSCRIPT_FORMAT,
   TRANSCRIPT_MAX_GZIP,
   TRANSCRIPT_MAX_TEXT,
