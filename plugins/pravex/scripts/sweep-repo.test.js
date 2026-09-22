@@ -36,7 +36,13 @@ function writeTranscript(home, sessionId, { cwd, gitBranch } = {}) {
       message: { id: 'm1', model: 'claude-opus-5', usage: { input_tokens: 10, output_tokens: 5 }, content: [{ type: 'text', text: 'Done.' }] },
     }),
   ];
-  fs.writeFileSync(path.join(dir, `${sessionId}.jsonl`), lines.map((l) => JSON.stringify(l)).join('\n'));
+  const file = path.join(dir, `${sessionId}.jsonl`);
+  fs.writeFileSync(file, lines.map((l) => JSON.stringify(l)).join('\n'));
+  // Every transcript this helper writes is a past session the sweep should pick
+  // up, so age it past the idle window — a freshly-written file now reads as a
+  // session still live in another terminal and is deliberately left alone.
+  const cold = Date.now() / 1000 - 30 * 60;
+  fs.utimesSync(file, cold, cold);
 }
 
 function captureServer() {

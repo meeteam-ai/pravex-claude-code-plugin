@@ -597,8 +597,13 @@ test('findUnreported skips the session that is starting, and anything already se
   try {
     const projects = path.join(home, '.claude', 'projects', 'some-project');
     fs.mkdirSync(projects, { recursive: true });
+    // Cold, so the live-session guard does not withhold them: this test is about
+    // the reported-list and current-session rules, not the idle window.
+    const cold = Date.now() / 1000 - 30 * 60;
     for (const id of ['current', 'already-sent', 'never-sent']) {
-      fs.writeFileSync(path.join(projects, `${id}.jsonl`), '{}\n');
+      const f = path.join(projects, `${id}.jsonl`);
+      fs.writeFileSync(f, '{}\n');
+      fs.utimesSync(f, cold, cold);
     }
 
     const script = `const m = require(${JSON.stringify(path.join(__dirname, 'report-session.js'))});
@@ -629,12 +634,78 @@ test('findUnreported ignores transcripts older than the sweep window', () => {
     fs.writeFileSync(old, '{}\n');
     const longAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     fs.utimesSync(old, longAgo, longAgo);
-    fs.writeFileSync(path.join(projects, 'recent.jsonl'), '{}\n');
+    const recent = path.join(projects, 'recent.jsonl');
+    fs.writeFileSync(recent, '{}\n');
+    // Old enough not to look live, young enough to be in the window.
+    const cold = new Date(Date.now() - 30 * 60 * 1000);
+    fs.utimesSync(recent, cold, cold);
 
     const script = `const m = require(${JSON.stringify(path.join(__dirname, 'report-session.js'))});
       const found = m.findUnreported('none').map((f) => f.sessionId);
       if (found.includes('ancient')) throw new Error('swept a month-old transcript');
       if (!found.includes('recent')) throw new Error('missed the recent one');`;
+
+    const result = require('node:child_process').spawnSync(process.execPath, ['-e', script], {
+      env: { ...process.env, HOME: home },
+      encoding: 'utf8',
+    });
+    assert.strictEqual(result.status, 0, result.stderr);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// ⚠️ The reason this fix exists. `SessionEnd` marks a session reported; a session
+// still running in another terminal never has, so the sweep used to pick up its
+// warm transcript and report it `ended` — flipping a live session off the
+// dashboard and paying to summarise an unfinished conversation. A transcript
+// touched inside the idle window is left for a later, colder sweep.
+test('findUnreported leaves a warm transcript alone (a session live elsewhere)', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-sweep-warm-'));
+  try {
+    const projects = path.join(home, '.claude', 'projects', 'p');
+    fs.mkdirSync(projects, { recursive: true });
+    // Written just now: this is what a session running in another terminal looks
+    // like from here.
+    fs.writeFileSync(path.join(projects, 'running.jsonl'), '{}\n');
+
+    const script = `const m = require(${JSON.stringify(path.join(__dirname, 'report-session.js'))});
+      const found = m.findUnreported('current').map((f) => f.sessionId);
+      if (found.includes('running')) throw new Error('swept a session that is still live');`;
+
+    const result = require('node:child_process').spawnSync(process.execPath, ['-e', script], {
+      env: { ...process.env, HOME: home },
+      encoding: 'utf8',
+    });
+    assert.strictEqual(result.status, 0, result.stderr);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// mtime alone is not enough: a long think between turns leaves the file cold
+// while the session is very much alive. A progress report sent inside the idle
+// window is the second signal that keeps it off the sweep.
+test('findUnreported respects a recent progress report even when the file is cold', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-sweep-progress-'));
+  try {
+    const projects = path.join(home, '.claude', 'projects', 'p');
+    fs.mkdirSync(projects, { recursive: true });
+    const thinking = path.join(projects, 'thinking.jsonl');
+    fs.writeFileSync(thinking, '{}\n');
+    // Cold on disk — no turn has landed for twenty minutes.
+    const cold = Date.now() / 1000 - 20 * 60;
+    fs.utimesSync(thinking, cold, cold);
+    // But a progress report went out two minutes ago, so it is still live.
+    fs.mkdirSync(path.join(home, '.pravex'), { recursive: true });
+    fs.writeFileSync(
+      path.join(home, '.pravex', 'progress.json'),
+      JSON.stringify({ thinking: Date.now() - 2 * 60 * 1000 }),
+    );
+
+    const script = `const m = require(${JSON.stringify(path.join(__dirname, 'report-session.js'))});
+      const found = m.findUnreported('current').map((f) => f.sessionId);
+      if (found.includes('thinking')) throw new Error('swept a session with a recent progress report');`;
 
     const result = require('node:child_process').spawnSync(process.execPath, ['-e', script], {
       env: { ...process.env, HOME: home },
@@ -784,7 +855,13 @@ test('SessionStart sweeps up a session whose terminal was closed', async () => {
     ].join('\n');
 
   // The one whose terminal was closed, and the one starting now.
-  fs.writeFileSync(path.join(projects, 'abandoned.jsonl'), turns('the lost session'));
+  const abandonedPath = path.join(projects, 'abandoned.jsonl');
+  fs.writeFileSync(abandonedPath, turns('the lost session'));
+  // Genuinely abandoned: its terminal closed long ago, so its transcript is
+  // cold. The sweep skips anything touched in the last fifteen minutes as still
+  // live, so a realistic fixture has to be aged past that window.
+  const old = Date.now() / 1000 - 30 * 60;
+  fs.utimesSync(abandonedPath, old, old);
   const current = path.join(projects, 'current.jsonl');
   fs.writeFileSync(current, turns('the session starting now'));
 
@@ -834,8 +911,9 @@ test('the sweep does not report the same session twice', async () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-sweep-twice-'));
   const projects = path.join(home, '.claude', 'projects', 'p');
   fs.mkdirSync(projects, { recursive: true });
+  const abandonedFile = path.join(projects, 'abandoned.jsonl');
   fs.writeFileSync(
-    path.join(projects, 'abandoned.jsonl'),
+    abandonedFile,
     [
       JSON.stringify({ type: 'user', timestamp: '2026-09-14T10:00:00.000Z', message: { content: 'hi' } }),
       JSON.stringify({
@@ -845,6 +923,8 @@ test('the sweep does not report the same session twice', async () => {
       }),
     ].join('\n'),
   );
+  const cold = Date.now() / 1000 - 30 * 60;
+  fs.utimesSync(abandonedFile, cold, cold);
 
   const env = { PRAVEX_API_KEY: 'pvx_test', PRAVEX_API_HOST: `http://127.0.0.1:${port}`, HOME: home };
   try {

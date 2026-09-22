@@ -64,6 +64,20 @@ const REPORTED_FILE = path.join(CONFIG_DIR, 'reported.json');
 const SWEEP_MAX_FILES = 40;
 /** Sessions older than this are not worth sweeping for; they are nobody's current work. */
 const SWEEP_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+/**
+ * A transcript touched, or a progress report sent, more recently than this still
+ * belongs to a session that is probably running in another terminal — the sweep
+ * leaves it alone. Below it the server still counts the session live, so
+ * reporting it `ended` from here would fight that. Whatever is skipped is picked
+ * up by a later `SessionStart`, once it is genuinely cold.
+ *
+ * ⚠️ Keep in sync with `LIVE_GRACE_MS` in pravex-backend
+ * (libs/core/src/session/session.service.ts). No shared package links the two
+ * repos, so if the server's live window changes this must change with it — a
+ * plugin window shorter than the server's re-sweeps sessions the server still
+ * shows live; longer, and a genuinely dead session waits extra to be reported.
+ */
+const SWEEP_MIN_IDLE_MS = 15 * 60 * 1000;
 /** How many ids to remember. Enough to cover the sweep window several times over. */
 const REPORTED_MAX = 500;
 /**
@@ -694,12 +708,9 @@ async function aggregate(transcriptPath, repo, { wantTranscript = true } = {}) {
  * not stop a session being reported at all.
  */
 function shouldSendProgress(sessionId, now = Date.now()) {
-  let seen = {};
-  try {
-    seen = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8')) || {};
-  } catch {
-    /* no file yet, or unreadable — send, and rewrite it below */
-  }
+  // Failing open (an unreadable file reads as {}) is deliberate: the throttle is
+  // an optimisation, and a corrupt state file must not stop a session reporting.
+  const seen = readProgress();
   if (typeof seen[sessionId] === 'number' && now - seen[sessionId] < PROGRESS_MIN_INTERVAL_MS) {
     return false;
   }
@@ -746,6 +757,16 @@ function rememberReported(sessionId) {
   }
 }
 
+/** The progress map keyed on session id, or an empty object when unreadable. */
+function readProgress() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
 /**
  * Transcripts for sessions that were never reported.
  *
@@ -758,9 +779,10 @@ function rememberReported(sessionId) {
  * without limit, and a hook that reads two years of history on every session
  * start would be worse than the problem it solves.
  */
-function findUnreported(currentSessionId) {
+function findUnreported(currentSessionId, now = Date.now()) {
   const reported = new Set(readReported());
   reported.add(currentSessionId);
+  const progress = readProgress();
 
   let files = [];
   try {
@@ -787,9 +809,22 @@ function findUnreported(currentSessionId) {
     return [];
   }
 
-  const cutoff = Date.now() - SWEEP_MAX_AGE_MS;
+  const cutoff = now - SWEEP_MAX_AGE_MS;
+  const idleCutoff = now - SWEEP_MIN_IDLE_MS;
+  // A session is eligible when it is: within the sweep window, not already
+  // reported, not the one starting, AND cold — neither its transcript nor a
+  // progress report touched in the last fifteen minutes. A warm one still looks
+  // live (running in another terminal), so reporting it `ended` now would flip it
+  // off the dashboard and pay to summarise an unfinished conversation; its own
+  // `SessionEnd` or a later cold sweep reports it instead.
   files = files
-    .filter((f) => f.mtime >= cutoff && !reported.has(f.sessionId))
+    .filter(
+      (f) =>
+        f.mtime >= cutoff &&
+        f.mtime < idleCutoff &&
+        !reported.has(f.sessionId) &&
+        !(progress[f.sessionId] > idleCutoff),
+    )
     .sort((a, b) => b.mtime - a.mtime)
     .slice(0, SWEEP_MAX_FILES);
 
@@ -1156,6 +1191,7 @@ module.exports = {
   modeFrom,
   readReported,
   rememberReported,
+  readProgress,
   TRANSCRIPT_FORMAT,
   TRANSCRIPT_MAX_GZIP,
   TRANSCRIPT_MAX_TEXT,

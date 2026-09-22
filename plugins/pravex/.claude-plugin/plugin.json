@@ -1,6 +1,6 @@
 {
   "name": "pravex",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Reports every Claude Code session (model, tokens, cost, duration, files, PR) to your Pravex workspace",
   "author": {
     "name": "Meeteam",
