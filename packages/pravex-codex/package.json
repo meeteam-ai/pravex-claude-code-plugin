@@ -1,0 +1,37 @@
+{
+  "name": "@meeteam/pravex-codex",
+  "version": "0.7.0",
+  "description": "Report every OpenAI Codex CLI session (model, tokens, cost, duration, files, PR) to your Pravex workspace",
+  "license": "MIT",
+  "author": "Meeteam (https://github.com/meeteam-ai)",
+  "homepage": "https://github.com/meeteam-ai/pravex-claude-code-plugin/tree/main/packages/pravex-codex",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/meeteam-ai/pravex-claude-code-plugin.git",
+    "directory": "packages/pravex-codex"
+  },
+  "bin": {
+    "pravex-codex": "cli.js"
+  },
+  "files": [
+    "cli.js",
+    "scripts/",
+    ".claude-plugin/"
+  ],
+  "scripts": {
+    "prepack": "node sync-scripts.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "pravex",
+    "codex",
+    "openai",
+    "analytics",
+    "usage",
+    "cost",
+    "telemetry"
+  ]
+}
