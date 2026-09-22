@@ -34,6 +34,7 @@ const https = require('https');
 const readline = require('readline');
 const zlib = require('zlib');
 const { execFileSync, spawn } = require('child_process');
+const codex = require('./codex-rollout.js');
 
 const CONFIG_DIR = path.join(os.homedir(), '.pravex');
 const PLUGIN_VERSION = (() => {
@@ -51,6 +52,22 @@ const SPOOL_DIR = path.join(CONFIG_DIR, 'spool');
 const SPOOL_MAX = 50;
 /** Where Claude Code keeps transcripts, one directory per project. */
 const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
+/** Where Codex CLI keeps rollouts, one directory per day (`YYYY/MM/DD`). */
+const CODEX_SESSIONS_DIR = path.join(os.homedir(), ...codex.SESSIONS_DIR_PARTS);
+/**
+ * Where the Codex hooks run this reporter from.
+ *
+ * Codex has no plugin marketplace: its hooks are entries in `~/.codex/hooks.json`
+ * pointing at a script on disk. The plugin's own directory changes on every
+ * update, so the installer copies these scripts here and every `SessionStart`
+ * refreshes the copy (the same trick `statusline.js` uses). The layout mirrors
+ * the plugin's (`scripts/` beside `.claude-plugin/plugin.json`) so the relative
+ * requires and the version lookup resolve unchanged.
+ */
+const CODEX_COPY_DIR = path.join(CONFIG_DIR, 'codex');
+const CODEX_COPY_FILES = ['report-session.js', 'codex-rollout.js', 'update-check.js', 'statusline.js', 'login.js'];
+/** The agents this reporter can read a transcript for. */
+const AGENTS = ['claude-code', 'codex'];
 /** Records which sessions have been reported, so the sweep does not re-send everything. */
 const REPORTED_FILE = path.join(CONFIG_DIR, 'reported.json');
 /**
@@ -284,8 +301,86 @@ function refreshStatusline() {
 }
 
 /** Where Claude Code keeps a session's transcript, for the command that has only its id. */
-function findTranscript(sessionId) {
-  const name = `${String(sessionId).replace(/[^A-Za-z0-9_-]/g, '')}.jsonl`;
+/**
+ * Keep the copy the Codex hooks run current.
+ *
+ * Opt-in: nothing is copied until `codex-install.js` has run once. After that,
+ * every session start of either agent refreshes it, so updating the Claude Code
+ * plugin updates the Codex hooks too. A no-op when this file *is* the copy.
+ */
+function refreshCodexCopy(sourceDir = __dirname) {
+  const target = path.join(CODEX_COPY_DIR, 'scripts');
+  try {
+    if (path.resolve(sourceDir) === path.resolve(target)) return false;
+    if (!fs.existsSync(path.join(target, 'report-session.js'))) return false;
+    for (const file of CODEX_COPY_FILES) fs.copyFileSync(path.join(sourceDir, file), path.join(target, file));
+    const manifest = path.join(sourceDir, '..', '.claude-plugin', 'plugin.json');
+    if (fs.existsSync(manifest)) {
+      fs.mkdirSync(path.join(CODEX_COPY_DIR, '.claude-plugin'), { recursive: true, mode: 0o700 });
+      fs.copyFileSync(manifest, path.join(CODEX_COPY_DIR, '.claude-plugin', 'plugin.json'));
+    }
+    return true;
+  } catch (err) {
+    log(`codex copy not refreshed: ${err && err.message}`);
+    return false;
+  }
+}
+
+/**
+ * Which agent wrote the transcript: `--agent <name>` on the command line, else
+ * whatever the first line of the file says. Claude Code when there is no file.
+ */
+function agentFrom(argv, transcriptPath) {
+  const at = argv.indexOf('--agent');
+  if (at !== -1 && AGENTS.includes(argv[at + 1])) return argv[at + 1];
+  if (transcriptPath && codex.isRollout(transcriptPath)) return 'codex';
+  return 'claude-code';
+}
+
+/**
+ * Every rollout under `~/.codex/sessions`, newest first: `{ full, sessionId, mtime }`.
+ *
+ * The session id is the uuid the file name ends in
+ * (`rollout-2026-09-21T10-00-00-<uuid>.jsonl`), which is what Codex hands the
+ * hooks as `session_id`. Bounded to four directory levels: year, month, day and
+ * the files, so a stray symlink cannot turn this into a filesystem walk.
+ */
+function findCodexRollouts(root = CODEX_SESSIONS_DIR) {
+  const out = [];
+  const walk = (dir, depth) => {
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (depth < 3) walk(full, depth + 1);
+        continue;
+      }
+      if (!entry.isFile() || !entry.name.endsWith('.jsonl')) continue;
+      const m = /-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/i.exec(entry.name);
+      const sessionId = m ? m[1] : entry.name.replace(/\.jsonl$/, '');
+      try {
+        out.push({ full, sessionId, mtime: fs.statSync(full).mtimeMs, agent: 'codex' });
+      } catch {
+        /* vanished between readdir and stat */
+      }
+    }
+  };
+  walk(root, 0);
+  return out.sort((a, b) => b.mtime - a.mtime);
+}
+
+function findTranscript(sessionId, agent = 'claude-code') {
+  const clean = String(sessionId).replace(/[^A-Za-z0-9_-]/g, '');
+  if (agent === 'codex') {
+    const hit = findCodexRollouts().find((r) => r.sessionId.toLowerCase() === clean.toLowerCase());
+    return hit ? hit.full : null;
+  }
+  const name = `${clean}.jsonl`;
   try {
     for (const project of fs.readdirSync(PROJECTS_DIR)) {
       const full = path.join(PROJECTS_DIR, project, name);
@@ -345,6 +440,8 @@ async function transcriptCwd(transcriptPath) {
       try {
         const o = JSON.parse(line);
         if (o && typeof o.cwd === 'string' && o.cwd) return o.cwd;
+        // A Codex rollout keeps it one level down, on the first line.
+        if (o && o.payload && typeof o.payload.cwd === 'string' && o.payload.cwd) return o.payload.cwd;
       } catch {
         // A torn line is not the end of the file.
       }
@@ -700,6 +797,14 @@ async function aggregate(transcriptPath, repo, { wantTranscript = true } = {}) {
   };
 }
 
+/** The text utilities `codex-rollout.js` borrows, so the two parsers cannot drift on redaction or PR rules. */
+const CODEX_HELPERS = { bashWrites, collectPrUrls, prUrlMatchesRepo, activeMinutes, clampText, packTranscript, redact, TEST_FILE_RE };
+
+/** `aggregate()` for whichever agent wrote the file; the rest of the reporter never asks. */
+function aggregateFor(agent, transcriptPath, repo, opts) {
+  return agent === 'codex' ? codex.aggregate(transcriptPath, repo, opts, CODEX_HELPERS) : aggregate(transcriptPath, repo, opts);
+}
+
 /**
  * Whether enough time has passed to send another progress report for a session.
  *
@@ -806,8 +911,9 @@ function findUnreported(currentSessionId, now = Date.now()) {
       }
     }
   } catch {
-    return [];
+    /* no Claude Code projects directory; Codex rollouts are still worth a look */
   }
+  files = files.map((f) => ({ ...f, agent: 'claude-code' })).concat(findCodexRollouts());
 
   const cutoff = now - SWEEP_MAX_AGE_MS;
   const idleCutoff = now - SWEEP_MIN_IDLE_MS;
@@ -855,7 +961,7 @@ async function sweepUnreported(apiHost, apiKey, currentSessionId) {
   const deadline = Date.now() + SWEEP_BUDGET_MS;
 
   for (let index = 0; index < candidates.length; index += 1) {
-    const { full, sessionId } = candidates[index];
+    const { full, sessionId, agent = 'claude-code' } = candidates[index];
     // Checked before each session rather than after: stopping here leaves the
     // rest for the next session start, and being killed mid-POST does not.
     if (Date.now() > deadline) {
@@ -866,14 +972,14 @@ async function sweepUnreported(apiHost, apiKey, currentSessionId) {
       // Unknown stays unknown: an empty repo is honest, the current one is not.
       const cwd = await transcriptCwd(full);
       const repo = cwd ? repoSlug(cwd) : '';
-      const agg = await aggregate(full, repo, { wantTranscript: !isIncognito(sessionId) });
+      const agg = await aggregateFor(agent, full, repo, { wantTranscript: !isIncognito(sessionId) });
       if (!agg.assistantMessages || !agg.startedAt) {
         // An empty transcript is not a session. Remembered anyway so the sweep
         // does not reconsider it on every start for the next week.
         rememberReported(sessionId);
         continue;
       }
-      const res = await post(apiHost, apiKey, buildBody(sessionId, repo, agg, cwd, 'ended'));
+      const res = await post(apiHost, apiKey, buildBody(sessionId, repo, agg, cwd, 'ended', { agent }));
       if (res.status >= 200 && res.status < 300) {
         rememberReported(sessionId);
         log(`sweep: reported ${sessionId} -> ${res.status}`);
@@ -891,7 +997,7 @@ async function sweepUnreported(apiHost, apiKey, currentSessionId) {
 }
 
 /** The payload, shared by every report so the three hooks cannot drift apart. */
-function buildBody(sessionId, repo, agg, cwd, status, { incognito = isIncognito(sessionId) } = {}) {
+function buildBody(sessionId, repo, agg, cwd, status, { incognito = isIncognito(sessionId), agent = 'claude-code' } = {}) {
   if (incognito) {
     // Usage and cost only. No title (it is the first prompt, or a summary of it),
     // no repo or branch, no files, no pull request and never the transcript. The
@@ -899,6 +1005,7 @@ function buildBody(sessionId, repo, agg, cwd, status, { incognito = isIncognito(
     // incognito already carried a title.
     return {
       externalId: sessionId,
+      agent,
       incognito: true,
       startedAt: agg.startedAt,
       endedAt: agg.endedAt,
@@ -909,6 +1016,7 @@ function buildBody(sessionId, repo, agg, cwd, status, { incognito = isIncognito(
   }
   return {
     externalId: sessionId,
+    agent,
     title: agg.title || undefined,
     repo,
     // No cwd means no fallback: `git` with no cwd would ask the current directory.
@@ -1030,7 +1138,33 @@ function modeFrom(argv) {
   if (argv.includes('--incognito')) return 'incognito';
   if (argv.includes('--start')) return 'start';
   if (argv.includes('--progress')) return 'progress';
+  if (argv.includes('--end-detached')) return 'end-detached';
   return 'end';
+}
+
+/** `--flag value` out of argv, or undefined. */
+function flagValue(argv, flag) {
+  const at = argv.indexOf(flag);
+  return at === -1 ? undefined : argv[at + 1];
+}
+
+/**
+ * Codex caps a `SessionEnd` hook at three seconds, which is not enough to parse a
+ * rollout and POST it. So the hook hands the work to a child that outlives it and
+ * returns at once; the child gets the payload as arguments, since its stdin is
+ * gone. The same `detached` + `unref` pair `spawnUpdateCheck` relies on.
+ */
+function spawnDetachedEnd(agent, input) {
+  const args = [__filename, '--end', '--agent', agent, '--session', String(input.session_id || '')];
+  if (input.transcript_path) args.push('--transcript', input.transcript_path);
+  if (input.cwd) args.push('--cwd', input.cwd);
+  try {
+    const child = spawn(process.execPath, args, { detached: true, stdio: 'ignore', windowsHide: true });
+    child.unref();
+    log(`end-detached ${input.session_id}: handed to pid ${child.pid}`);
+  } catch (err) {
+    log(`end-detached ${input.session_id}: could not spawn (${err && err.message})`);
+  }
 }
 
 /**
@@ -1072,10 +1206,21 @@ async function main() {
   }
 
   let input = {};
-  try {
-    input = JSON.parse((await readStdin()) || '{}');
-  } catch {
-    log(`skipped (${mode}): could not parse hook stdin`);
+  if (flagValue(argv, '--session') !== undefined) {
+    // A detached child: its parent already read stdin and passed the payload on.
+    input = { session_id: flagValue(argv, '--session'), transcript_path: flagValue(argv, '--transcript'), cwd: flagValue(argv, '--cwd') };
+  } else {
+    try {
+      input = JSON.parse((await readStdin()) || '{}');
+    } catch {
+      log(`skipped (${mode}): could not parse hook stdin`);
+      return;
+    }
+  }
+  const agent = agentFrom(argv, input.transcript_path && input.transcript_path.replace(/^~/, os.homedir()));
+
+  if (mode === 'end-detached') {
+    spawnDetachedEnd(agent, input);
     return;
   }
 
@@ -1089,9 +1234,12 @@ async function main() {
       source: input.source,
       update: require('./update-check.js').updateStatus(),
     });
-    if (message) process.stdout.write(JSON.stringify({ systemMessage: message }));
+    // Codex does not surface a hook's `systemMessage`; the log is what there is.
+    if (message && agent === 'codex') log(`start (${agent}): ${message}`);
+    else if (message) process.stdout.write(JSON.stringify({ systemMessage: message }));
     pruneIncognito();
     refreshStatusline();
+    refreshCodexCopy();
     spawnUpdateCheck();
   }
   if (!apiKey || !apiHost) {
@@ -1130,7 +1278,7 @@ async function main() {
     return;
   }
 
-  const agg = await aggregate(transcriptPath, repo, { wantTranscript: mode === 'end' && !isIncognito(sessionId) });
+  const agg = await aggregateFor(agent, transcriptPath, repo, { wantTranscript: mode === 'end' && !isIncognito(sessionId) });
   if (!agg.assistantMessages || !agg.startedAt) {
     log(`skipped (${mode}) ${sessionId}: empty transcript`);
     return;
@@ -1139,7 +1287,7 @@ async function main() {
     log(`${sessionId}: ignored ${agg.prUrlsRejected} pull-request url(s) from outside ${repo}`);
   }
 
-  const body = buildBody(sessionId, repo, agg, cwd, mode === 'end' ? 'ended' : 'active');
+  const body = buildBody(sessionId, repo, agg, cwd, mode === 'end' ? 'ended' : 'active', { agent });
 
   // Only on the final report. Replaying the spool on every `Stop` would retry a
   // dead host once per assistant turn, which is neither kind nor useful.
@@ -1177,7 +1325,16 @@ if (require.main === module) {
 }
 
 module.exports = {
+  AGENTS,
+  CODEX_COPY_DIR,
+  CODEX_COPY_FILES,
+  CODEX_SESSIONS_DIR,
   INCOGNITO_DIR,
+  agentFrom,
+  aggregateFor,
+  findCodexRollouts,
+  flagValue,
+  refreshCodexCopy,
   PROGRESS_MIN_INTERVAL_MS,
   findTranscript,
   isIncognito,

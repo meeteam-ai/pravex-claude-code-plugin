@@ -5,14 +5,14 @@
     "url": "https://github.com/meeteam-ai"
   },
   "metadata": {
-    "description": "The Pravex plugin for Claude Code",
-    "version": "0.6.1"
+    "description": "The Pravex plugin for Claude Code, with Codex CLI support",
+    "version": "0.7.0"
   },
   "plugins": [
     {
       "name": "pravex",
-      "description": "Reports every Claude Code session (model, tokens, cost, duration, files, PR) to your Pravex workspace",
-      "version": "0.6.1",
+      "description": "Reports every Claude Code and Codex CLI session (model, tokens, cost, duration, files, PR) to your Pravex workspace",
+      "version": "0.7.0",
       "author": {
         "name": "Meeteam"
       },
