@@ -67,10 +67,15 @@ const SWEEP_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 /**
  * A transcript touched, or a progress report sent, more recently than this still
  * belongs to a session that is probably running in another terminal — the sweep
- * leaves it alone. Matches the server's own `LIVE_GRACE_MS`: below it the server
- * still counts the session live, so reporting it `ended` from here would fight
- * that. Whatever is skipped is picked up by a later `SessionStart`, once it is
- * genuinely cold.
+ * leaves it alone. Below it the server still counts the session live, so
+ * reporting it `ended` from here would fight that. Whatever is skipped is picked
+ * up by a later `SessionStart`, once it is genuinely cold.
+ *
+ * ⚠️ Keep in sync with `LIVE_GRACE_MS` in pravex-backend
+ * (libs/core/src/session/session.service.ts). No shared package links the two
+ * repos, so if the server's live window changes this must change with it — a
+ * plugin window shorter than the server's re-sweeps sessions the server still
+ * shows live; longer, and a genuinely dead session waits extra to be reported.
  */
 const SWEEP_MIN_IDLE_MS = 15 * 60 * 1000;
 /** How many ids to remember. Enough to cover the sweep window several times over. */
@@ -806,14 +811,20 @@ function findUnreported(currentSessionId, now = Date.now()) {
 
   const cutoff = now - SWEEP_MAX_AGE_MS;
   const idleCutoff = now - SWEEP_MIN_IDLE_MS;
+  // A session is eligible when it is: within the sweep window, not already
+  // reported, not the one starting, AND cold — neither its transcript nor a
+  // progress report touched in the last fifteen minutes. A warm one still looks
+  // live (running in another terminal), so reporting it `ended` now would flip it
+  // off the dashboard and pay to summarise an unfinished conversation; its own
+  // `SessionEnd` or a later cold sweep reports it instead.
   files = files
-    .filter((f) => f.mtime >= cutoff && !reported.has(f.sessionId))
-    // Skip anything that still looks live: a transcript written in the last
-    // fifteen minutes, or a session this machine sent a progress report for that
-    // recently. Either way its own `SessionEnd`, or a later cold sweep, reports
-    // it — reporting it `ended` now would flip a running session off the
-    // dashboard and pay to summarise a conversation that is not finished.
-    .filter((f) => f.mtime < idleCutoff && !(progress[f.sessionId] > idleCutoff))
+    .filter(
+      (f) =>
+        f.mtime >= cutoff &&
+        f.mtime < idleCutoff &&
+        !reported.has(f.sessionId) &&
+        !(progress[f.sessionId] > idleCutoff),
+    )
     .sort((a, b) => b.mtime - a.mtime)
     .slice(0, SWEEP_MAX_FILES);
 
