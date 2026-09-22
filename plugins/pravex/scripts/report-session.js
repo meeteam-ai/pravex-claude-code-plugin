@@ -703,12 +703,9 @@ async function aggregate(transcriptPath, repo, { wantTranscript = true } = {}) {
  * not stop a session being reported at all.
  */
 function shouldSendProgress(sessionId, now = Date.now()) {
-  let seen = {};
-  try {
-    seen = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8')) || {};
-  } catch {
-    /* no file yet, or unreadable — send, and rewrite it below */
-  }
+  // Failing open (an unreadable file reads as {}) is deliberate: the throttle is
+  // an optimisation, and a corrupt state file must not stop a session reporting.
+  const seen = readProgress();
   if (typeof seen[sessionId] === 'number' && now - seen[sessionId] < PROGRESS_MIN_INTERVAL_MS) {
     return false;
   }
