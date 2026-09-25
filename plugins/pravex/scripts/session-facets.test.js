@@ -12,7 +12,14 @@ const os = require('node:os');
 const path = require('node:path');
 
 const {
+  MAX_NAMES,
   claudeEditLines,
+  cleanName,
+  codexMcpServerOf,
+  commandsIn,
+  isDenial,
+  isInterrupt,
+  mcpServerOf,
   claudeToolCategory,
   classifyShell,
   codexToolCategory,
@@ -245,9 +252,11 @@ test('a Claude Code transcript reduces to the full facets object', async () => {
         use('t13', 'mcp__linear__update_issue', { id: 'X-1' }),
         use('t14', 'WebFetch', { url: 'https://example.com' }),
         use('t15', 'Task', { prompt: 'review' }),
-        use('t16', 'Skill', { name: 'x' }),
+        use('t16', 'Skill', { skill: 'code-review', args: 'check the retry client' }),
+        use('t17', 'Agent', { subagent_type: 'Explore', prompt: 'find the pager' }),
+        use('t18', 'mcp__1a59c906-04da-521d-bda7-7f71b9f9e01c__read', {}),
       ]),
-      results(['t8', true], ['t9', false], ['t10', false], ['t11', false], ['t12', false], ['t13', false], ['t14', false], ['t15', false], ['t16', false]),
+      results(['t8', true], ['t9', false], ['t10', false], ['t11', false], ['t12', false], ['t13', false], ['t14', false], ['t15', false], ['t16', false], ['t17', false], ['t18', false]),
     ],
     'transcript.jsonl',
   );
@@ -255,21 +264,30 @@ test('a Claude Code transcript reduces to the full facets object', async () => {
   const agg = await aggregate(file, 'acme/widgets', { wantTranscript: false });
 
   assert.deepStrictEqual(agg.facets, {
-    v: 1,
+    v: 2,
     languages: { TypeScript: 2, Markdown: 1, JSON: 1 },
     fileKinds: { test: 1, docs: 1, adr: 1, deps: 1 },
-    tools: { read: 1, search: 1, edit: 5, shell: 4, plan: 1, mcp: 1, web: 1, subagent: 1, other: 1 },
-    toolUses: 16,
+    tools: { read: 1, search: 1, edit: 5, shell: 4, plan: 1, mcp: 2, web: 1, subagent: 2, other: 1 },
+    toolUses: 18,
     toolErrors: 2,
     linesAdded: 10,
     linesRemoved: 4,
     commits: 1,
     prsOpened: 1,
     testRuns: { passed: 1, failed: 1 },
+    commands: {},
+    skills: { 'code-review': 1 },
+    subagents: { 'general-purpose': 1, Explore: 1 },
+    mcpServers: { linear: 1, 'claude-ai-connector': 1 },
+    prompts: 1,
+    interrupts: 0,
+    permissionDenials: 0,
+    compactions: 0,
+    apiErrors: 0,
   });
-  // Counts and categories only: nothing from the transcript's paths or commands.
+  // Names of what was invoked, never what it was given: no paths, commands or arguments.
   const wire = JSON.stringify(agg.facets);
-  for (const leak of ['client', 'package', 'retries', 'pnpm', 'gh pr', 'linear']) assert.ok(!wire.includes(leak), `facets leaked ${leak}`);
+  for (const leak of ['client', 'package', 'pnpm', 'gh pr', 'pager', 'update_issue']) assert.ok(!wire.includes(leak), `facets leaked ${leak}`);
 });
 
 test('a Codex rollout reduces to the full facets object, in the same vocabulary', async () => {
@@ -307,7 +325,7 @@ test('a Codex rollout reduces to the full facets object, in the same vocabulary'
   const agg = await aggregateFor('codex', file, 'acme/api', { wantTranscript: false });
 
   assert.deepStrictEqual(agg.facets, {
-    v: 1,
+    v: 2,
     languages: { Go: 2 },
     fileKinds: { test: 1 },
     tools: { edit: 2, shell: 4, plan: 1, mcp: 1, web: 1 },
@@ -318,7 +336,139 @@ test('a Codex rollout reduces to the full facets object, in the same vocabulary'
     commits: 1,
     prsOpened: 0,
     testRuns: { passed: 1, failed: 1 },
+    commands: {},
+    skills: {},
+    subagents: {},
+    mcpServers: { linear: 1 },
+    prompts: 0,
+    interrupts: 0,
+    permissionDenials: 0,
+    compactions: 0,
+    apiErrors: 0,
   });
+});
+
+// ── v2: names, friction and modes ─────────────────────────────
+
+test('cleanName keeps names and drops anything that reads like content', () => {
+  assert.strictEqual(cleanName('/code-review'), 'code-review');
+  assert.strictEqual(cleanName('caveman:cavecrew-reviewer'), 'caveman:cavecrew-reviewer');
+  assert.strictEqual(cleanName('rm -rf /'), null);
+  assert.strictEqual(cleanName('"quoted"'), null);
+  assert.strictEqual(cleanName('x'.repeat(65)), null);
+  assert.strictEqual(cleanName(undefined), null);
+});
+
+test('mcpServerOf keeps the server and never the tool; connectors are one name', () => {
+  assert.strictEqual(mcpServerOf('mcp__linear__update_issue'), 'linear');
+  assert.strictEqual(mcpServerOf('mcp__Claude_Browser__computer'), 'Claude_Browser');
+  assert.strictEqual(mcpServerOf('mcp__1a59c906-04da-521d-bda7-7f71b9f9e01c__read'), 'claude-ai-connector');
+  assert.strictEqual(mcpServerOf('Bash'), null);
+  assert.strictEqual(codexMcpServerOf('linear__list_issues'), 'linear');
+  assert.strictEqual(codexMcpServerOf('mcp__github__get_pr'), 'github');
+  assert.strictEqual(codexMcpServerOf('shell'), null);
+});
+
+test('commandsIn reads Claude Code slash-command tags and nothing after them', () => {
+  assert.deepStrictEqual(commandsIn('<command-name>/model</command-name>\n<command-args>opus</command-args>'), ['model']);
+  assert.deepStrictEqual(commandsIn('please run /model'), []);
+});
+
+test('isDenial tells a refusal from a failure; isInterrupt spots both interrupt forms', () => {
+  assert.ok(isDenial("The user doesn't want to proceed with this tool use. The tool use was rejected"));
+  assert.ok(isDenial('Permission for this action was denied by the Claude Code auto mode classifier. Reason: x'));
+  assert.ok(!isDenial('Exit code 1'));
+  assert.ok(isInterrupt('[Request interrupted by user]'));
+  assert.ok(isInterrupt('[Request interrupted by user for tool use]'));
+  assert.ok(!isInterrupt('I was interrupted'));
+});
+
+test('a names map stops growing at MAX_NAMES distinct names but keeps counting known ones', () => {
+  const f = createFacets();
+  for (let i = 0; i < MAX_NAMES + 5; i++) f.name('skills', `skill-${i}`);
+  f.name('skills', 'skill-0');
+  const skills = f.result(new Set(), 0, 0).skills;
+  assert.strictEqual(Object.keys(skills).length, MAX_NAMES);
+  assert.strictEqual(skills['skill-0'], 2);
+});
+
+test('a session records commands, prompts, interrupts, refusals, compactions, API errors and its dominant modes', async () => {
+  const base = { timestamp: TS, entrypoint: 'claude-desktop', effort: 'high' };
+  const file = writeLines(
+    [
+      { ...base, type: 'user', permissionMode: 'plan', message: { content: 'plan the retries' } },
+      { ...base, type: 'user', permissionMode: 'bypassPermissions', message: { content: '<command-name>/model</command-name>\n<command-args>opus</command-args>' } },
+      { ...base, type: 'user', permissionMode: 'bypassPermissions', message: { content: [{ type: 'text', text: 'now build it' }] } },
+      assistant('m1', [use('t1', 'Bash', { command: 'rm -rf dist' })]),
+      { ...base, type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 't1', is_error: true, content: "The user doesn't want to proceed with this tool use." }] } },
+      { ...base, type: 'user', message: { content: [{ type: 'text', text: '[Request interrupted by user]' }] } },
+      { ...base, type: 'user', permissionMode: 'bypassPermissions', message: { content: '<command-name>/compact</command-name>' } },
+      { ...base, type: 'system', subtype: 'compact_boundary' },
+      { ...base, type: 'system', subtype: 'api_error', error: { status: 529 } },
+      { ...base, type: 'user', isMeta: true, message: { content: 'meta, never a prompt' } },
+    ],
+    'modes.jsonl',
+  );
+
+  const { facets } = await aggregate(file, 'acme/widgets', { wantTranscript: false });
+
+  assert.deepStrictEqual(facets.commands, { model: 1, compact: 1 });
+  assert.strictEqual(facets.prompts, 2);
+  assert.strictEqual(facets.interrupts, 1);
+  assert.strictEqual(facets.permissionDenials, 1);
+  assert.strictEqual(facets.compactions, 1);
+  assert.strictEqual(facets.apiErrors, 1);
+  assert.strictEqual(facets.permissionMode, 'bypassPermissions');
+  assert.strictEqual(facets.surface, 'claude-desktop');
+  assert.strictEqual(facets.effort, 'high');
+  assert.ok(!JSON.stringify(facets).includes('opus'), 'a command argument leaked');
+});
+
+test("subagent transcripts add their usage, tools and edits to the session, but not their prompts", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-subagents-'));
+  const id = 'abc-123';
+  const main = path.join(dir, `${id}.jsonl`);
+  fs.writeFileSync(
+    main,
+    [
+      { type: 'user', timestamp: TS, message: { content: 'review the pager' } },
+      assistant('m1', [use('t1', 'Agent', { subagent_type: 'Explore', prompt: 'look around' })]),
+      results(['t1', false]),
+    ]
+      .map((l) => JSON.stringify(l))
+      .join('\n'),
+  );
+  fs.mkdirSync(path.join(dir, id, 'subagents'), { recursive: true });
+  const subAssistant = (mid, content) => ({ type: 'assistant', timestamp: TS, isSidechain: true, message: { id: mid, model: 'claude-haiku-4-5', usage: { input_tokens: 100, output_tokens: 20, cache_read_input_tokens: 5000 }, content } });
+  fs.writeFileSync(
+    path.join(dir, id, 'subagents', 'agent-a1.jsonl'),
+    [
+      { type: 'user', timestamp: TS, isSidechain: true, message: { content: 'look around' } },
+      subAssistant('s1', [use('u1', 'Grep', { pattern: 'pager' }), use('u2', 'Edit', { file_path: 'src/pager.ts', old_string: 'a', new_string: 'b' })]),
+      { type: 'user', timestamp: TS, isSidechain: true, message: { content: [{ type: 'tool_result', tool_use_id: 'u1', content: 'ok' }, { type: 'tool_result', tool_use_id: 'u2', content: 'ok' }] } },
+    ]
+      .map((l) => JSON.stringify(l))
+      .join('\n'),
+  );
+
+  const agg = await aggregate(main, 'acme/widgets', { wantTranscript: false });
+
+  const haiku = agg.usage.find((u) => u.model === 'claude-haiku-4-5');
+  assert.deepStrictEqual(haiku, { model: 'claude-haiku-4-5', inputTokens: 100, outputTokens: 20, cacheReadTokens: 5000, cacheWriteTokens: 0 });
+  assert.strictEqual(agg.filesTouched, 1);
+  assert.strictEqual(agg.facets.toolUses, 3);
+  assert.deepStrictEqual(agg.facets.tools, { subagent: 1, search: 1, edit: 1 });
+  assert.deepStrictEqual(agg.facets.subagents, { Explore: 1 });
+  // The orchestrator's brief to its subagent is not a person typing.
+  assert.strictEqual(agg.facets.prompts, 1);
+});
+
+test('a session without a subagents folder reads exactly as before', async () => {
+  const file = writeLines([{ type: 'user', timestamp: TS, message: { content: 'hi' } }, assistant('m1', [])], 'lonely.jsonl');
+
+  const agg = await aggregate(file, 'acme/widgets', { wantTranscript: false });
+
+  assert.deepStrictEqual(agg.usage, [{ model: 'claude-opus-5', inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0 }]);
 });
 
 // ── The body ────────────────────────────────────────────────

@@ -53,7 +53,7 @@ test('a Codex SessionEnd reports the rollout with agent codex and OpenAI token s
   assert.strictEqual(body.title, 'port the retry middleware');
   assert.ok(body.transcript, 'the final report carries the conversation');
   assert.strictEqual(typeof body.tz, 'string');
-  assert.strictEqual(body.facets.v, 1);
+  assert.strictEqual(body.facets.v, 2);
 });
 
 test('a rollout is recognised without the --agent flag', async () => {
