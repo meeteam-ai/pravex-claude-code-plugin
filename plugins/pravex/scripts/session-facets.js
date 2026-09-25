@@ -7,12 +7,19 @@
  * single pass over the file, so the two agents cannot drift on what counts as a
  * test file, a commit or a line added. Everything that classifies lives here, once.
  *
- * ⚠️ **Counts and categories only.** A path, a file name or a command is read to
- * be classified and then dropped: the accumulator keeps a number per category and
- * never the thing it counted. The same rule the transcript extraction follows — a
- * command line is exactly the sort of thing that carries a hostname or a token.
+ * ⚠️ **Counts, categories and a few names — never arguments.** A path, a file name
+ * or a command line is read to be classified and then dropped: the accumulator
+ * keeps a number per category and never the thing it counted. The same rule the
+ * transcript extraction follows — a command line is exactly the sort of thing that
+ * carries a hostname or a token.
  *
- * The wire shape is `facets` v1 on `POST /api/sessions`. Bump `FACETS_VERSION` on
+ * v2 adds four maps keyed by **name**: slash commands, skills, subagent types and
+ * MCP servers. Those names are what somebody installed or typed to invoke a
+ * feature (`/code-review`, `Explore`, `linear`), never what it was given. Each is
+ * checked against `NAME_RE` and dropped if it looks like anything else, and each
+ * map is capped at `MAX_NAMES` entries. Incognito sessions send no facets at all.
+ *
+ * The wire shape is `facets` v2 on `POST /api/sessions`. Bump `FACETS_VERSION` on
  * any change the server could misread; adding a key to a map is not one.
  *
  * Standard library only, like everything else in this plugin. Not a `*.test.js`
@@ -20,7 +27,7 @@
  */
 
 /** Schema version of the `facets` object. */
-const FACETS_VERSION = 1;
+const FACETS_VERSION = 2;
 
 /** Kept here, not in the parsers, because `testsAdded` and `fileKinds.test` must agree. */
 const TEST_FILE_RE = /(\.test\.|\.spec\.|_test\.|(^|\/)test_|\/tests?\/|__tests__\/)/;
@@ -185,6 +192,54 @@ function codexToolCategory(name) {
   return 'other';
 }
 
+/**
+ * A name worth keeping: a command, skill, agent type or MCP server as somebody
+ * would type it. Anything with spaces, quotes or longer than 64 characters is not
+ * a name but content, and is dropped.
+ */
+const NAME_RE = /^[A-Za-z0-9][\w.:@/-]{0,63}$/;
+/** Distinct names per map. A session that invokes more is an outlier; the rest are dropped. */
+const MAX_NAMES = 50;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** claude.ai connectors reach Claude Code as `mcp__<uuid>__tool`; a UUID tells a reader nothing. */
+const CONNECTOR = 'claude-ai-connector';
+
+/** `name` if it passes `NAME_RE` (a leading `/` is dropped), else null. */
+function cleanName(raw) {
+  const n = String(raw == null ? '' : raw)
+    .trim()
+    .replace(/^\//, '');
+  return NAME_RE.test(n) ? n : null;
+}
+
+/** The server in `mcp__<server>__<tool>`, or null for any other tool. */
+function mcpServerOf(toolName) {
+  const m = /^mcp__(.+?)__/.exec(String(toolName || ''));
+  if (!m) return null;
+  return UUID_RE.test(m[1]) ? CONNECTOR : cleanName(m[1]);
+}
+
+/** Codex names an MCP tool `<server>__<tool>`, and newer CLIs prefix `mcp__`. */
+function codexMcpServerOf(toolName) {
+  const n = String(toolName || '');
+  if (n.startsWith('mcp__')) return mcpServerOf(n);
+  const i = n.indexOf('__');
+  return i > 0 ? cleanName(n.slice(0, i)) : null;
+}
+
+const COMMAND_RE = /<command-name>([^<]{1,80})<\/command-name>/g;
+
+/** Slash commands a user entry invoked, as Claude Code records them (`<command-name>/model</command-name>`). */
+function commandsIn(text) {
+  if (typeof text !== 'string' || !text.includes('<command-name>')) return [];
+  return [...text.matchAll(COMMAND_RE)].map((m) => cleanName(m[1])).filter(Boolean);
+}
+
+/** Tool results that mean a person (or the auto-mode classifier) said no, not that the tool failed. */
+const DENIAL_RES = [/doesn't want to proceed with this tool use/, /Permission for this action was denied by the Claude Code auto mode classifier/];
+const isDenial = (text) => typeof text === 'string' && DENIAL_RES.some((re) => re.test(text));
+const isInterrupt = (text) => typeof text === 'string' && text.startsWith('[Request interrupted by user');
+
 /** Lines in a piece of text. A trailing newline ends the last line rather than starting another. */
 function countLines(text) {
   if (typeof text !== 'string' || text === '') return 0;
@@ -272,6 +327,11 @@ function createFacets() {
   let commits = 0;
   let prsOpened = 0;
   const testRuns = { passed: 0, failed: 0 };
+  const names = { commands: {}, skills: {}, subagents: {}, mcpServers: {} };
+  const counts = { prompts: 0, interrupts: 0, permissionDenials: 0, compactions: 0, apiErrors: 0 };
+  // Seen once per transcript entry; the value seen most wins, so a session that
+  // was mostly in bypass mode reads as bypass even after one switch to plan.
+  const modes = { permissionMode: {}, surface: {}, effort: {} };
   let broken = false;
 
   const safe = (fn) => (...args) => {
@@ -299,6 +359,24 @@ function createFacets() {
       if (flags.commit && ok) commits += 1;
       if (flags.pr && ok) prsOpened += 1;
       if (flags.test) testRuns[ok ? 'passed' : 'failed'] += 1;
+    }),
+    /** One invocation of a named feature: `kind` is `commands`, `skills`, `subagents` or `mcpServers`. */
+    name: safe((kind, raw) => {
+      const map = names[kind];
+      const n = cleanName(raw);
+      if (!map || !n) return;
+      if (!(n in map) && Object.keys(map).length >= MAX_NAMES) return;
+      map[n] = (map[n] || 0) + 1;
+    }),
+    /** One occurrence of `prompts`, `interrupts`, `permissionDenials`, `compactions` or `apiErrors`. */
+    count: safe((key) => {
+      if (key in counts) counts[key] += 1;
+    }),
+    /** One entry's `permissionMode`, `surface` (Claude Code's `entrypoint`) or `effort`. */
+    mode: safe((kind, raw) => {
+      const map = modes[kind];
+      const v = cleanName(raw);
+      if (map && v) map[v] = (map[v] || 0) + 1;
     }),
     /**
      * The `facets` object, or undefined if anything went wrong along the way.
@@ -328,6 +406,12 @@ function createFacets() {
           commits,
           prsOpened,
           testRuns: { ...testRuns },
+          commands: { ...names.commands },
+          skills: { ...names.skills },
+          subagents: { ...names.subagents },
+          mcpServers: { ...names.mcpServers },
+          ...counts,
+          ...dominant(modes),
         };
       } catch {
         return undefined;
@@ -336,8 +420,26 @@ function createFacets() {
   };
 }
 
+/** The most-seen value of each mode, omitted when none was seen. Ties go to the first seen. */
+function dominant(modes) {
+  const out = {};
+  for (const [kind, seen] of Object.entries(modes)) {
+    let best = null;
+    for (const [v, n] of Object.entries(seen)) if (!best || n > seen[best]) best = v;
+    if (best) out[kind] = best;
+  }
+  return out;
+}
+
 module.exports = {
   FACETS_VERSION,
+  MAX_NAMES,
+  commandsIn,
+  cleanName,
+  codexMcpServerOf,
+  isDenial,
+  isInterrupt,
+  mcpServerOf,
   TEST_FILE_RE,
   claudeEditLines,
   claudeToolCategory,

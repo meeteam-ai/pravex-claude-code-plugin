@@ -691,31 +691,32 @@ async function aggregate(transcriptPath, repo, { wantTranscript = true } = {}) {
   let aiTitle = '';
   let firstPrompt = '';
 
-  const rl = readline.createInterface({
-    input: fs.createReadStream(transcriptPath, { encoding: 'utf8' }),
-    crlfDelay: Infinity,
-  });
-
-  for await (const line of rl) {
-    if (!line) continue;
-    let o;
-    try {
-      o = JSON.parse(line);
-    } catch {
-      continue;
+  /**
+   * One transcript entry. `sub` marks an entry from a subagent's own transcript:
+   * its usage, tool calls and edits are the session's too — it ran on the same
+   * bill, in the same repo — but its "user" turns are the orchestrator's prompts,
+   * not a person's, and its clock, branch and title are the main session's.
+   */
+  const consume = (o, sub) => {
+    if (!sub) {
+      if (o.timestamp) {
+        if (!first || o.timestamp < first) first = o.timestamp;
+        if (!last || o.timestamp > last) last = o.timestamp;
+        stamps.push(o.timestamp);
+      }
+      // Last wins: a session that starts on `main` and ends on a feature branch belongs to
+      // the branch the work landed on, which is also what the git fallback below reports.
+      if (o.gitBranch && o.gitBranch !== 'HEAD') branch = o.gitBranch;
+      if (o.type === 'ai-title' && o.aiTitle) aiTitle = o.aiTitle;
+      if (o.permissionMode) facets.mode('permissionMode', o.permissionMode);
+      if (o.entrypoint) facets.mode('surface', o.entrypoint);
+      if (o.effort) facets.mode('effort', o.effort);
+      if (o.type === 'system' && o.subtype === 'compact_boundary') facets.count('compactions');
+      if (o.type === 'system' && o.subtype === 'api_error') facets.count('apiErrors');
     }
-    if (o.timestamp) {
-      if (!first || o.timestamp < first) first = o.timestamp;
-      if (!last || o.timestamp > last) last = o.timestamp;
-      stamps.push(o.timestamp);
-    }
-    // Last wins: a session that starts on `main` and ends on a feature branch belongs to
-    // the branch the work landed on, which is also what the git fallback below reports.
-    if (o.gitBranch && o.gitBranch !== 'HEAD') branch = o.gitBranch;
-    if (o.type === 'ai-title' && o.aiTitle) aiTitle = o.aiTitle;
 
     const msg = o.message;
-    if (!msg || typeof msg !== 'object') continue;
+    if (!msg || typeof msg !== 'object') return;
 
     if (o.type === 'assistant') {
       // Streaming writes one line per content block with the same message.id — dedupe.
@@ -728,6 +729,11 @@ async function aggregate(transcriptPath, repo, { wantTranscript = true } = {}) {
           if (b.type === 'tool_use') {
             toolUses += 1;
             facets.tool(facetsLib.claudeToolCategory(b.name));
+            if (b.name === 'Skill' && b.input) facets.name('skills', b.input.skill);
+            // Agent's default is general-purpose; older transcripts call the tool Task.
+            if ((b.name === 'Agent' || b.name === 'Task') && b.input) facets.name('subagents', b.input.subagent_type || 'general-purpose');
+            const server = facetsLib.mcpServerOf(b.name);
+            if (server) facets.name('mcpServers', server);
             const fp = b.input && (b.input.file_path || b.input.notebook_path);
             // Held until the matching tool_result confirms it landed.
             if (facetsLib.claudeToolCategory(b.name) === 'edit' && typeof fp === 'string' && b.id) {
@@ -737,7 +743,7 @@ async function aggregate(transcriptPath, repo, { wantTranscript = true } = {}) {
               for (const f of bashWrites(b.input.command)) bashFiles.add(f);
               if (b.id) pendingShells.set(b.id, facetsLib.classifyShell(b.input.command));
             }
-          } else if (b.type === 'text') {
+          } else if (b.type === 'text' && !sub) {
             collectPrUrls(b.text, prUrls);
           }
         }
@@ -747,7 +753,10 @@ async function aggregate(transcriptPath, repo, { wantTranscript = true } = {}) {
         for (const b of msg.content) {
           if (!b) continue;
           if (b.type === 'tool_result') {
-            if (b.is_error) toolErrors += 1;
+            if (b.is_error) {
+              toolErrors += 1;
+              if (!sub && facetsLib.isDenial(textOf(b.content))) facets.count('permissionDenials');
+            }
             const edit = pendingEdits.get(b.tool_use_id);
             if (edit !== undefined) {
               if (!b.is_error) {
@@ -761,17 +770,27 @@ async function aggregate(transcriptPath, repo, { wantTranscript = true } = {}) {
               facets.shell(shell, !b.is_error);
               pendingShells.delete(b.tool_use_id);
             }
-            collectPrUrls(textOf(b.content), prUrls);
+            if (!sub) collectPrUrls(textOf(b.content), prUrls);
           }
         }
       }
+      if (sub) return;
+      const text = textOf(msg.content).trim();
+      for (const c of facetsLib.commandsIn(text)) facets.name('commands', c);
+      if (facetsLib.isInterrupt(text)) facets.count('interrupts');
+      else if (text && !o.isMeta && !text.startsWith('<') && !Array.isArray(msg.content)) facets.count('prompts');
+      else if (!o.isMeta && Array.isArray(msg.content) && msg.content.some((b) => b && b.type === 'text' && !String(b.text).startsWith('<'))) {
+        facets.count('prompts');
+      }
       if (!firstPrompt && !o.isMeta) {
-        const t = textOf(msg.content).trim();
         // Skip system tags and slash commands so the title is a real prompt.
-        if (t && !t.startsWith('<') && !t.startsWith('/')) firstPrompt = t;
+        if (text && !text.startsWith('<') && !text.startsWith('/')) firstPrompt = text;
       }
     }
+  };
 
+  for await (const o of jsonLines(transcriptPath)) {
+    consume(o, false);
     // Skipped entirely on a progress report, which discards the result: extraction
     // runs `redact` over every prompt and reply and holds the whole turn list in
     // memory, and the gzip at the end is the cheapest part of it.
@@ -779,6 +798,12 @@ async function aggregate(transcriptPath, repo, { wantTranscript = true } = {}) {
       const turn = extractTurn(o);
       if (turn) turns.push(turn);
     }
+  }
+  // Claude Code writes each subagent to `<id>/subagents/*.jsonl`, and none of its
+  // usage appears in the main transcript. Leaving them out undercounted a session
+  // that delegated by whatever its subagents spent.
+  for (const file of subagentTranscripts(transcriptPath)) {
+    for await (const o of jsonLines(file)) consume(o, true);
   }
 
   const usageByModel = new Map();
@@ -820,6 +845,33 @@ async function aggregate(transcriptPath, repo, { wantTranscript = true } = {}) {
     // Undefined when anything in it failed; buildBody then sends the report without it.
     facets: facets.result(files, toolUses, toolErrors),
   };
+}
+
+/** Parsed JSON lines of a file; a line that doesn't parse is skipped, not fatal. */
+async function* jsonLines(file) {
+  const rl = readline.createInterface({ input: fs.createReadStream(file, { encoding: 'utf8' }), crlfDelay: Infinity });
+  for await (const line of rl) {
+    if (!line) continue;
+    try {
+      yield JSON.parse(line);
+    } catch {
+      // A torn last line while Claude Code is still writing; the next report reads it.
+    }
+  }
+}
+
+/** `<dir>/<id>/subagents/*.jsonl` for the transcript `<dir>/<id>.jsonl`, sorted; none if absent. */
+function subagentTranscripts(transcriptPath) {
+  const dir = path.join(path.dirname(transcriptPath), path.basename(transcriptPath, '.jsonl'), 'subagents');
+  try {
+    return fs
+      .readdirSync(dir)
+      .filter((f) => f.endsWith('.jsonl'))
+      .sort()
+      .map((f) => path.join(dir, f));
+  } catch {
+    return [];
+  }
 }
 
 /** Add one model's usage (the `POST /sessions` shape) into a per-model accumulator. */

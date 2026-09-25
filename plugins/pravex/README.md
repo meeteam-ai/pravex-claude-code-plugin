@@ -196,18 +196,23 @@ environment — from ever leaving the machine.
   "filesTouched": 0, "testsAdded": 0, "retryRate": 0, "prUrl": "https://github.com/.../pull/1",
   "tz": "America/Bogota",
   "facets": {
-    "v": 1,
+    "v": 2,
     "languages": { "TypeScript": 12, "Python": 3 },
     "fileKinds": { "test": 4, "docs": 1, "config": 2 },
     "tools": { "edit": 30, "shell": 12, "read": 40, "search": 9, "mcp": 5 },
     "toolUses": 96, "toolErrors": 4, "linesAdded": 420, "linesRemoved": 130,
-    "commits": 2, "prsOpened": 1, "testRuns": { "passed": 5, "failed": 2 }
+    "commits": 2, "prsOpened": 1, "testRuns": { "passed": 5, "failed": 2 },
+    "commands": { "model": 2, "compact": 1 }, "skills": { "code-review": 1 },
+    "subagents": { "Explore": 3 }, "mcpServers": { "linear": 5 },
+    "prompts": 14, "interrupts": 1, "permissionDenials": 0, "compactions": 1, "apiErrors": 0,
+    "permissionMode": "default", "surface": "cli", "effort": "high"
   },
   "transcript": { "encoding": "gzip+base64", "format": 1, "turns": 847, "dropped": 0, "data": "H4sIA..." }
 }
 ```
 
-`facets` is counts and categories only — no path, file name or command leaves the
-machine — computed in the same pass over the transcript, and simply absent if it
-could not be computed. An incognito report carries `usage`, timing and `tz`, and
+`facets` is counts, categories and the names of commands, skills, subagent types
+and MCP servers — no path, file name, command line or argument leaves the machine.
+It is computed in the same pass over the transcript (and its subagents'), and simply
+absent if it could not be computed. An incognito report carries `usage`, timing and `tz`, and
 never `facets`. The full field list is in the [root README](../../README.md#what-it-sends).

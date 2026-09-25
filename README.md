@@ -93,8 +93,9 @@ no code, no file contents**:
 | `tz` | The machine's IANA time zone (`America/Bogota`), so sessions land in your own day and hour |
 | `facets` | What kind of work it was, as **counts only** — see below |
 
-`facets` is counts and categories, never a path, file name or command. Everything
-in it is computed in the same single pass over the transcript:
+`facets` is counts, categories and the **names** of what was invoked — never a
+path, file name, command line or argument. Everything in it is computed in the same
+single pass over the transcript and its subagents' transcripts:
 
 | Facet | Notes |
 | --- | --- |
@@ -105,6 +106,20 @@ in it is computed in the same single pass over the transcript:
 | `linesAdded`, `linesRemoved` | From edits whose result confirmed they landed |
 | `commits`, `prsOpened` | Successful `git commit` and `gh pr create` calls |
 | `testRuns` | Test-runner calls (`vitest`, `jest`, `pytest`, `go test`, `npm test`, …) that passed and failed |
+| `commands` | Slash commands by name (`model`, `compact`, `code-review`), never their arguments |
+| `skills` | Skills invoked through the Skill tool, by name |
+| `subagents` | Subagents launched, by type (`Explore`, `Plan`, `general-purpose`, a plugin's own agent) |
+| `mcpServers` | MCP tool calls by **server** (`linear`, `Claude_Browser`); the tool and its input are dropped. claude.ai connectors, which Claude Code names by UUID, count as `claude-ai-connector` |
+| `prompts`, `interrupts` | Prompts a person typed, and how many times they stopped Claude mid-turn |
+| `permissionDenials` | Tool calls a person or the auto-mode classifier refused (not ones that failed) |
+| `compactions`, `apiErrors` | Context compactions and API errors (overloaded, auth) during the session |
+| `permissionMode`, `surface`, `effort` | The permission mode, where it ran (`cli`, `claude-desktop`, …) and effort level seen most in the session |
+
+A name is kept only if it looks like one — letters, digits and `.:@/_-`, at most 64
+characters — and each map holds at most 50 names. Subagents write their own
+transcripts (`<session>/subagents/*.jsonl`): their tokens, tool calls and edits
+count toward the session they ran in, while prompts, title and duration come from
+the main transcript only.
 
 A facet that cannot be computed never costs the report: `facets` is simply left
 out. **Incognito sends usage only, plus the time zone** — never `facets`.
