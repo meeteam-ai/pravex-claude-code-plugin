@@ -41,7 +41,7 @@ const COPY_SCRIPTS = path.join(COPY_DIR, 'scripts');
  * `SessionStart` refreshes itself through it). The one list: `report-session.js`
  * and the npm package's `sync-scripts.js` both read it from here.
  */
-const COPY_FILES = ['report-session.js', 'codex-rollout.js', 'session-facets.js', 'codex-install.js', 'update-check.js', 'statusline.js', 'login.js'];
+const COPY_FILES = ['report-session.js', 'codex-rollout.js', 'session-facets.js', 'seat.js', 'codex-install.js', 'update-check.js', 'statusline.js', 'login.js'];
 const COPY_MANIFEST = path.join(COPY_DIR, '.claude-plugin', 'plugin.json');
 const HOOKS_FILE = path.join(os.homedir(), '.codex', 'hooks.json');
 const BACKUP_FILE = `${HOOKS_FILE}.pravex-backup`;
@@ -187,6 +187,7 @@ function main(argv) {
     else if (r.installed) console.log(`Pravex: Codex hooks installed (${r.events.join(', ')})`);
     else if (r.events.length) console.log(`Pravex: Codex hooks partly installed (${r.events.join(', ')}) — run install again`);
     else console.log('Pravex: Codex hooks not installed');
+    // The sign-in line, and the seat line under it, are `/pravex:status`'s own.
     const login = spawnSync(process.execPath, [path.join(__dirname, 'login.js'), '--status'], { encoding: 'utf8' });
     if (login.stdout) process.stdout.write(login.stdout);
     return 0;

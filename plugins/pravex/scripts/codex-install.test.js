@@ -135,3 +135,36 @@ test('refresh recopies only when the running plugin version differs from the cop
   assert.notStrictEqual(fs.readFileSync(copy, 'utf8'), '// stale');
   assert.notStrictEqual(JSON.parse(fs.readFileSync(manifest, 'utf8')).version, '0.0.1');
 });
+
+// Asynchronous, unlike `run`: the stand-in API answers from this process, and
+// `spawnSync` would block it for as long as the child waited on it.
+test('status shows the seat under the sign-in line, the same words as /pravex:status', async () => {
+  const http = require('node:http');
+  const { spawn } = require('node:child_process');
+  const home = tempHome();
+  const server = http.createServer((req, res) => {
+    const send = (body) => res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ status: 200, result: body }));
+    if (req.url === '/api/me') return send({ email: 'dana@northwind.co', orgName: 'Northwind' });
+    if (req.url === '/api/me/seat') return send({ status: 'none', workspace: { id: 'o', name: 'Northwind' }, admins: [], requestedAt: null, message: 'x' });
+    res.writeHead(404).end('{}');
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const host = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const stdout = await new Promise((resolve, reject) => {
+      const env = { ...process.env, HOME: home, USERPROFILE: home, PRAVEX_API_KEY: 'pvx_test', PRAVEX_API_HOST: host };
+      const child = spawn(process.execPath, [INSTALLER, 'status'], { env });
+      let out = '';
+      child.stdout.on('data', (c) => (out += c));
+      child.on('error', reject);
+      child.on('close', () => resolve(out));
+    });
+    assert.deepStrictEqual(stdout.trim().split('\n'), [
+      'Pravex: Codex hooks not installed',
+      `Pravex: connected to ${host} as dana@northwind.co (Northwind)`,
+      "Seat: not assigned. Sessions on this machine aren't tracked until a workspace admin assigns you one.",
+    ]);
+  } finally {
+    server.close();
+  }
+});

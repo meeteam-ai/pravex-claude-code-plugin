@@ -36,6 +36,8 @@ const INSTALLED_COPY = path.join(CONFIG_DIR, 'statusline.js');
 const CHAIN_FILE = path.join(CONFIG_DIR, 'statusline.json');
 // Written by `update-check.js`, which the SessionStart hook runs in the background.
 const UPDATE_FILE = path.join(CONFIG_DIR, 'update-check.json');
+// Written by `seat.js` at session start and after every report. Same path there; change both together.
+const SEAT_FILE = path.join(CONFIG_DIR, 'seat.json');
 const SETTINGS_FILE = path.join(os.homedir(), '.claude', 'settings.json');
 /** The status line blocks the UI while it runs; a slow chained command must not. */
 const CHAIN_TIMEOUT_MS = 2000;
@@ -50,11 +52,20 @@ function readJson(file, fallback) {
   }
 }
 
-/** `watching`, `incognito` or `login` — the three things worth a glance. */
+/**
+ * `watching`, `incognito`, `noseat` or `login`: the four things worth a glance.
+ *
+ * Checked in that order of precedence, from last to first: a machine that needs a
+ * login reports nothing, and without a seat nothing is tracked, incognito or not.
+ * The seat comes from the cache the hooks keep. The status line runs on every
+ * refresh, so it never asks the server.
+ */
 function stateFor(sessionId, env = process.env) {
   const config = readJson(CONFIG_FILE, {});
   const configured = Boolean((env.PRAVEX_API_KEY || config.apiKey) && (env.PRAVEX_API_HOST || config.apiHost));
   if (!configured) return 'login';
+  const seat = readJson(SEAT_FILE, null);
+  if (seat && (seat.status === 'none' || seat.status === 'suspended')) return 'noseat';
   const safe = String(sessionId || '').replace(/[^A-Za-z0-9_-]/g, '');
   if (safe && fs.existsSync(path.join(INCOGNITO_DIR, safe))) return 'incognito';
   return 'watching';
@@ -78,6 +89,7 @@ function segmentFor(state, { color = true, update = false } = {}) {
   const paint = (c, text) => (color ? `${COLOR[c]}${text}${COLOR.reset}` : text);
   let segment;
   if (state === 'login') segment = paint('yellow', '⚠ Pravex: /pravex:login');
+  else if (state === 'noseat') segment = paint('yellow', '⚠ Pravex: no seat');
   else if (state === 'incognito') segment = paint('magenta', '◌ Pravex incognito');
   else segment = paint('green', '● Pravex');
   // The full command is in the session's start message; the bar only has room to say so.
@@ -181,7 +193,8 @@ function install() {
   fs.mkdirSync(path.dirname(SETTINGS_FILE), { recursive: true });
   fs.writeFileSync(SETTINGS_FILE, `${JSON.stringify(next, null, 2)}\n`);
   console.log('Pravex: status line installed. It shows ● Pravex while a session is recorded,');
-  console.log('◌ Pravex incognito after /pravex:incognito, and ⚠ when this machine needs /pravex:login.');
+  console.log('◌ Pravex incognito after /pravex:incognito, ⚠ Pravex: no seat while you have no seat in the');
+  console.log('workspace, and ⚠ Pravex: /pravex:login when this machine needs a login.');
   if (readJson(CHAIN_FILE, {}).previous) console.log('Your existing status line still runs first; Pravex is added after it.');
   return 0;
 }
@@ -221,4 +234,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { INCOGNITO_DIR, INSTALLED_COPY, UPDATE_FILE, basics, compose, install, newerThan, refreshCopy, segmentFor, stateFor, uninstall };
+module.exports = { INCOGNITO_DIR, INSTALLED_COPY, SEAT_FILE, UPDATE_FILE, basics, compose, install, newerThan, refreshCopy, segmentFor, stateFor, uninstall };
