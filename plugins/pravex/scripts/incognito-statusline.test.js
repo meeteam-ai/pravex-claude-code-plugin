@@ -54,6 +54,8 @@ function writeTranscript(home, sessionId) {
 function captureServer() {
   const bodies = [];
   const server = http.createServer((req, res) => {
+    // The seat check at session start: a server from before seats answers 404.
+    if (req.method === 'GET') return res.writeHead(404).end('{}');
     let data = '';
     req.on('data', (c) => (data += c));
     req.on('end', () => {
@@ -84,6 +86,31 @@ test('startMessage says whether the session is recorded, incognito or needs a lo
   // Compaction and /clear do not change who is watching; a banner there is noise.
   assert.strictEqual(startMessage({ configured: true, source: 'compact' }), null);
   assert.strictEqual(startMessage({ configured: true, source: 'clear' }), null);
+});
+
+const NONE_LINE = "Pravex: you don't have a seat in Northwind, so this session isn't tracked. Ask a workspace admin to assign you one.";
+const PAUSED_LINE = "Pravex: your seat in Northwind is paused, so this session isn't tracked. A workspace admin can restore it.";
+
+test('startMessage puts the seat first: no seat or a paused one replaces "recording", and the update notice still follows', () => {
+  const { startMessage } = require('./report-session.js');
+  const none = { status: 'none', message: NONE_LINE, workspace: { name: 'Northwind' } };
+  // No server message: the same words, built here.
+  const paused = { status: 'suspended', message: null, workspace: { name: 'Northwind' } };
+
+  assert.strictEqual(startMessage({ configured: true, source: 'startup', seat: none }), NONE_LINE);
+  assert.strictEqual(startMessage({ configured: true, source: 'resume', seat: paused }), PAUSED_LINE);
+  assert.match(startMessage({ configured: true, source: 'startup', seat: { status: 'active' } }), /^Pravex: recording this session/);
+  // No answer at all is not "no seat".
+  assert.match(startMessage({ configured: true, source: 'startup', seat: null }), /^Pravex: recording this session/);
+  // Without a seat nothing is reported, usage included, so incognito has nothing to add.
+  assert.strictEqual(startMessage({ configured: true, incognito: true, source: 'startup', seat: none }), NONE_LINE);
+  // A login is still the first thing to fix.
+  assert.match(startMessage({ configured: false, source: 'startup', seat: none }), /not connected.*\/pravex:login/);
+  assert.strictEqual(
+    startMessage({ configured: true, source: 'startup', seat: none, update: { available: true, installed: '0.8.0', latest: '0.9.0' } }),
+    `${NONE_LINE} Update available (0.8.0 → 0.9.0): run /pravex:update.`
+  );
+  assert.strictEqual(startMessage({ configured: true, source: 'compact', seat: none }), null);
 });
 
 test('an incognito body carries usage and cost inputs, and nothing about the work', () => {
@@ -183,6 +210,43 @@ test('the status line shows the login, watching and incognito states', async () 
 
   await run(REPORT, ['--incognito', 'sess-3'], { env: envFor(home) });
   assert.strictEqual(plain((await run(STATUSLINE, [], { input, env })).stdout), '◌ Pravex incognito');
+});
+
+test('the status line shows no seat, from the cache alone: after a login, before incognito', async () => {
+  const home = tempHome();
+  const input = JSON.stringify({ session_id: 'sess-4' });
+  const plain = (s) => s.replace(/\x1b\[[0-9;]*m/g, '').trim();
+  // Any request at all fails the test: the status line runs on every refresh.
+  let requests = 0;
+  const server = http.createServer((req, res) => {
+    requests += 1;
+    res.writeHead(500).end();
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const env = envFor(home, { PRAVEX_API_KEY: 'pvx_test', PRAVEX_API_HOST: `http://127.0.0.1:${server.address().port}` });
+  fs.mkdirSync(path.join(home, '.pravex'), { recursive: true });
+  const cache = (status) =>
+    fs.writeFileSync(path.join(home, '.pravex', 'seat.json'), JSON.stringify({ status, message: null, workspace: { id: 'o', name: 'Northwind' }, checkedAt: Date.now() }));
+
+  try {
+    cache('none');
+    const shown = (await run(STATUSLINE, [], { input, env })).stdout;
+    assert.strictEqual(plain(shown), '⚠ Pravex: no seat');
+    assert.ok(shown.includes('\x1b[33m⚠ Pravex: no seat'), 'yellow, like the login warning');
+
+    cache('suspended');
+    assert.strictEqual(plain((await run(STATUSLINE, [], { input, env })).stdout), '⚠ Pravex: no seat');
+
+    await run(REPORT, ['--incognito', 'sess-4'], { env: envFor(home) });
+    assert.strictEqual(plain((await run(STATUSLINE, [], { input, env })).stdout), '⚠ Pravex: no seat');
+    assert.match(plain((await run(STATUSLINE, [], { input, env: envFor(home) })).stdout), /⚠ Pravex: \/pravex:login/);
+
+    cache('active');
+    assert.strictEqual(plain((await run(STATUSLINE, [], { input, env })).stdout), '◌ Pravex incognito');
+    assert.strictEqual(requests, 0);
+  } finally {
+    server.close();
+  }
 });
 
 test('install keeps an existing status line, chains it, and uninstall puts it back', async () => {

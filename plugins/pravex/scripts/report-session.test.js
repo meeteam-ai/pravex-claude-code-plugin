@@ -280,6 +280,8 @@ function captureServer() {
   let resolve;
   const received = new Promise((r) => (resolve = r));
   const server = http.createServer((req, res) => {
+    // The seat check is not the report; a server from before seats answers 404.
+    if (req.method === 'GET') return res.writeHead(404).end('{}');
     let body = '';
     req.on('data', (c) => (body += c));
     req.on('end', () => {
@@ -828,6 +830,7 @@ test('the SessionEnd hook reports the session as ended, with the transcript', as
 test('SessionStart sweeps up a session whose terminal was closed', async () => {
   const bodies = [];
   const server = http.createServer((req, res) => {
+    if (req.method === 'GET') return res.writeHead(404).end('{}'); // the seat check, from a server before seats
     let body = '';
     req.on('data', (c) => (body += c));
     req.on('end', () => {
@@ -901,6 +904,7 @@ test('SessionStart sweeps up a session whose terminal was closed', async () => {
 test('the sweep does not report the same session twice', async () => {
   const bodies = [];
   const server = http.createServer((req, res) => {
+    if (req.method === 'GET') return res.writeHead(404).end('{}'); // the seat check, from a server before seats
     let body = '';
     req.on('data', (c) => (body += c));
     req.on('end', () => {

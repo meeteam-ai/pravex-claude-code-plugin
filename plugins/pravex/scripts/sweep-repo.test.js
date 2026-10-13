@@ -48,6 +48,9 @@ function writeTranscript(home, sessionId, { cwd, gitBranch } = {}) {
 function captureServer() {
   const bodies = [];
   const server = http.createServer((req, res) => {
+    // The seat check at session start. A server from before seats answers 404,
+    // and the hook goes on as it always did.
+    if (req.method === 'GET') return res.writeHead(404).end('{}');
     let data = '';
     req.on('data', (c) => (data += c));
     req.on('end', () => {

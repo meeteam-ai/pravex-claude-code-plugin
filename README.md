@@ -24,19 +24,20 @@ in terminal scrollback, and in the session transcript **this plugin uploads**.
 One real key was burned exactly that way.
 
 `--api-url` points it elsewhere (`/pravex:login --api-url http://localhost:3000`).
-`/pravex:status` says whether this machine is connected, and the **Install** page
+`/pravex:status` says whether this machine is connected and whether you hold a seat, and the **Install** page
 disconnects it — each login is its own connection, so one machine can be cut off
 without touching the others.
 
 ## Know when Pravex is watching
 
-Every new or resumed session opens with one line saying which of three states it
-is in: **recording**, **incognito**, or **not connected — run `/pravex:login`**.
+Every new or resumed session opens with one line saying which of four states it
+is in: **recording**, **incognito**, **not tracked — no seat** (see [Seats](#seats)),
+or **not connected — run `/pravex:login`**.
 
 For an indicator that stays on screen, add it to the status line:
 
 ```
-/pravex:statusline              # ● Pravex · ◌ Pravex incognito · ⚠ Pravex: /pravex:login
+/pravex:statusline              # ● Pravex · ◌ Pravex incognito · ⚠ Pravex: no seat · ⚠ Pravex: /pravex:login
 /pravex:statusline --uninstall
 ```
 
@@ -47,6 +48,32 @@ first and Pravex is appended to its last line. The script is copied to
 `~/.pravex/statusline.js`, because the plugin's own directory changes on every
 update, and each session start refreshes the copy. Under a managed
 `allowManagedHooksOnly` policy only a managed status line shows.
+
+## Seats
+
+A workspace pays per seat, and only members holding one are tracked. Without a
+seat nothing is blocked or slowed down, and nothing is sent. The session opens
+with the server's own line instead of "recording":
+
+```
+Pravex: you don't have a seat in Northwind, so this session isn't tracked. Ask a workspace admin to assign you one.
+```
+
+A paused seat has its own line, and the status line shows `⚠ Pravex: no seat`.
+When an admin assigns or removes a seat while a session runs, the next reply says
+so, once: *you now have a seat in Northwind. This session is tracked from here
+on.* or *your seat in Northwind was removed, so the rest of this session isn't
+tracked.* Codex shows the same lines as warnings. `/pravex:status` adds a `Seat:`
+line.
+
+The answer is cached in `~/.pravex/seat.json`. Session start refreshes it,
+waiting 1.5 s at most before falling back to the cache, and so does every
+report. While the cache says there is no seat the hooks send nothing, and they
+ask the server again after five minutes. Any error sends as before, because the
+server checks the seat on ingest anyway. That is also why an older plugin simply
+stops being tracked, without saying so. A server from before seats tracks
+everyone. A session that ran without a seat is never sent later, even after a
+seat arrives.
 
 ## Incognito sessions
 
@@ -149,6 +176,7 @@ plugins/pravex/
 └── scripts/
     ├── report-session.js           reads the transcript, posts the session
     ├── report-session.test.js
+    ├── seat.js                     whether you hold a seat; caches ~/.pravex/seat.json
     ├── login.js                    the device flow; writes ~/.pravex/config.json
     └── login.test.js
 ```

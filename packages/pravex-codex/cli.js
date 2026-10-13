@@ -5,7 +5,7 @@
  *
  *   install               write the three hooks into ~/.codex/hooks.json and copy the reporter
  *   uninstall             remove exactly those hooks
- *   status                what is installed, and whether this machine is signed in
+ *   status                what is installed, whether this machine is signed in, and the seat
  *   login [--api-url u]   sign in with the device flow — nothing to copy or paste
  *
  * Everything runs the same scripts the Claude Code plugin ships; see

@@ -248,3 +248,79 @@ test('it tightens the permissions of a config file that already existed', async 
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+
+// ── /pravex:status and the seat ──────────────────────────────────────────────
+
+/**
+ * `/api/me`, and `/api/me/seat` answering `seat`: a seat object, or a bare
+ * status code for a server from before seats (404) or one that failed (500).
+ */
+function accountServer(seat) {
+  const server = http.createServer((req, res) => {
+    const send = (code, body) => res.writeHead(code, { 'Content-Type': 'application/json' }).end(JSON.stringify(body));
+    if (req.url === '/api/me') return send(200, { status: 200, result: { email: 'dana@northwind.co', orgName: 'Northwind' } });
+    if (req.url === '/api/me/seat') return typeof seat === 'number' ? send(seat, { status: seat }) : send(200, { status: 200, result: seat });
+    return send(404, {});
+  });
+  return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve({ server, host: `http://127.0.0.1:${server.address().port}` })));
+}
+
+/** `login.js --status` as the command runs it, with its own HOME. */
+function status(home, host) {
+  return new Promise((resolve, reject) => {
+    const env = { ...process.env, HOME: home, USERPROFILE: home, PRAVEX_API_KEY: FAKE_KEY, PRAVEX_API_HOST: host };
+    const child = spawn(process.execPath, [path.join(__dirname, 'login.js'), '--status'], { env });
+    let stdout = '';
+    child.stdout.on('data', (c) => (stdout += c));
+    child.on('error', reject);
+    child.on('close', (code) => resolve({ code, lines: stdout.trim().split('\n') }));
+  });
+}
+
+const workspace = { id: 'org-1', name: 'Northwind' };
+for (const [label, seat, line] of [
+  ['an active seat', { status: 'active', workspace, admins: [], requestedAt: null, message: null }, 'Seat: active. Every session is reported when it ends.'],
+  ['no seat', { status: 'none', workspace, admins: ['Ana Admin'], requestedAt: null, message: 'x' }, "Seat: not assigned. Sessions on this machine aren't tracked until a workspace admin assigns you one."],
+  ['a paused seat', { status: 'suspended', workspace, admins: [], requestedAt: null, message: 'x' }, "Seat: paused. Sessions on this machine aren't tracked until a workspace admin restores it."],
+]) {
+  test(`/pravex:status says so under the account line for ${label}, and caches it`, async () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-login-'));
+    const { server, host } = await accountServer(seat);
+    try {
+      const { code, lines } = await status(home, host);
+      assert.strictEqual(code, 0);
+      assert.deepStrictEqual(lines, [`Pravex: connected to ${host} as dana@northwind.co (Northwind)`, line]);
+      // The status line and the next session start now agree with what was printed.
+      assert.strictEqual(JSON.parse(fs.readFileSync(path.join(home, '.pravex', 'seat.json'), 'utf8')).status, seat.status);
+    } finally {
+      server.close();
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  });
+}
+
+for (const [label, code] of [
+  ['a server from before seats', 404],
+  ['a seat check that fails', 500],
+]) {
+  test(`/pravex:status says nothing about the seat for ${label}`, async () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-login-'));
+    const { server, host } = await accountServer(code);
+    try {
+      const result = await status(home, host);
+      assert.strictEqual(result.code, 0);
+      assert.deepStrictEqual(result.lines, [`Pravex: connected to ${host} as dana@northwind.co (Northwind)`]);
+    } finally {
+      server.close();
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  });
+}
+
+test('after a login, "every session is reported" gives way to the seat line when there is none', () => {
+  const { afterLogin } = require('./login.js');
+  assert.match(afterLogin({ status: 'active' }), /every session is reported/);
+  assert.match(afterLogin(null), /every session is reported/);
+  assert.match(afterLogin({ status: 'none' }), /^Seat: not assigned\./);
+  assert.match(afterLogin({ status: 'suspended' }), /^Seat: paused\./);
+});
