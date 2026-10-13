@@ -241,6 +241,8 @@ async function aggregate(transcriptPath, repo, { wantTranscript = true } = {}, h
       toolUses += 1;
       const name = p.name || (p.type === 'local_shell_call' ? 'local_shell' : 'tool');
       facets.tool(facetsLib.codexToolCategory(name));
+      const server = facetsLib.codexMcpServerOf(name);
+      if (server) facets.name('mcpServers', server);
       if (wantTranscript) {
         const lastTurn = turns[turns.length - 1];
         if (lastTurn && lastTurn.role === 'assistant') (lastTurn.tools = lastTurn.tools || []).push(name);
