@@ -29,6 +29,7 @@ const path = require('path');
 const http = require('http');
 const https = require('https');
 const { spawn } = require('child_process');
+const seatLib = require('./seat.js');
 
 const CONFIG_DIR = path.join(os.homedir(), '.pravex');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
@@ -36,6 +37,8 @@ const DEFAULT_HOST = 'https://pravex.tenox.ai';
 
 /** Stop polling after this long whatever the server says, so it cannot spin forever. */
 const POLL_CEILING_MS = 10 * 60 * 1000;
+/** Someone ran a command and is waiting for the answer, so this is longer than the session start's 1.5 s. */
+const SEAT_TIMEOUT_MS = 5000;
 
 function parseArgs(argv) {
   const out = {};
@@ -148,6 +151,35 @@ function openBrowser(url) {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Ask for this credential's seat and cache the answer, so the status line and the
+ * next session start agree with what is printed here. Null when the server could
+ * not say. The caller then prints nothing about the seat.
+ */
+async function seatFor(host, apiKey) {
+  const seat = await seatLib.fetchSeat(host, apiKey, { timeoutMs: SEAT_TIMEOUT_MS });
+  if (seat) seatLib.writeSeat(seat);
+  return seat;
+}
+
+/**
+ * After a login. A cached answer belongs to the previous credential, which may be
+ * another workspace, so it goes first. Then the new answer, when there is one.
+ */
+async function refreshSeat(host, apiKey) {
+  seatLib.forgetSeat();
+  return seatFor(host, apiKey);
+}
+
+/** "Every session is reported", unless the new seat says otherwise. */
+function afterLogin(seat) {
+  if (seat && seat.status !== 'active') {
+    const line = seatLib.statusLine(seat);
+    if (line) return line;
+  }
+  return 'Nothing else to do — every session is reported automatically when it ends.';
+}
+
 async function deviceFlow(host, { noBrowser } = {}) {
   const clientName = `Claude Code on ${os.hostname()}`;
   const start = unwrap(
@@ -211,6 +243,9 @@ async function main() {
       process.exit(1);
     }
     console.log(`Pravex: connected to ${current.apiHost} as ${me.email} (${me.orgName})`);
+    // On any error, or from a server that has no seats, nothing about the seat.
+    const seatLine = seatLib.statusLine(await seatFor(current.apiHost, current.apiKey));
+    if (seatLine) console.log(seatLine);
     return;
   }
 
@@ -225,23 +260,26 @@ async function main() {
     }
     const me = await verify(host, args.key);
     writeConfig(host, args.key);
+    const seat = await refreshSeat(host, args.key);
     console.log('');
     console.log('⚠  A pasted key is now in your clipboard, your scrollback, and this session transcript.');
     console.log('   Run /pravex:login with no arguments instead — it never displays the key.');
     console.log('');
     console.log(`Pravex: configured. Sessions will be reported as ${me.email} (${me.orgName}).`);
     console.log(`Config: ${CONFIG_FILE}`);
+    if (seat && seat.status !== 'active') console.log(afterLogin(seat));
     return;
   }
 
   const approved = await deviceFlow(host, { noBrowser: args.noBrowser });
   writeConfig(host, approved.apiKey);
+  const seat = await refreshSeat(host, approved.apiKey);
 
   const account = approved.account || {};
   console.log('');
   console.log(`Pravex: connected. Sessions will be reported as ${account.email || 'you'}${account.orgName ? ` (${account.orgName})` : ''}.`);
   console.log(`Config: ${CONFIG_FILE}`);
-  console.log('Nothing else to do — every session is reported automatically when it ends.');
+  console.log(afterLogin(seat));
   console.log('Tip: /pravex:statusline shows in the status line whether a session is recorded, and /pravex:incognito keeps one private.');
 }
 
@@ -252,4 +290,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { deviceFlow, parseArgs, readConfig, unwrap, verify, writeConfig };
+module.exports = { afterLogin, deviceFlow, parseArgs, readConfig, unwrap, verify, writeConfig };

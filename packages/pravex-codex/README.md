@@ -16,5 +16,11 @@ npx @pravex/codex status
 three seconds by Codex, so that hook hands the report to a detached child and
 returns. Sessions whose terminal was closed are swept on the next start.
 
+Only members holding a seat in the workspace are tracked. Without one, Codex
+shows a warning at session start (*Pravex: you don't have a seat in Northwind, so
+this session isn't tracked.*) and nothing is sent; nothing is blocked or slowed
+down. `status` adds the seat line: `Seat: active. Every session is reported when
+it ends.`, `Seat: not assigned. …` or `Seat: paused. …`.
+
 The scripts are the ones the Claude Code plugin ships, copied at pack time —
 see `sync-scripts.js`. No dependencies.

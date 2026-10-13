@@ -16,4 +16,5 @@ into the shell command itself — only choose between these three:
 - `--status`: `node "${CLAUDE_PLUGIN_ROOT}/scripts/codex-install.js" status`
 
 Run it and show the output verbatim. If it says nothing is configured,
-suggest `/pravex:login`.
+suggest `/pravex:login`. `--status` ends with the same `Seat:` line as
+`/pravex:status`.

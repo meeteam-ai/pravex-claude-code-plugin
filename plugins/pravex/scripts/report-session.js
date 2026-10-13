@@ -23,6 +23,11 @@
  *
  * Never blocks Claude Code: every failure is logged to ~/.pravex/last-report.log
  * and the process exits 0.
+ *
+ * Only members holding a seat are tracked (see `seat.js`). Without one, nothing
+ * is sent and the session is told so once: at the start, or on the `Stop` after
+ * the seat changes. The start waits for the seat check, 1.5 s at most. Nothing
+ * else is ever blocked or slowed down.
  */
 'use strict';
 
@@ -36,6 +41,7 @@ const zlib = require('zlib');
 const { execFileSync, spawn } = require('child_process');
 const codex = require('./codex-rollout.js');
 const facetsLib = require('./session-facets.js');
+const seatLib = require('./seat.js');
 
 const CONFIG_DIR = path.join(os.homedir(), '.pravex');
 const PLUGIN_VERSION = (() => {
@@ -245,17 +251,32 @@ function pruneIncognito(now = Date.now()) {
  *
  * `null` after `/clear` and compaction: the session did not change hands, and a
  * banner every time the context is compacted would be noise nobody reads.
+ *
+ * `seat` is what the server, or failing that the cache, said about the seat.
+ * Without an active one the session is not tracked at all, so that line wins
+ * over incognito, which still reports usage.
  */
-function startMessage({ configured, incognito, source, update }) {
+function startMessage({ configured, incognito, source, update, seat }) {
   if (source === 'clear' || source === 'compact') return null;
   let message;
   if (!configured) message = 'Pravex: not connected, so this session will not be reported. Run /pravex:login.';
+  else if (seat && seat.status !== 'active') message = seatLib.notTrackedMessage(seat);
   else if (incognito) message = 'Pravex: incognito. Only usage and cost are reported for this session.';
   else message = 'Pravex: recording this session. Run /pravex:incognito to keep the conversation private.';
   if (update && update.available) {
     message += ` Update available (${update.installed} → ${update.latest}): run /pravex:update.`;
   }
   return message;
+}
+
+/**
+ * Show the user one line, the same way for both agents: a `systemMessage` in JSON
+ * on stdout. Claude Code shows it in the session and Codex as a warning line.
+ * Codex adds plain SessionStart stdout to the model's context and rejects plain
+ * text from `Stop` outright, so nothing else in a hook may write to stdout.
+ */
+function emit(message) {
+  process.stdout.write(JSON.stringify({ systemMessage: message }));
 }
 
 /**
@@ -989,10 +1010,16 @@ function findUnreported(currentSessionId, now = Date.now()) {
  *
  * Errors are swallowed per session: one unreadable transcript must not stop the
  * sweep, and none of this may delay the session the user is actually starting.
+ *
+ * ⚠️ **A session that told its user it was not tracked is never sent later**,
+ * even after the seat comes back. It is remembered as reported and skipped. When
+ * the server answers `tracked: false`, the sweep stops and resolves that seat.
+ * Each remaining POST would be refused the same way, so the rest wait for a
+ * session start that has a seat. Resolves null otherwise.
  */
 async function sweepUnreported(apiHost, apiKey, currentSessionId) {
   const candidates = findUnreported(currentSessionId);
-  if (!candidates.length) return;
+  if (!candidates.length) return null;
 
   log(`sweep: ${candidates.length} unreported session(s)`);
   const deadline = Date.now() + SWEEP_BUDGET_MS;
@@ -1003,7 +1030,12 @@ async function sweepUnreported(apiHost, apiKey, currentSessionId) {
     // rest for the next session start, and being killed mid-POST does not.
     if (Date.now() > deadline) {
       log(`sweep: out of time after ${index} of ${candidates.length}; the rest wait for the next session`);
-      return;
+      return null;
+    }
+    if (seatLib.untrackedSession(sessionId)) {
+      rememberReported(sessionId);
+      log(`sweep: ${sessionId} dropped: it ran without a seat`);
+      continue;
     }
     try {
       // Unknown stays unknown: an empty repo is honest, the current one is not.
@@ -1019,7 +1051,15 @@ async function sweepUnreported(apiHost, apiKey, currentSessionId) {
       }
       const res = await post(apiHost, apiKey, buildBody(sessionId, repo, agg, cwd, 'ended', { agent }));
       if (res.status >= 200 && res.status < 300) {
+        // Remembered either way: a report the server declined for want of a
+        // seat is dropped, never re-sent on every session start.
         rememberReported(sessionId);
+        const said = seatLib.seatFromIngest(res.body);
+        if (said) seatLib.writeSeat(said);
+        if (said && said.status !== 'active') {
+          log(`sweep: ${sessionId} not tracked (no seat); the rest wait for a session with one`);
+          return said;
+        }
         log(`sweep: reported ${sessionId} -> ${res.status}`);
       } else if (res.status < 500) {
         // Our own bad request; it will never succeed on a replay either.
@@ -1032,6 +1072,7 @@ async function sweepUnreported(apiHost, apiKey, currentSessionId) {
       log(`sweep: ${sessionId} failed (${err && err.message})`);
     }
   }
+  return null;
 }
 
 /**
@@ -1137,6 +1178,10 @@ function spool(body) {
  * Stops at the first failure rather than hammering a host that is still down, and only
  * deletes an entry the server actually accepted — or rejected as its own fault (4xx),
  * which will never succeed on a replay either.
+ *
+ * An entry answered `tracked: false` (no seat) is deleted like any other 200, so
+ * an untracked report is never re-sent. The replay then stops, because every
+ * later entry would be declined the same way. Those wait for a seat.
  */
 async function flushSpool(apiHost, apiKey) {
   let entries;
@@ -1161,6 +1206,12 @@ async function flushSpool(apiHost, apiKey) {
         return;
       }
       try { fs.unlinkSync(full); } catch { /* already gone */ }
+      const said = res.status < 300 ? seatLib.seatFromIngest(res.body) : null;
+      if (said) seatLib.writeSeat(said);
+      if (said && said.status !== 'active') {
+        log(`spool: ${file} dropped, not tracked (no seat); the rest wait for a seat`);
+        return;
+      }
       log(`spool: replayed ${file} -> ${res.status}`);
     } catch (err) {
       log(`spool: ${file} deferred (${err && err.message})`);
@@ -1286,24 +1337,45 @@ async function main() {
   }
 
   const { apiKey, apiHost } = loadConfig();
+  const configured = Boolean(apiKey && apiHost);
+  // Whether the seat lets this start send the sweep and its own live report.
+  let startSends = true;
   if (mode === 'start') {
-    // Before anything that can fail or take time: the indicator is the one part
-    // of this hook the user actually sees.
+    // Before anything else that can fail or take time: the indicator is the one
+    // part of this hook the user actually sees. The seat check is the exception.
+    // The line depends on it, so it is the one network call a session waits on,
+    // and for 1.5 s at most. `/clear` and compaction show no line, so they skip
+    // it and judge from the cache, like any `Stop`.
+    const showsLine = input.source !== 'clear' && input.source !== 'compact';
+    let seat = null;
+    if (configured && showsLine) {
+      const start = await seatLib.atStart(apiHost, apiKey);
+      seat = start.seat;
+      // A fresh answer is trusted. A cached one only while it is recent, the
+      // same rule `Stop` uses, so an old "no seat" never holds a report back.
+      startSends = start.fresh ? seat.status === 'active' : !seatLib.noSeatRecently(seat);
+    } else if (configured) {
+      startSends = (await seatLib.gate(apiHost, apiKey)).send;
+    }
     const message = startMessage({
-      configured: Boolean(apiKey && apiHost),
+      configured,
       incognito: isIncognito(input.session_id),
       source: input.source,
       update: require('./update-check.js').updateStatus(),
+      seat,
     });
-    // Codex does not surface a hook's `systemMessage`; the log is what there is.
-    if (message && agent === 'codex') log(`start (${agent}): ${message}`);
-    else if (message) process.stdout.write(JSON.stringify({ systemMessage: message }));
+    // Both agents. Codex shows a SessionStart `systemMessage` as a warning line.
+    if (message) emit(message);
+    // What this session told its user, so that a change later on is said once.
+    // No seat answer at all means the line said "recording".
+    if (message && configured) seatLib.writeShown(input.session_id, seat ? seat.status : 'active');
     pruneIncognito();
+    seatLib.pruneShown();
     refreshStatusline();
     refreshCodexCopy();
     spawnUpdateCheck();
   }
-  if (!apiKey || !apiHost) {
+  if (!configured) {
     log(`skipped (${mode}): no apiKey/apiHost (run /pravex:login)`);
     return;
   }
@@ -1321,8 +1393,14 @@ async function main() {
 
   // The sweep runs first and only on start. It is the fix for sessions whose
   // terminal was closed, which `SessionEnd` never reported at all.
+  //
+  // Without a seat the server keeps nothing, so nothing is sent: not the sweep
+  // and not this session. Sweep candidates wait for a start that has a seat.
   if (mode === 'start') {
-    await sweepUnreported(apiHost, apiKey, sessionId);
+    if (!startSends || (await sweepUnreported(apiHost, apiKey, sessionId))) {
+      log(`skipped (start) ${sessionId}: no seat`);
+      return;
+    }
   }
 
   // Before the transcript is opened, so a throttled turn costs one small file
@@ -1337,6 +1415,26 @@ async function main() {
     // There is nothing to report yet, and the `Stop` hook will be along shortly.
     log(`skipped (${mode}): no transcript at ${transcriptPath}`);
     return;
+  }
+
+  // `Stop` and `SessionEnd` hold the report back while the cache says there is no
+  // seat, and ask the server again once that answer is five minutes old. Any
+  // failure sends as before, because the server checks the seat on ingest anyway.
+  // Placed after the transcript check, so a turn with nothing to send never asks,
+  // and before the parse, so a skipped turn costs one small file read.
+  let gated = null;
+  if (mode === 'progress' || mode === 'end') {
+    gated = await seatLib.gate(apiHost, apiKey);
+    if (!gated.send) {
+      log(`skipped (${mode}) ${sessionId}: no seat`);
+      if (mode === 'progress') {
+        const line = seatLib.noteSeat(sessionId, gated.seat);
+        if (line) emit(line);
+      }
+      // Never sent later either: not by the sweep, not once a seat comes back.
+      if (mode === 'end') rememberReported(sessionId);
+      return;
+    }
   }
 
   const agg = await aggregateFor(agent, transcriptPath, repo, { wantTranscript: mode === 'end' && !isIncognito(sessionId) });
@@ -1363,8 +1461,19 @@ async function main() {
   try {
     const res = await post(apiHost, apiKey, body);
     if (res.status >= 200 && res.status < 300) {
-      log(`ok (${mode}) ${sessionId} -> ${res.status} ${res.body.slice(0, 200)}`);
+      // Every ingest response says whether the session was tracked. A server
+      // from before seats says nothing, and the cache is left alone.
+      const said = seatLib.seatFromIngest(res.body);
+      const seat = said ? seatLib.writeSeat(said) : gated && gated.rechecked ? gated.seat : null;
+      if (said && said.status !== 'active') log(`untracked (${mode}) ${sessionId} -> ${res.status}: no seat, nothing stored`);
+      else log(`ok (${mode}) ${sessionId} -> ${res.status} ${res.body.slice(0, 200)}`);
       if (mode === 'end') rememberReported(sessionId);
+      // Said once per change, and only on `Stop`. The start has already had its
+      // line, and at `SessionEnd` there is nobody left to tell.
+      if (mode === 'progress') {
+        const line = seatLib.noteSeat(sessionId, seat);
+        if (line) emit(line);
+      }
     } else if (res.status >= 500) {
       // The server's problem, so it is worth replaying. A 4xx is ours and never
       // will be. Progress reports are NOT spooled: the next one is one assistant
