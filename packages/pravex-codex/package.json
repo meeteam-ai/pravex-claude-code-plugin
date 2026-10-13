@@ -1,6 +1,6 @@
 {
   "name": "@pravex/codex",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Report every OpenAI Codex CLI session (model, tokens, cost, duration, files, PR) to your Pravex workspace",
   "license": "MIT",
   "author": "Meeteam (https://github.com/meeteam-ai)",
