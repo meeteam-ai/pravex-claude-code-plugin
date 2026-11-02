@@ -16,26 +16,50 @@ Claude Code plugin that reports each finished session to your [Pravex](https://g
 ```
 
 It prints a short code and opens your browser. Approve the code on a page you
-are already signed in to, and the plugin collects its credential itself.
+are already signed in to, and the plugin collects its credentials itself.
 
 **Nothing is copied and nothing is pasted.** This is the OAuth 2.0 Device
-Authorization Grant (RFC 8628) — the flow `gh auth login` and `docker login` use.
-It matters here more than most places: a pasted key lands in the clipboard, in
-terminal scrollback, and in the session transcript *this plugin uploads*. One
-real key was burned exactly that way.
+Authorization Grant (RFC 8628), the flow `gh auth login` and `docker login` use,
+and it matters here more than most places: a pasted key lands in the clipboard,
+in terminal scrollback, and in the session transcript **this plugin uploads**.
+One real key was burned exactly that way.
 
-Point it somewhere else with `--api-url`:
+`--api-url` points it elsewhere (`/pravex:login --api-url http://localhost:3000`).
+`/pravex:status` says whether this machine is connected and whether you hold a
+seat. `/pravex:logout` disconnects it: the server revokes this machine's access
+and the credentials are removed. The **Install** page disconnects a machine
+remotely. Each login is its own connection, so one machine can be cut off without
+touching the others.
 
+### How the sign-in is kept alive
+
+Pravex is its own OAuth 2.1 authorization server. The login returns a short-lived
+**access token** (15 minutes, sent as `Authorization: Bearer`) and a **refresh
+token** (30 days of non-use, rotated on every use). Both live in
+`~/.pravex/config.json` (mode 600):
+
+```json
+{ "version": 2, "apiHost": "https://pravex.tenox.ai", "clientId": "pravex-claude-code",
+  "accessToken": "…", "refreshToken": "…", "expiresAt": 1762100000000 }
 ```
-/pravex:login --api-url http://localhost:3000
-```
 
-The credential is stored in `~/.pravex/config.json` (mode 600). `PRAVEX_API_HOST`
-/ `PRAVEX_API_KEY` override it, which is how CI and the test suite drive it.
+The hooks renew the access token a minute before it lapses. A refresh token works
+once: the server replaces it on every refresh, and **presenting a used one revokes
+the whole connection**. Hooks of several sessions overlap, so a refresh takes the
+lock file `~/.pravex/auth.lock`, re-reads the config in case another hook already
+renewed, and writes the new pair atomically before anything uses it. A lock left by
+a killed hook is broken after 30 seconds. An unreachable server costs nothing: the
+credentials stay and the next hook tries again.
 
-`/pravex:status` says whether this machine is connected and whether you hold a seat. Revoke it from the
-**Install** page in Pravex — each `/pravex:login` is its own connection, so one
-machine can be cut off without touching the others.
+If the connection was revoked (from the Install page, by a workspace admin, or by
+30 idle days) the plugin removes the credentials and says so: the next prompt after
+a `Stop` shows *Pravex: this machine was disconnected… Run /pravex:login to connect
+again*, and so does the next session start. A final report that could not be sent
+is kept in the spool and goes out after you log in.
+
+**Upgrading from a version with `pvx_` keys:** the old key no longer exists on the
+server. The first run drops it from `~/.pravex/config.json` and asks you to run
+`/pravex:login` once more. `PRAVEX_API_KEY` is no longer read.
 
 ## Know when Pravex is watching
 
@@ -179,7 +203,7 @@ waste — the server summarises once, when the transcript arrives.
 **A report that cannot be delivered is spooled, not lost.** Failures from the network or a 5xx are parked under `~/.pravex/spool/` (at most 50, oldest dropped) and replayed at the start of the next session. Ingest is idempotent on `externalId`, so a replay is safe. A 4xx is our own bad request and is never retried.
 
 **Titles are redacted.** When a session has no `ai-title`, the title falls back to the first user prompt — which is routinely a pasted credential. Key-shaped tokens are masked before the payload leaves the machine.
-- It `POST`s to `/api/sessions` with the API key. Cost is computed **server-side** from list prices.
+- It `POST`s to `/api/sessions` with the OAuth access token as a Bearer. Cost is computed **server-side** from list prices.
 - Idempotent: re-posting the same `session_id` updates the row.
 - Never blocks Claude Code — errors go to `~/.pravex/last-report.log`. Check with `/pravex:status`.
 

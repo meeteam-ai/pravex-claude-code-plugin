@@ -18,9 +18,9 @@ const tempHome = () => fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-home-'));
 /** Env for a child: isolated HOME and, when a port is given, credentials pointing at the capture server. */
 function envFor(home, port) {
   const env = { ...process.env, HOME: home, USERPROFILE: home };
-  delete env.PRAVEX_API_KEY;
+  delete env.PRAVEX_ACCESS_TOKEN;
   delete env.PRAVEX_API_HOST;
-  if (port) Object.assign(env, { PRAVEX_API_KEY: 'pvx_test', PRAVEX_API_HOST: `http://127.0.0.1:${port}` });
+  if (port) Object.assign(env, { PRAVEX_ACCESS_TOKEN: 'test-access-token', PRAVEX_API_HOST: `http://127.0.0.1:${port}` });
   return env;
 }
 
@@ -93,4 +93,105 @@ function captureServer({ seat, ingest } = {}) {
   return { server, bodies, seatRequests, nth, listen, close };
 }
 
-module.exports = { REPORT, captureServer, envFor, runHook, tempHome };
+const DEVICE_GRANT = 'urn:ietf:params:oauth:grant-type:device_code';
+
+const PENDING = { status: 400, body: { error: 'authorization_pending' } };
+
+/**
+ * A stand-in for `/api/oauth/*`. `device` is a queue of answers for the device-code
+ * poll; refresh tokens are issued as r1, r2, … and rotate.
+ */
+function oauthServer({ device = [], refreshLatencyMs = 0 } = {}) {
+  const state = {
+    deviceAuth: [],
+    polls: [],
+    refreshes: [],
+    revocations: [],
+    apiCalls: [],
+    sessions: [],
+    reused: false,
+    revokedGrant: false,
+    serial: 1,
+    live: new Set(),
+    /** Answer every refresh with this instead (an `{ status, body }`). */
+    refreshOverride: null,
+    /** Access tokens `GET /api/me` accepts. */
+    validAccess: new Set(),
+  };
+  const queue = [...device];
+  const issue = (fromRefresh) => {
+    state.serial += 1;
+    const pair = { access_token: `at${state.serial}`, refresh_token: `rt${state.serial}`, token_type: 'Bearer', expires_in: 900 };
+    state.live.add(pair.refresh_token);
+    state.validAccess.add(pair.access_token);
+    if (fromRefresh) state.live.delete(fromRefresh);
+    return pair;
+  };
+  state.issue = () => issue(null);
+
+  const server = http.createServer((req, res) => {
+    let raw = '';
+    req.on('data', (c) => (raw += c));
+    req.on('end', () => {
+      const form = Object.fromEntries(new URLSearchParams(raw));
+      const send = (status, body) => res.writeHead(status, { 'Content-Type': 'application/json' }).end(JSON.stringify(body));
+      if (req.url === '/api/oauth/device/auth') {
+        state.deviceAuth.push({ form, type: req.headers['content-type'] });
+        const base = `http://127.0.0.1:${server.address().port}/api/oauth/device`;
+        return send(200, {
+          device_code: 'dev-code-1',
+          user_code: 'WDJB-MJHT',
+          verification_uri: base,
+          verification_uri_complete: `${base}?user_code=WDJB-MJHT`,
+          expires_in: 600,
+        });
+      }
+      if (req.url === '/api/oauth/token' && form.grant_type === DEVICE_GRANT) {
+        state.polls.push(form);
+        const next = queue.length > 1 ? queue.shift() : queue[0];
+        if (next === 'approve') return send(200, issue(null));
+        return send(next.status, next.body);
+      }
+      if (req.url === '/api/oauth/token' && form.grant_type === 'refresh_token') {
+        state.refreshes.push(form);
+        const answer = () => {
+          if (state.refreshOverride) return send(state.refreshOverride.status, state.refreshOverride.body);
+          if (state.revokedGrant) return send(400, { error: 'invalid_grant' });
+          if (!state.live.has(form.refresh_token)) {
+            // Reuse detection: the whole connection dies with it.
+            state.reused = true;
+            state.revokedGrant = true;
+            state.live.clear();
+            return send(400, { error: 'invalid_grant' });
+          }
+          return send(200, issue(form.refresh_token));
+        };
+        return refreshLatencyMs ? setTimeout(answer, refreshLatencyMs) : answer();
+      }
+      if (req.url === '/api/oauth/token/revocation') {
+        state.revocations.push(form);
+        return send(200, {});
+      }
+      if (req.url === '/api/sessions' && req.method === 'POST') {
+        const token = (req.headers.authorization || '').replace('Bearer ', '');
+        state.apiCalls.push(token);
+        if (state.revokedGrant || !state.validAccess.has(token)) return send(401, { status: 401, error: { message: 'InvalidToken' } });
+        state.sessions.push(JSON.parse(raw || '{}'));
+        return send(201, { status: 201, result: { created: true } });
+      }
+      if (req.url === '/api/me/seat') return send(404, { status: 404, error: { message: 'Cannot GET /api/me/seat' } });
+      if (req.url === '/api/me') {
+        const token = (req.headers.authorization || '').replace('Bearer ', '');
+        state.apiCalls.push(token);
+        if (state.revokedGrant || !state.validAccess.has(token)) return send(401, { status: 401, error: { message: 'InvalidToken' } });
+        return send(200, { status: 200, result: { email: 'dana@northwind.co', orgName: 'Northwind' } });
+      }
+      return send(404, {});
+    });
+  });
+  return new Promise((resolve) =>
+    server.listen(0, '127.0.0.1', () => resolve({ server, state, host: `http://127.0.0.1:${server.address().port}` })),
+  );
+}
+
+module.exports = { PENDING, REPORT, captureServer, envFor, oauthServer, runHook, tempHome };

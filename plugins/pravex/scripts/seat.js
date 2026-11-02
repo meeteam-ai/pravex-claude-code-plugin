@@ -120,7 +120,7 @@ function workspaceOf(value) {
  *
  * A 404 is a server from before seats, where everybody is tracked. It comes back
  * as active and marked `legacy`, so `/pravex:status` can say nothing about seats.
- * Anything else that is not a seat (5xx, a revoked key, an HTML error page) is
+ * Anything else that is not a seat (5xx, a revoked connection, an HTML error page) is
  * null: the server could not say, and the caller falls back to the cache.
  */
 function parseSeatResponse(statusCode, body) {
@@ -149,7 +149,7 @@ function parseSeatResponse(statusCode, body) {
  * `timeout` option only fires when the socket goes quiet, so a server dripping a
  * byte a second could hold a session start for as long as it liked.
  */
-function fetchSeat(apiHost, apiKey, { timeoutMs = START_TIMEOUT_MS } = {}) {
+function fetchSeat(apiHost, accessToken, { timeoutMs = START_TIMEOUT_MS } = {}) {
   return new Promise((resolve) => {
     let req;
     let settled = false;
@@ -173,7 +173,7 @@ function fetchSeat(apiHost, apiKey, { timeoutMs = START_TIMEOUT_MS } = {}) {
           method: 'GET',
           headers: {
             Accept: 'application/json',
-            Authorization: `Bearer ${apiKey}`,
+            Authorization: `Bearer ${accessToken}`,
             'User-Agent': `pravex-claude-code-plugin/${PLUGIN_VERSION}`,
           },
         },
@@ -223,8 +223,8 @@ function seatFromIngest(body) {
  * At SessionStart: ask the server, and fall back to the cache when it does not
  * answer in time. Resolves `{ seat, fresh }`. `seat` is null when neither knows.
  */
-async function atStart(apiHost, apiKey, { now = Date.now(), timeoutMs = START_TIMEOUT_MS } = {}) {
-  const answer = await fetchSeat(apiHost, apiKey, { timeoutMs });
+async function atStart(apiHost, accessToken, { now = Date.now(), timeoutMs = START_TIMEOUT_MS } = {}) {
+  const answer = await fetchSeat(apiHost, accessToken, { timeoutMs });
   if (answer) return { seat: writeSeat(answer, now), fresh: true };
   return { seat: readSeat(), fresh: false };
 }
@@ -237,11 +237,11 @@ async function atStart(apiHost, apiKey, { now = Date.now(), timeoutMs = START_TI
  * back only while the cache says, recently, that there is no seat. Once the
  * cache is older than `RECHECK_AFTER_MS` the server is asked again first.
  */
-async function gate(apiHost, apiKey, { now = Date.now(), timeoutMs = START_TIMEOUT_MS } = {}) {
+async function gate(apiHost, accessToken, { now = Date.now(), timeoutMs = START_TIMEOUT_MS } = {}) {
   const cached = readSeat();
   if (!cached || cached.status === 'active') return { send: true, seat: cached, rechecked: false };
   if (noSeatRecently(cached, now)) return { send: false, seat: cached, rechecked: false };
-  const answer = await fetchSeat(apiHost, apiKey, { timeoutMs });
+  const answer = await fetchSeat(apiHost, accessToken, { timeoutMs });
   if (!answer) return { send: true, seat: cached, rechecked: false };
   const seat = writeSeat(answer, now);
   return { send: seat.status === 'active', seat, rechecked: true };

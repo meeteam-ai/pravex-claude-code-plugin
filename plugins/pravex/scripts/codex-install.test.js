@@ -152,7 +152,7 @@ test('status shows the seat under the sign-in line, the same words as /pravex:st
   const host = `http://127.0.0.1:${server.address().port}`;
   try {
     const stdout = await new Promise((resolve, reject) => {
-      const env = { ...process.env, HOME: home, USERPROFILE: home, PRAVEX_API_KEY: 'pvx_test', PRAVEX_API_HOST: host };
+      const env = { ...process.env, HOME: home, USERPROFILE: home, PRAVEX_ACCESS_TOKEN: 'test-access-token', PRAVEX_API_HOST: host };
       const child = spawn(process.execPath, [INSTALLER, 'status'], { env });
       let out = '';
       child.stdout.on('data', (c) => (out += c));

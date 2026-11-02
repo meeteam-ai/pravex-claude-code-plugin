@@ -1,14 +1,10 @@
 'use strict';
 /**
- * Tests for `/pravex:login` — the device flow.
+ * Tests for `/pravex:login`, `/pravex:status` and logout: the device flow end to
+ * end, what is printed, and what is stored. The protocol itself (polling, refresh,
+ * the lock) is in `auth.test.js`.
  *
- * `node --test`. Standard library only, like the rest of the plugin: this runs
- * inside someone else's session and must not pull anything at install time.
- *
- * The device flow is driven against a **real local HTTP server** rather than a
- * stubbed `request`. What is worth asserting here is the conversation — that the
- * poll honours `slow_down`, that a denial is not retried, that a credential is
- * never printed — and none of that is visible if the transport is mocked away.
+ * `node --test`, standard library only. The Pravex API is a real local HTTP server.
  */
 const test = require('node:test');
 const assert = require('node:assert');
@@ -18,56 +14,19 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 
-const { deviceFlow, parseArgs, unwrap, writeConfig } = require('./login.js');
+const HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-login-'));
+process.env.HOME = HOME;
+process.env.USERPROFILE = HOME;
+delete process.env.PRAVEX_ACCESS_TOKEN;
+delete process.env.PRAVEX_API_HOST;
 
-/** Synthetic. Nothing in this file is a real credential. */
-const FAKE_KEY = 'pvx_0000000000000000000000000000000000000000000000';
+const auth = require('./auth.js');
+const { clientIdFor, connect, deviceFlow, parseArgs, afterLogin } = require('./login.js');
+const { PENDING, oauthServer } = require('./test-support.js');
 
-/**
- * A stand-in Pravex API.
- *
- * `answers` is a queue of poll results, so a test describes the sequence the
- * server will give back rather than the internals of the loop.
- */
-function startServer({ answers, interval = 0.01, expiresIn = 5 }) {
-  const seen = { codeRequests: [], polls: [], pollTimes: [] };
-  const queue = [...answers];
-
-  const server = http.createServer((req, res) => {
-    let body = '';
-    req.on('data', (c) => (body += c));
-    req.on('end', () => {
-      const json = body ? JSON.parse(body) : {};
-      const send = (result) => {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ status: 200, result }));
-      };
-
-      if (req.url === '/api/auth/device/code') {
-        seen.codeRequests.push(json);
-        const base = `http://127.0.0.1:${server.address().port}`;
-        return send({
-          deviceCode: 'device-code-abc',
-          userCode: 'WDJB-MJHT',
-          verificationUri: `${base}/link`,
-          verificationUriComplete: `${base}/link?code=WDJB-MJHT`,
-          interval,
-          expiresIn,
-        });
-      }
-      if (req.url === '/api/auth/device/token') {
-        seen.polls.push(json);
-        seen.pollTimes.push(Date.now());
-        return send(queue.length > 1 ? queue.shift() : queue[0]);
-      }
-      res.writeHead(404).end('{}');
-    });
-  });
-
-  return new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => resolve({ server, seen, host: `http://127.0.0.1:${server.address().port}` }));
-  });
-}
+const LOGIN = path.join(__dirname, 'login.js');
+const CONFIG = auth.CONFIG_FILE;
+const instantly = { sleep: async () => {} };
 
 /** Captures stdout so a test can assert on what the user is shown. */
 function captureLog(fn) {
@@ -82,179 +41,102 @@ function captureLog(fn) {
     .then((value) => ({ value, output: lines.join('\n') }));
 }
 
+const reset = () => {
+  for (const f of [CONFIG, auth.LOCK_FILE, path.join(HOME, '.pravex', 'seat.json')]) fs.rmSync(f, { force: true });
+};
+
 test('parseArgs accepts --api-url and the older --host as the same flag', () => {
   assert.strictEqual(parseArgs(['--api-url', 'http://localhost:3000']).host, 'http://localhost:3000');
   assert.strictEqual(parseArgs(['--host', 'http://localhost:3000']).host, 'http://localhost:3000');
   assert.strictEqual(parseArgs(['--status']).status, true);
+  assert.strictEqual(parseArgs(['--logout']).logout, true);
+  assert.strictEqual(parseArgs(['--client', 'codex']).client, 'codex');
   assert.strictEqual(parseArgs([]).host, undefined);
 });
 
-test('parseArgs reads a key when one is given', () => {
-  assert.strictEqual(parseArgs(['--key', FAKE_KEY]).key, FAKE_KEY);
+test('the client names map to the OAuth client ids', () => {
+  assert.strictEqual(clientIdFor(undefined), 'pravex-claude-code');
+  assert.strictEqual(clientIdFor('claude-code'), 'pravex-claude-code');
+  assert.strictEqual(clientIdFor('codex'), 'pravex-codex');
+  assert.strictEqual(clientIdFor('pravex-codex'), 'pravex-codex');
 });
 
-test('unwrap reads the envelope, and reports an error message rather than a status code', () => {
-  assert.deepStrictEqual(unwrap({ status: 200, body: '{"status":200,"result":{"a":1}}' }, 'h'), { a: 1 });
-  // An older build without the envelope still parses.
-  assert.deepStrictEqual(unwrap({ status: 200, body: '{"a":1}' }, 'h'), { a: 1 });
-  assert.throws(
-    () => unwrap({ status: 404, body: '{"error":{"message":"That code is not valid."}}' }, 'h'),
-    /That code is not valid/,
-  );
-  assert.throws(() => unwrap({ status: 200, body: '<html>' }, 'example.test'), /example\.test did not return JSON/);
+test('the device flow shows the code and the page, and never a token', async () => {
+  reset();
+  const { server, state, host } = await oauthServer({ device: [PENDING, 'approve'] });
+  try {
+    const { value, output } = await captureLog(() => deviceFlow(host, { noBrowser: true, ...instantly }));
+
+    assert.strictEqual(value.accessToken, 'at2');
+    assert.ok(output.includes('WDJB-MJHT'), 'the code is what the person compares');
+    assert.ok(output.includes('/api/oauth/device'), 'and the page they approve it on');
+    for (const secret of [value.accessToken, value.refreshToken]) {
+      assert.ok(!output.includes(secret), 'a credential must never be printed');
+    }
+    assert.strictEqual(state.deviceAuth[0].form.client_id, 'pravex-claude-code');
+  } finally {
+    server.close();
+  }
 });
 
-test('the device flow collects a credential without ever printing one', async () => {
-  const { server, seen, host } = await startServer({
-    answers: [{ status: 'pending' }, { status: 'approved', apiKey: FAKE_KEY, account: { email: 'ada@b.test', orgName: 'Northwind' } }],
+test('connecting stores the pair, names the account, and caches the seat', async () => {
+  reset();
+  const { server, state, host } = await oauthServer({ device: ['approve'] });
+  try {
+    const { value } = await captureLog(() => connect(host, { noBrowser: true, clientId: 'pravex-codex', ...instantly }));
+
+    assert.strictEqual(value.account.email, 'dana@northwind.co');
+    const stored = JSON.parse(fs.readFileSync(CONFIG, 'utf8'));
+    assert.deepStrictEqual(
+      [stored.version, stored.apiHost, stored.clientId, stored.accessToken, stored.refreshToken],
+      [2, host, 'pravex-codex', 'at2', 'rt2'],
+    );
+    assert.ok(stored.expiresAt > Date.now() + 14 * 60 * 1000);
+    assert.strictEqual(fs.statSync(CONFIG).mode & 0o777, 0o600);
+    // The first call to the API used the new access token as a Bearer.
+    assert.strictEqual(state.apiCalls[0], 'at2');
+    assert.strictEqual(state.deviceAuth[0].form.client_id, 'pravex-codex');
+  } finally {
+    server.close();
+  }
+});
+
+test('a refused sign-in stores nothing', async () => {
+  reset();
+  const { server, host } = await oauthServer({ device: [{ status: 400, body: { error: 'access_denied' } }] });
+  try {
+    await assert.rejects(() => captureLog(() => connect(host, { noBrowser: true, ...instantly })), /refused/);
+    assert.ok(!fs.existsSync(CONFIG));
+  } finally {
+    server.close();
+  }
+});
+
+test('after a login, "every session is reported" gives way to the seat line when there is none', () => {
+  assert.match(afterLogin({ status: 'active' }), /every session is reported/);
+  assert.match(afterLogin(null), /every session is reported/);
+  assert.match(afterLogin({ status: 'none' }), /^Seat: not assigned\./);
+  assert.match(afterLogin({ status: 'suspended' }), /^Seat: paused\./);
+});
+
+// ── the command, as a person runs it ────────────────────────────────────────
+
+/** `login.js <args>` with its own HOME. Resolves `{ code, stdout, stderr, lines }`. */
+function run(args, home, env = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [LOGIN, ...args], { env: { ...process.env, HOME: home, USERPROFILE: home, PRAVEX_ACCESS_TOKEN: '', PRAVEX_API_HOST: '', ...env } });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (c) => (stdout += c));
+    child.stderr.on('data', (c) => (stderr += c));
+    child.on('error', reject);
+    child.on('close', (code) => resolve({ code, stdout, stderr, lines: stdout.trim().split('\n') }));
   });
-  try {
-    const { value, output } = await captureLog(() => deviceFlow(host, { noBrowser: true }));
+}
 
-    assert.strictEqual(value.status, 'approved');
-    assert.strictEqual(value.apiKey, FAKE_KEY);
+const tempHome = () => fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-login-cli-'));
 
-    // The entire point of the grant: the key is never on screen.
-    assert.ok(!output.includes(FAKE_KEY), 'the credential must never be printed');
-    // The short code and the URL are, because those are what the person needs.
-    assert.ok(output.includes('WDJB-MJHT'));
-    assert.ok(output.includes('/link'));
-  } finally {
-    server.close();
-  }
-});
-
-test('it tells the server what it is, so the approval screen can name it', async () => {
-  const { server, seen, host } = await startServer({ answers: [{ status: 'approved', apiKey: FAKE_KEY, account: {} }] });
-  try {
-    await captureLog(() => deviceFlow(host, { noBrowser: true }));
-
-    assert.match(seen.codeRequests[0].clientName, /^Claude Code on /);
-  } finally {
-    server.close();
-  }
-});
-
-test('it keeps polling with the same device code until the answer changes', async () => {
-  const { server, seen, host } = await startServer({
-    answers: [{ status: 'pending' }, { status: 'pending' }, { status: 'approved', apiKey: FAKE_KEY, account: {} }],
-  });
-  try {
-    await captureLog(() => deviceFlow(host, { noBrowser: true }));
-
-    assert.ok(seen.polls.length >= 3);
-    for (const poll of seen.polls) assert.strictEqual(poll.deviceCode, 'device-code-abc');
-  } finally {
-    server.close();
-  }
-});
-
-// The server enforces `slow_down` by raising the floor, so a client that ignores
-// it only makes every later poll slower. Honouring it is the client's half.
-test('it slows down when the server says to', async () => {
-  const { server, seen, host } = await startServer({
-    answers: [{ status: 'slow_down', interval: 0.25 }, { status: 'approved', apiKey: FAKE_KEY, account: {} }],
-    interval: 0.01,
-  });
-  try {
-    await captureLog(() => deviceFlow(host, { noBrowser: true }));
-
-    const gap = seen.pollTimes[1] - seen.pollTimes[0];
-    assert.ok(gap >= 200, `expected the second poll to wait ~250ms, waited ${gap}ms`);
-  } finally {
-    server.close();
-  }
-});
-
-test('a refusal stops immediately and says so', async () => {
-  const { server, seen, host } = await startServer({ answers: [{ status: 'denied' }] });
-  try {
-    await assert.rejects(() => captureLog(() => deviceFlow(host, { noBrowser: true })), /refused/i);
-    // One poll, not a loop: a denial is final and retrying it is noise.
-    assert.strictEqual(seen.polls.length, 1);
-  } finally {
-    server.close();
-  }
-});
-
-test('an expired code stops and points at running the command again', async () => {
-  const { server, host } = await startServer({ answers: [{ status: 'expired' }] });
-  try {
-    await assert.rejects(() => captureLog(() => deviceFlow(host, { noBrowser: true })), /\/pravex:login again/);
-  } finally {
-    server.close();
-  }
-});
-
-// Without a ceiling, a server that answered `pending` forever would leave the
-// command hanging in the user's session with no way out but Ctrl-C.
-test('it gives up rather than polling forever', async () => {
-  const { server, host } = await startServer({ answers: [{ status: 'pending' }], interval: 0.01, expiresIn: 0.3 });
-  try {
-    await assert.rejects(() => captureLog(() => deviceFlow(host, { noBrowser: true })), /Timed out/);
-  } finally {
-    server.close();
-  }
-});
-
-// `CONFIG_FILE` is resolved from `os.homedir()` at require time, so this runs the
-// real `writeConfig` in a child process with an isolated HOME rather than
-// asserting around it — and rather than writing into the developer's own config,
-// which an earlier version of the sibling suite did.
-test('the stored credential is readable only by its owner', async () => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-login-'));
-  try {
-    const script = `const { writeConfig } = require(${JSON.stringify(path.join(__dirname, 'login.js'))});
-      writeConfig('https://pravex.test', ${JSON.stringify(FAKE_KEY)});`;
-
-    await new Promise((resolve, reject) => {
-      const child = spawn(process.execPath, ['-e', script], { env: { ...process.env, HOME: home }, stdio: 'ignore' });
-      child.on('error', reject);
-      child.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`exited ${code}`))));
-    });
-
-    const configFile = path.join(home, '.pravex', 'config.json');
-    assert.strictEqual(fs.statSync(configFile).mode & 0o777, 0o600, 'config.json must not be world-readable');
-    assert.deepStrictEqual(JSON.parse(fs.readFileSync(configFile, 'utf8')), {
-      apiHost: 'https://pravex.test',
-      apiKey: FAKE_KEY,
-    });
-  } finally {
-    fs.rmSync(home, { recursive: true, force: true });
-  }
-});
-
-// `mode` on writeFileSync only applies when the file is created, so an existing
-// looser file would keep its permissions and leave the credential readable by
-// everyone on the machine. The explicit chmod is what closes that.
-test('it tightens the permissions of a config file that already existed', async () => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-login-'));
-  try {
-    fs.mkdirSync(path.join(home, '.pravex'), { recursive: true });
-    const configFile = path.join(home, '.pravex', 'config.json');
-    fs.writeFileSync(configFile, '{}', { mode: 0o644 });
-    fs.chmodSync(configFile, 0o644);
-
-    const script = `const { writeConfig } = require(${JSON.stringify(path.join(__dirname, 'login.js'))});
-      writeConfig('https://pravex.test', ${JSON.stringify(FAKE_KEY)});`;
-    await new Promise((resolve, reject) => {
-      const child = spawn(process.execPath, ['-e', script], { env: { ...process.env, HOME: home }, stdio: 'ignore' });
-      child.on('error', reject);
-      child.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`exited ${code}`))));
-    });
-
-    assert.strictEqual(fs.statSync(configFile).mode & 0o777, 0o600);
-  } finally {
-    fs.rmSync(home, { recursive: true, force: true });
-  }
-});
-
-// ── /pravex:status and the seat ──────────────────────────────────────────────
-
-/**
- * `/api/me`, and `/api/me/seat` answering `seat`: a seat object, or a bare
- * status code for a server from before seats (404) or one that failed (500).
- */
+/** `/api/me` and `/api/me/seat`, answering `seat`: a seat object, or a bare status code. */
 function accountServer(seat) {
   const server = http.createServer((req, res) => {
     const send = (code, body) => res.writeHead(code, { 'Content-Type': 'application/json' }).end(JSON.stringify(body));
@@ -265,32 +147,21 @@ function accountServer(seat) {
   return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve({ server, host: `http://127.0.0.1:${server.address().port}` })));
 }
 
-/** `login.js --status` as the command runs it, with its own HOME. */
-function status(home, host) {
-  return new Promise((resolve, reject) => {
-    const env = { ...process.env, HOME: home, USERPROFILE: home, PRAVEX_API_KEY: FAKE_KEY, PRAVEX_API_HOST: host };
-    const child = spawn(process.execPath, [path.join(__dirname, 'login.js'), '--status'], { env });
-    let stdout = '';
-    child.stdout.on('data', (c) => (stdout += c));
-    child.on('error', reject);
-    child.on('close', (code) => resolve({ code, lines: stdout.trim().split('\n') }));
-  });
-}
-
+const staticToken = (host) => ({ PRAVEX_ACCESS_TOKEN: 'test-access-token', PRAVEX_API_HOST: host });
 const workspace = { id: 'org-1', name: 'Northwind' };
+
 for (const [label, seat, line] of [
   ['an active seat', { status: 'active', workspace, admins: [], requestedAt: null, message: null }, 'Seat: active. Every session is reported when it ends.'],
   ['no seat', { status: 'none', workspace, admins: ['Ana Admin'], requestedAt: null, message: 'x' }, "Seat: not assigned. Sessions on this machine aren't tracked until a workspace admin assigns you one."],
   ['a paused seat', { status: 'suspended', workspace, admins: [], requestedAt: null, message: 'x' }, "Seat: paused. Sessions on this machine aren't tracked until a workspace admin restores it."],
 ]) {
   test(`/pravex:status says so under the account line for ${label}, and caches it`, async () => {
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-login-'));
+    const home = tempHome();
     const { server, host } = await accountServer(seat);
     try {
-      const { code, lines } = await status(home, host);
+      const { code, lines } = await run(['--status'], home, staticToken(host));
       assert.strictEqual(code, 0);
       assert.deepStrictEqual(lines, [`Pravex: connected to ${host} as dana@northwind.co (Northwind)`, line]);
-      // The status line and the next session start now agree with what was printed.
       assert.strictEqual(JSON.parse(fs.readFileSync(path.join(home, '.pravex', 'seat.json'), 'utf8')).status, seat.status);
     } finally {
       server.close();
@@ -304,10 +175,10 @@ for (const [label, code] of [
   ['a seat check that fails', 500],
 ]) {
   test(`/pravex:status says nothing about the seat for ${label}`, async () => {
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-login-'));
+    const home = tempHome();
     const { server, host } = await accountServer(code);
     try {
-      const result = await status(home, host);
+      const result = await run(['--status'], home, staticToken(host));
       assert.strictEqual(result.code, 0);
       assert.deepStrictEqual(result.lines, [`Pravex: connected to ${host} as dana@northwind.co (Northwind)`]);
     } finally {
@@ -317,10 +188,108 @@ for (const [label, code] of [
   });
 }
 
-test('after a login, "every session is reported" gives way to the seat line when there is none', () => {
-  const { afterLogin } = require('./login.js');
-  assert.match(afterLogin({ status: 'active' }), /every session is reported/);
-  assert.match(afterLogin(null), /every session is reported/);
-  assert.match(afterLogin({ status: 'none' }), /^Seat: not assigned\./);
-  assert.match(afterLogin({ status: 'suspended' }), /^Seat: paused\./);
+test('/pravex:status renews an expiring token from the stored login and uses the new one', async () => {
+  const home = tempHome();
+  const { server, state, host } = await oauthServer();
+  try {
+    const pair = state.issue();
+    fs.mkdirSync(path.join(home, '.pravex'));
+    fs.writeFileSync(
+      path.join(home, '.pravex', 'config.json'),
+      JSON.stringify({ version: 2, apiHost: host, clientId: 'pravex-claude-code', accessToken: pair.access_token, refreshToken: pair.refresh_token, expiresAt: Date.now() + 5000 }),
+    );
+    const result = await run(['--status'], home);
+    assert.strictEqual(result.code, 0, result.stderr);
+    assert.match(result.lines[0], /connected to .* as dana@northwind\.co/);
+    assert.strictEqual(state.refreshes.length, 1);
+    assert.notStrictEqual(state.apiCalls[0], pair.access_token);
+  } finally {
+    server.close();
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });
+
+test('/pravex:status on a machine that never logged in says so', async () => {
+  const home = tempHome();
+  const result = await run(['--status'], home);
+  assert.strictEqual(result.code, 0);
+  assert.strictEqual(result.stdout.trim(), 'Pravex: not configured. Run /pravex:login');
+  fs.rmSync(home, { recursive: true, force: true });
+});
+
+test('/pravex:status on a revoked connection says it was disconnected and to log in again', async () => {
+  const home = tempHome();
+  const { server, state, host } = await oauthServer();
+  try {
+    const pair = state.issue();
+    state.revokedGrant = true;
+    fs.mkdirSync(path.join(home, '.pravex'));
+    fs.writeFileSync(
+      path.join(home, '.pravex', 'config.json'),
+      JSON.stringify({ version: 2, apiHost: host, accessToken: pair.access_token, refreshToken: pair.refresh_token, expiresAt: Date.now() + 5000 }),
+    );
+    const result = await run(['--status'], home);
+    assert.strictEqual(result.code, 1);
+    assert.match(result.stdout, /disconnected.*\/pravex:login/);
+    assert.ok(!result.stdout.includes(pair.refresh_token));
+  } finally {
+    server.close();
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('/pravex:status on a machine still holding a pvx_ key drops it and says to log in again', async () => {
+  const home = tempHome();
+  fs.mkdirSync(path.join(home, '.pravex'));
+  fs.writeFileSync(path.join(home, '.pravex', 'config.json'), JSON.stringify({ apiHost: 'http://127.0.0.1:1', apiKey: 'pvx_0000' }));
+  const result = await run(['--status'], home);
+  assert.strictEqual(result.code, 1);
+  assert.match(result.stdout, /API key.*no longer accepts.*\/pravex:login/);
+  assert.ok(!fs.readFileSync(path.join(home, '.pravex', 'config.json'), 'utf8').includes('pvx_'));
+  fs.rmSync(home, { recursive: true, force: true });
+});
+
+test('a pasted key is refused with the reason, not silently accepted', async () => {
+  const home = tempHome();
+  const result = await run(['--api-url', 'http://127.0.0.1:1', '--key', 'pvx_0000'], home);
+  assert.strictEqual(result.code, 1);
+  assert.match(result.stderr, /API keys .* are gone/);
+  assert.ok(!fs.existsSync(path.join(home, '.pravex', 'config.json')));
+  fs.rmSync(home, { recursive: true, force: true });
+});
+
+test('--logout revokes the connection, clears the seat cache and the credentials', async () => {
+  const home = tempHome();
+  const { server, state, host } = await oauthServer();
+  try {
+    const pair = state.issue();
+    fs.mkdirSync(path.join(home, '.pravex'));
+    fs.writeFileSync(
+      path.join(home, '.pravex', 'config.json'),
+      JSON.stringify({ version: 2, apiHost: host, clientId: 'pravex-claude-code', accessToken: pair.access_token, refreshToken: pair.refresh_token, expiresAt: Date.now() + 900_000 }),
+    );
+    fs.writeFileSync(path.join(home, '.pravex', 'seat.json'), JSON.stringify({ status: 'active', checkedAt: Date.now() }));
+
+    const result = await run(['--logout'], home);
+
+    assert.strictEqual(result.code, 0, result.stderr);
+    assert.match(result.stdout, /disconnected.*revoked on the server/);
+    assert.deepStrictEqual(state.revocations.map((r) => r.token), [pair.refresh_token]);
+    const stored = JSON.parse(fs.readFileSync(path.join(home, '.pravex', 'config.json'), 'utf8'));
+    assert.strictEqual(stored.refreshToken, undefined);
+    assert.ok(!fs.existsSync(path.join(home, '.pravex', 'seat.json')));
+  } finally {
+    server.close();
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('--logout on a machine that is not connected says so', async () => {
+  const home = tempHome();
+  const result = await run(['--logout'], home);
+  assert.strictEqual(result.code, 0);
+  assert.match(result.stdout, /was not connected/);
+  fs.rmSync(home, { recursive: true, force: true });
+});
+
+test.after(() => fs.rmSync(HOME, { recursive: true, force: true }));

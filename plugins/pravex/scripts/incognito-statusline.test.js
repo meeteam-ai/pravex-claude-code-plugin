@@ -152,7 +152,7 @@ test('/pravex:incognito marks the session and reports it scrubbed at once', asyn
   writeTranscript(home, 'sess-1');
 
   const { code, stdout } = await run(REPORT, ['--incognito', 'sess-1'], {
-    env: envFor(home, { PRAVEX_API_KEY: 'pvx_test', PRAVEX_API_HOST: host }),
+    env: envFor(home, { PRAVEX_ACCESS_TOKEN: 'test-access-token', PRAVEX_API_HOST: host }),
   });
   server.close();
 
@@ -171,7 +171,7 @@ test('after /pravex:incognito the end-of-session report sends no transcript', as
   const home = tempHome();
   const { server, bodies, host } = await captureServer();
   const transcript = writeTranscript(home, 'sess-2');
-  const env = envFor(home, { PRAVEX_API_KEY: 'pvx_test', PRAVEX_API_HOST: host });
+  const env = envFor(home, { PRAVEX_ACCESS_TOKEN: 'test-access-token', PRAVEX_API_HOST: host });
   await run(REPORT, ['--incognito', 'sess-2'], { env });
 
   await run(REPORT, [], { input: JSON.stringify({ session_id: 'sess-2', transcript_path: transcript, cwd: process.cwd() }), env });
@@ -205,7 +205,7 @@ test('the status line shows the login, watching and incognito states', async () 
 
   assert.match(plain((await run(STATUSLINE, [], { input, env: envFor(home) })).stdout), /⚠ Pravex: \/pravex:login/);
 
-  const env = envFor(home, { PRAVEX_API_KEY: 'pvx_test', PRAVEX_API_HOST: 'http://127.0.0.1:1' });
+  const env = envFor(home, { PRAVEX_ACCESS_TOKEN: 'test-access-token', PRAVEX_API_HOST: 'http://127.0.0.1:1' });
   assert.strictEqual(plain((await run(STATUSLINE, [], { input, env })).stdout), '● Pravex');
 
   await run(REPORT, ['--incognito', 'sess-3'], { env: envFor(home) });
@@ -223,7 +223,7 @@ test('the status line shows no seat, from the cache alone: after a login, before
     res.writeHead(500).end();
   });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
-  const env = envFor(home, { PRAVEX_API_KEY: 'pvx_test', PRAVEX_API_HOST: `http://127.0.0.1:${server.address().port}` });
+  const env = envFor(home, { PRAVEX_ACCESS_TOKEN: 'test-access-token', PRAVEX_API_HOST: `http://127.0.0.1:${server.address().port}` });
   fs.mkdirSync(path.join(home, '.pravex'), { recursive: true });
   const cache = (status) =>
     fs.writeFileSync(path.join(home, '.pravex', 'seat.json'), JSON.stringify({ status, message: null, workspace: { id: 'o', name: 'Northwind' }, checkedAt: Date.now() }));
@@ -255,7 +255,7 @@ test('install keeps an existing status line, chains it, and uninstall puts it ba
   fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
   const previous = { type: 'command', command: `"${process.execPath}" -e "process.stdout.write('GSD phase 3')"`, padding: 1 };
   fs.writeFileSync(settingsFile, JSON.stringify({ model: 'opus', statusLine: previous }));
-  const env = envFor(home, { PRAVEX_API_KEY: 'pvx_test', PRAVEX_API_HOST: 'http://127.0.0.1:1' });
+  const env = envFor(home, { PRAVEX_ACCESS_TOKEN: 'test-access-token', PRAVEX_API_HOST: 'http://127.0.0.1:1' });
 
   assert.strictEqual((await run(STATUSLINE, ['--install'], { env })).code, 0);
   const installed = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
@@ -353,14 +353,14 @@ test('the start message and the status line both say when an update is waiting',
   const home = tempHome();
   fs.mkdirSync(path.join(home, '.pravex'), { recursive: true });
   fs.writeFileSync(path.join(home, '.pravex', 'update-check.json'), JSON.stringify({ installed: '0.4.0', latest: '0.5.0' }));
-  const env = envFor(home, { PRAVEX_API_KEY: 'pvx_test', PRAVEX_API_HOST: 'http://127.0.0.1:1' });
+  const env = envFor(home, { PRAVEX_ACCESS_TOKEN: 'test-access-token', PRAVEX_API_HOST: 'http://127.0.0.1:1' });
   const out = (await run(STATUSLINE, [], { input: '{"session_id":"s"}', env })).stdout.replace(/\x1b\[[0-9;]*m/g, '').trim();
   assert.strictEqual(out, '● Pravex ⬆ /pravex:update');
 });
 
 test('alone, the status line still shows the model and context use', async () => {
   const home = tempHome();
-  const env = envFor(home, { PRAVEX_API_KEY: 'pvx_test', PRAVEX_API_HOST: 'http://127.0.0.1:1' });
+  const env = envFor(home, { PRAVEX_ACCESS_TOKEN: 'test-access-token', PRAVEX_API_HOST: 'http://127.0.0.1:1' });
   const input = JSON.stringify({ session_id: 's', model: { display_name: 'Opus 5' }, context_window: { used_percentage: 41.6 } });
 
   const out = (await run(STATUSLINE, [], { input, env })).stdout.replace(/\x1b\[[0-9;]*m/g, '').trim();
@@ -370,7 +370,7 @@ test('alone, the status line still shows the model and context use', async () =>
 
 test('with nothing to show but Pravex, it prints just the segment', async () => {
   const home = tempHome();
-  const env = envFor(home, { PRAVEX_API_KEY: 'pvx_test', PRAVEX_API_HOST: 'http://127.0.0.1:1' });
+  const env = envFor(home, { PRAVEX_ACCESS_TOKEN: 'test-access-token', PRAVEX_API_HOST: 'http://127.0.0.1:1' });
   const out = (await run(STATUSLINE, [], { input: '{"session_id":"s"}', env })).stdout.replace(/\x1b\[[0-9;]*m/g, '').trim();
   assert.strictEqual(out, '● Pravex');
 });

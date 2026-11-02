@@ -176,7 +176,7 @@ test('SessionStart without a seat says so instead of "recording", and sends noth
   assert.strictEqual(code, 0);
   assert.strictEqual(systemMessage(stdout), NONE_LINE);
   assert.strictEqual(seatRequests.length, 1);
-  assert.strictEqual(seatRequests[0].auth, 'Bearer pvx_test');
+  assert.strictEqual(seatRequests[0].auth, 'Bearer test-access-token');
   assert.strictEqual(bodies.length, 0, 'nothing is sent without a seat: not the sweep, not this session');
   // The abandoned one waits for a start with a seat rather than being dropped.
   assert.ok(!reported(home).includes('abandoned'));

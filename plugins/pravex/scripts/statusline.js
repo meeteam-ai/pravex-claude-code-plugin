@@ -62,7 +62,8 @@ function readJson(file, fallback) {
  */
 function stateFor(sessionId, env = process.env) {
   const config = readJson(CONFIG_FILE, {});
-  const configured = Boolean((env.PRAVEX_API_KEY || config.apiKey) && (env.PRAVEX_API_HOST || config.apiHost));
+  // Signed in means a refresh token is stored (the access token is renewed on demand), or the tests' static token.
+  const configured = Boolean((env.PRAVEX_ACCESS_TOKEN && env.PRAVEX_API_HOST) || (config.refreshToken && config.apiHost));
   if (!configured) return 'login';
   const seat = readJson(SEAT_FILE, null);
   if (seat && (seat.status === 'none' || seat.status === 'suspended')) return 'noseat';
