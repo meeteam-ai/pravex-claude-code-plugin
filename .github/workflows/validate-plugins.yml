@@ -269,6 +269,7 @@ jobs:
         run: |
           node --check plugins/pravex/scripts/report-session.js
           node --check plugins/pravex/scripts/login.js
+          node --check plugins/pravex/scripts/auth.js
           node --check plugins/pravex/scripts/statusline.js
           node --check plugins/pravex/scripts/update-check.js
           node --check plugins/pravex/scripts/update.js

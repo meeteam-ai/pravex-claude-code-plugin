@@ -41,7 +41,7 @@ const COPY_SCRIPTS = path.join(COPY_DIR, 'scripts');
  * `SessionStart` refreshes itself through it). The one list: `report-session.js`
  * and the npm package's `sync-scripts.js` both read it from here.
  */
-const COPY_FILES = ['report-session.js', 'codex-rollout.js', 'session-facets.js', 'seat.js', 'codex-install.js', 'update-check.js', 'statusline.js', 'login.js'];
+const COPY_FILES = ['report-session.js', 'codex-rollout.js', 'session-facets.js', 'seat.js', 'codex-install.js', 'update-check.js', 'statusline.js', 'login.js', 'auth.js'];
 const COPY_MANIFEST = path.join(COPY_DIR, '.claude-plugin', 'plugin.json');
 const HOOKS_FILE = path.join(os.homedir(), '.codex', 'hooks.json');
 const BACKUP_FILE = `${HOOKS_FILE}.pravex-backup`;
@@ -173,7 +173,7 @@ function main(argv) {
     const r = install();
     console.log(`Pravex: Codex hooks installed in ${r.hooksFile}`);
     console.log(`Reporter: ${r.scripts}`);
-    console.log('Sessions report with the credential in ~/.pravex/config.json — run the login if that is empty.');
+    console.log('Sessions report once this machine is signed in: run `npx @pravex/codex login` (or /pravex:login) if it is not.');
     return 0;
   }
   if (cmd === 'uninstall') {

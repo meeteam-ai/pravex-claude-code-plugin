@@ -17,9 +17,11 @@
  * assumed. The `SessionStart` sweep is what covers it: ingest is idempotent on
  * `externalId`, so re-reporting a session already sent is free.
  *
- * Config (first match wins):
- *   - env PRAVEX_API_KEY + PRAVEX_API_HOST
- *   - ~/.pravex/config.json  { "apiHost": "...", "apiKey": "pvx_..." }
+ * Credentials (`auth.js`): OAuth tokens in ~/.pravex/config.json, written by
+ * `/pravex:login`. The access token lives 15 minutes and is renewed here, under a
+ * lock file, a minute before it lapses. The environment variables
+ * PRAVEX_ACCESS_TOKEN + PRAVEX_API_HOST override them (no renewal) so the tests can
+ * drive the real script against a local server.
  *
  * Never blocks Claude Code: every failure is logged to ~/.pravex/last-report.log
  * and the process exits 0.
@@ -42,6 +44,7 @@ const { execFileSync, spawn } = require('child_process');
 const codex = require('./codex-rollout.js');
 const facetsLib = require('./session-facets.js');
 const seatLib = require('./seat.js');
+const auth = require('./auth.js');
 
 const CONFIG_DIR = path.join(os.homedir(), '.pravex');
 const PLUGIN_VERSION = (() => {
@@ -51,7 +54,6 @@ const PLUGIN_VERSION = (() => {
     return 'unknown';
   }
 })();
-const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 const LOG_FILE = path.join(CONFIG_DIR, 'last-report.log');
 const SPOOL_DIR = path.join(CONFIG_DIR, 'spool');
 // A session ends offline more often than you would think — VPN down, laptop closed on a
@@ -196,16 +198,20 @@ function log(msg) {
   }
 }
 
-function loadConfig() {
-  let file = {};
-  try {
-    file = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
-  } catch {
-    /* no config file */
+/**
+ * What this run authenticates with, renewed if it is about to lapse.
+ *
+ * `configured` is false only when there is nothing to renew: never signed in, an
+ * old `pvx_` key that was dropped, or a connection that was revoked. `reason` says
+ * which. A renewal that merely failed to reach the server keeps the stale pair and
+ * stays configured, so the next run can try again.
+ */
+async function loadCredentials() {
+  const creds = await auth.getCredentials();
+  if (creds.ok || (creds.reason === 'unavailable' && creds.accessToken)) {
+    return { configured: true, accessToken: creds.accessToken, apiHost: creds.apiHost.replace(/\/+$/, ''), reason: null };
   }
-  const apiKey = process.env.PRAVEX_API_KEY || file.apiKey;
-  const apiHost = (process.env.PRAVEX_API_HOST || file.apiHost || '').replace(/\/+$/, '');
-  return { apiKey, apiHost };
+  return { configured: false, accessToken: undefined, apiHost: '', reason: creds.reason };
 }
 
 /** Session ids are UUIDs; anything else must not become a path segment. */
@@ -256,10 +262,10 @@ function pruneIncognito(now = Date.now()) {
  * Without an active one the session is not tracked at all, so that line wins
  * over incognito, which still reports usage.
  */
-function startMessage({ configured, incognito, source, update, seat }) {
+function startMessage({ configured, reason, incognito, source, update, seat }) {
   if (source === 'clear' || source === 'compact') return null;
   let message;
-  if (!configured) message = 'Pravex: not connected, so this session will not be reported. Run /pravex:login.';
+  if (!configured) message = auth.messageFor(reason);
   else if (seat && seat.status !== 'active') message = seatLib.notTrackedMessage(seat);
   else if (incognito) message = 'Pravex: incognito. Only usage and cost are reported for this session.';
   else message = 'Pravex: recording this session. Run /pravex:incognito to keep the conversation private.';
@@ -1069,7 +1075,7 @@ function findUnreported(currentSessionId, now = Date.now()) {
  * Each remaining POST would be refused the same way, so the rest wait for a
  * session start that has a seat. Resolves null otherwise.
  */
-async function sweepUnreported(apiHost, apiKey, currentSessionId) {
+async function sweepUnreported(apiHost, accessToken, currentSessionId) {
   const candidates = findUnreported(currentSessionId);
   if (!candidates.length) return null;
 
@@ -1101,7 +1107,12 @@ async function sweepUnreported(apiHost, apiKey, currentSessionId) {
         rememberReported(sessionId);
         continue;
       }
-      const res = await post(apiHost, apiKey, buildBody(sessionId, repo, agg, cwd, 'ended', { agent }));
+      const res = await post(apiHost, accessToken, buildBody(sessionId, repo, agg, cwd, 'ended', { agent }));
+      if (res.revoked) {
+        // Not remembered: these sessions are still wanted once the person logs in again.
+        log('sweep: the connection was revoked; the rest wait for /pravex:login');
+        return { status: 'revoked' };
+      }
       if (res.status >= 200 && res.status < 300) {
         // Remembered either way: a report the server declined for want of a
         // seat is dropped, never re-sent on every session start.
@@ -1235,7 +1246,7 @@ function spool(body) {
  * an untracked report is never re-sent. The replay then stops, because every
  * later entry would be declined the same way. Those wait for a seat.
  */
-async function flushSpool(apiHost, apiKey) {
+async function flushSpool(apiHost, accessToken) {
   let entries;
   try {
     entries = fs.readdirSync(SPOOL_DIR).filter((f) => f.endsWith('.json')).sort();
@@ -1252,9 +1263,10 @@ async function flushSpool(apiHost, apiKey) {
       continue;
     }
     try {
-      const res = await post(apiHost, apiKey, body);
-      if (res.status >= 500) {
-        log(`spool: ${file} still failing (${res.status}), keeping`);
+      const res = await post(apiHost, accessToken, body);
+      if (res.status >= 500 || res.revoked) {
+        // A revoked connection is not the report's fault: it is replayed after the next login.
+        log(`spool: ${file} still failing (${res.status}${res.revoked ? ', not connected' : ''}), keeping`);
         return;
       }
       try { fs.unlinkSync(full); } catch { /* already gone */ }
@@ -1279,7 +1291,7 @@ function apiUrl(apiHost, route) {
   return base;
 }
 
-function post(apiHost, apiKey, body) {
+function postOnce(apiHost, accessToken, body) {
   return new Promise((resolve, reject) => {
     const url = apiUrl(apiHost, '/api/sessions');
     const payload = JSON.stringify(body);
@@ -1291,7 +1303,7 @@ function post(apiHost, apiKey, body) {
         headers: {
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(payload),
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: `Bearer ${accessToken}`,
           'User-Agent': `pravex-claude-code-plugin/${PLUGIN_VERSION}`,
         },
         timeout: 10000,
@@ -1307,6 +1319,25 @@ function post(apiHost, apiKey, body) {
     req.write(payload);
     req.end();
   });
+}
+
+/**
+ * POST one session, renewing the access token once if the server refuses it.
+ *
+ * A `401` means the token lapsed or the connection was revoked. `refreshAfterRejection`
+ * takes the lock, so a hook that already renewed hands its pair over instead of
+ * spending the refresh token a second time. Resolves `{ status, body, revoked }`;
+ * `revoked` means the refresh token is dead too and the person has to log in again.
+ * A renewal that could not reach the server throws, so a final report is spooled
+ * rather than lost.
+ */
+async function post(apiHost, accessToken, body) {
+  const res = await postOnce(apiHost, accessToken, body);
+  if (res.status !== 401) return res;
+  const next = await auth.refreshAfterRejection(accessToken);
+  if (next.ok) return postOnce(apiHost, next.accessToken, body);
+  if (next.reason === 'unavailable') throw new Error('the access token was refused and could not be renewed');
+  return { ...res, revoked: next.reason === 'revoked' };
 }
 
 /** Which point in the session's life this invocation is. */
@@ -1351,13 +1382,13 @@ async function goIncognito(sessionId, agent = 'claude-code') {
   console.log('Pravex: this session is incognito. The conversation, title, repository, files and pull request');
   console.log('will not be sent; only usage and cost are recorded. This lasts until the session ends.');
 
-  const { apiKey, apiHost } = loadConfig();
+  const { configured, accessToken, apiHost } = await loadCredentials();
   const transcriptPath = findTranscript(sessionId, agent);
-  if (!apiKey || !apiHost || !transcriptPath) return;
+  if (!configured || !transcriptPath) return;
   try {
     const agg = await aggregateFor(agent, transcriptPath, '', { wantTranscript: false });
     if (!agg.assistantMessages || !agg.startedAt) return;
-    const res = await post(apiHost, apiKey, buildBody(sessionId, '', agg, process.cwd(), 'active', { incognito: true, agent }));
+    const res = await post(apiHost, accessToken, buildBody(sessionId, '', agg, process.cwd(), 'active', { incognito: true, agent }));
     log(`ok (incognito) ${sessionId} -> ${res.status}`);
   } catch (err) {
     // The marker is what matters; the next Stop or SessionEnd sends the scrubbed report.
@@ -1388,8 +1419,7 @@ async function main() {
     return;
   }
 
-  const { apiKey, apiHost } = loadConfig();
-  const configured = Boolean(apiKey && apiHost);
+  const { configured, accessToken, apiHost, reason } = await loadCredentials();
   // Whether the seat lets this start send the sweep and its own live report.
   let startSends = true;
   if (mode === 'start') {
@@ -1401,16 +1431,17 @@ async function main() {
     const showsLine = input.source !== 'clear' && input.source !== 'compact';
     let seat = null;
     if (configured && showsLine) {
-      const start = await seatLib.atStart(apiHost, apiKey);
+      const start = await seatLib.atStart(apiHost, accessToken);
       seat = start.seat;
       // A fresh answer is trusted. A cached one only while it is recent, the
       // same rule `Stop` uses, so an old "no seat" never holds a report back.
       startSends = start.fresh ? seat.status === 'active' : !seatLib.noSeatRecently(seat);
     } else if (configured) {
-      startSends = (await seatLib.gate(apiHost, apiKey)).send;
+      startSends = (await seatLib.gate(apiHost, accessToken)).send;
     }
     const message = startMessage({
       configured,
+      reason,
       incognito: isIncognito(input.session_id),
       source: input.source,
       update: require('./update-check.js').updateStatus(),
@@ -1428,7 +1459,7 @@ async function main() {
     spawnUpdateCheck();
   }
   if (!configured) {
-    log(`skipped (${mode}): no apiKey/apiHost (run /pravex:login)`);
+    log(`skipped (${mode}): not connected${reason ? ` (${reason})` : ''}; run /pravex:login`);
     return;
   }
 
@@ -1449,8 +1480,9 @@ async function main() {
   // Without a seat the server keeps nothing, so nothing is sent: not the sweep
   // and not this session. Sweep candidates wait for a start that has a seat.
   if (mode === 'start') {
-    if (!startSends || (await sweepUnreported(apiHost, apiKey, sessionId))) {
-      log(`skipped (start) ${sessionId}: no seat`);
+    const swept = startSends ? await sweepUnreported(apiHost, accessToken, sessionId) : null;
+    if (!startSends || swept) {
+      log(`skipped (start) ${sessionId}: ${swept && swept.status === 'revoked' ? 'not connected' : 'no seat'}`);
       return;
     }
   }
@@ -1476,7 +1508,7 @@ async function main() {
   // and before the parse, so a skipped turn costs one small file read.
   let gated = null;
   if (mode === 'progress' || mode === 'end') {
-    gated = await seatLib.gate(apiHost, apiKey);
+    gated = await seatLib.gate(apiHost, accessToken);
     if (!gated.send) {
       log(`skipped (${mode}) ${sessionId}: no seat`);
       if (mode === 'progress') {
@@ -1507,11 +1539,11 @@ async function main() {
   // Only on the final report. Replaying the spool on every `Stop` would retry a
   // dead host once per assistant turn, which is neither kind nor useful.
   if (mode === 'end') {
-    await flushSpool(apiHost, apiKey);
+    await flushSpool(apiHost, accessToken);
   }
 
   try {
-    const res = await post(apiHost, apiKey, body);
+    const res = await post(apiHost, accessToken, body);
     if (res.status >= 200 && res.status < 300) {
       // Every ingest response says whether the session was tracked. A server
       // from before seats says nothing, and the cache is left alone.
@@ -1526,6 +1558,11 @@ async function main() {
         const line = seatLib.noteSeat(sessionId, seat);
         if (line) emit(line);
       }
+    } else if (res.revoked) {
+      // The connection is gone, not the report: keep it for after the next login, and say so once.
+      const spooled = mode === 'end' && spool(body) ? ' (spooled)' : '';
+      log(`error (${mode}) ${sessionId} -> ${res.status}: the connection was revoked${spooled}`);
+      if (mode === 'progress') emit(auth.messageFor('revoked'));
     } else if (res.status >= 500) {
       // The server's problem, so it is worth replaying. A 4xx is ours and never
       // will be. Progress reports are NOT spooled: the next one is one assistant

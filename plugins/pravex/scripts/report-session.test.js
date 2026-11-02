@@ -320,7 +320,7 @@ test('the hook reads stdin, aggregates and posts the session', async () => {
   const code = await runHook(
     { session_id: 'test-session', transcript_path: transcript, cwd: process.cwd() },
     {
-      PRAVEX_API_KEY: 'pvx_test',
+      PRAVEX_ACCESS_TOKEN: 'test-access-token',
       PRAVEX_API_HOST: `http://127.0.0.1:${port}`,
       // An isolated home, so the hook cannot read a real ~/.pravex — a spooled report
       // from an earlier run would replay before this session's own.
@@ -334,7 +334,7 @@ test('the hook reads stdin, aggregates and posts the session', async () => {
   server.close();
 
   assert.strictEqual(req.path, '/api/sessions');
-  assert.strictEqual(req.auth, 'Bearer pvx_test');
+  assert.strictEqual(req.auth, 'Bearer test-access-token');
   assert.strictEqual(req.body.externalId, 'test-session');
   assert.strictEqual(req.body.filesTouched, 1);
   assert.strictEqual(typeof req.body.durationMinutes, 'number');
@@ -377,7 +377,7 @@ test('a report that cannot be delivered is spooled for the next session', async 
   // Nothing listening: a session ends offline more often than you would think.
   const code = await runHook(
     { session_id: 'offline-session', transcript_path: transcript, cwd: process.cwd() },
-    { PRAVEX_API_KEY: 'pvx_test', PRAVEX_API_HOST: 'http://127.0.0.1:1', HOME: home }
+    { PRAVEX_ACCESS_TOKEN: 'test-access-token', PRAVEX_API_HOST: 'http://127.0.0.1:1', HOME: home }
   );
   assert.strictEqual(code, 0, 'a failed report must never fail the session');
 
@@ -761,7 +761,7 @@ test('the Stop hook reports the session as active, without a transcript', async 
     const code = await runHook(
       { session_id: 'progress-session', transcript_path: transcript, cwd: process.cwd() },
       {
-        PRAVEX_API_KEY: 'pvx_test',
+        PRAVEX_ACCESS_TOKEN: 'test-access-token',
         PRAVEX_API_HOST: `http://127.0.0.1:${port}`,
         HOME: fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-home-')),
       },
@@ -803,7 +803,7 @@ test('the SessionEnd hook reports the session as ended, with the transcript', as
     const code = await runHook(
       { session_id: 'end-session', transcript_path: transcript, cwd: process.cwd() },
       {
-        PRAVEX_API_KEY: 'pvx_test',
+        PRAVEX_ACCESS_TOKEN: 'test-access-token',
         PRAVEX_API_HOST: `http://127.0.0.1:${port}`,
         HOME: fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-home-')),
       },
@@ -875,7 +875,7 @@ test('SessionStart sweeps up a session whose terminal was closed', async () => {
   try {
     const code = await runHook(
       { session_id: 'current', transcript_path: current, cwd: process.cwd() },
-      { PRAVEX_API_KEY: 'pvx_test', PRAVEX_API_HOST: `http://127.0.0.1:${port}`, HOME: home },
+      { PRAVEX_ACCESS_TOKEN: 'test-access-token', PRAVEX_API_HOST: `http://127.0.0.1:${port}`, HOME: home },
       ['--start'],
     );
     assert.strictEqual(code, 0);
@@ -934,7 +934,7 @@ test('the sweep does not report the same session twice', async () => {
   const cold = Date.now() / 1000 - 30 * 60;
   fs.utimesSync(abandonedFile, cold, cold);
 
-  const env = { PRAVEX_API_KEY: 'pvx_test', PRAVEX_API_HOST: `http://127.0.0.1:${port}`, HOME: home };
+  const env = { PRAVEX_ACCESS_TOKEN: 'test-access-token', PRAVEX_API_HOST: `http://127.0.0.1:${port}`, HOME: home };
   try {
     await runHook({ session_id: 'first', cwd: process.cwd() }, env, ['--start']);
     await runHook({ session_id: 'second', cwd: process.cwd() }, env, ['--start']);

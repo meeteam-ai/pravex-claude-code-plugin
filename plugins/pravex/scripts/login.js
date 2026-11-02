@@ -1,42 +1,30 @@
 #!/usr/bin/env node
 /**
- * Connects this machine to a Pravex workspace, and reports whether it is connected.
+ * Connects this machine to a Pravex workspace, reports whether it is connected, and
+ * disconnects it.
  *
- *   node login.js                            device flow against the default host
+ *   node login.js                            sign in with the device flow, default host
  *   node login.js --api-url http://localhost:3000   point it somewhere else
+ *   node login.js --client codex             sign in as the Codex client (`npx @pravex/codex login`)
  *   node login.js --status
- *   node login.js --api-url <url> --key pvx_xxx     legacy, discouraged — see below
+ *   node login.js --logout
  *
- * The normal path is the OAuth 2.0 Device Authorization Grant (RFC 8628), the flow
- * `gh auth login`, `stripe login` and `docker login` all use: this prints a short
- * code, the person approves it in a browser where they are already signed in, and
- * this collects the credential over HTTPS.
- *
- * Why that matters here more than most places. A pasted key does not stay in the
- * prompt: it lands in the clipboard, in terminal scrollback, and in the session
- * transcript — the same transcript this plugin uploads. One real key was burned
- * exactly that way. With the device grant the `pvx_` string is never displayed and
- * never typed, so there is nothing for any of those to capture.
+ * The OAuth 2.0 Device Authorization Grant (RFC 8628), the flow `gh auth login`,
+ * `stripe login` and `docker login` use: this prints a short code and opens the
+ * browser, the person approves it where they are already signed in, and this
+ * collects the tokens over HTTPS. The tokens are never displayed and never typed,
+ * so there is nothing for the clipboard, the scrollback or the session transcript
+ * (which this plugin uploads) to capture. See `auth.js` for the token handling.
  *
  * No dependencies, by design: this runs inside someone else's Claude Code session
  * and must not fetch anything at install time.
  */
 'use strict';
 
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
-const http = require('http');
-const https = require('https');
 const { spawn } = require('child_process');
 const seatLib = require('./seat.js');
+const auth = require('./auth.js');
 
-const CONFIG_DIR = path.join(os.homedir(), '.pravex');
-const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
-const DEFAULT_HOST = 'https://pravex.tenox.ai';
-
-/** Stop polling after this long whatever the server says, so it cannot spin forever. */
-const POLL_CEILING_MS = 10 * 60 * 1000;
 /** Someone ran a command and is waiting for the answer, so this is longer than the session start's 1.5 s. */
 const SEAT_TIMEOUT_MS = 5000;
 
@@ -46,7 +34,7 @@ function parseArgs(argv) {
     const a = argv[i];
     // `--api-url` is the name the docs use; `--host` is kept because the first
     // version shipped with it and it is in people's shell history.
-    if (a === '--host' || a === '--api-url' || a === '--key') {
+    if (a === '--host' || a === '--api-url' || a === '--client' || a === '--key') {
       const value = argv[i + 1];
       // Without this, `login.js --api-url` (no value) silently reuses the stored
       // config and reports success for a command that set nothing.
@@ -54,78 +42,39 @@ function parseArgs(argv) {
         console.error(`Missing value for ${a}.`);
         process.exit(1);
       }
-      out[a === '--key' ? 'key' : 'host'] = value;
+      out[a === '--client' ? 'client' : a === '--key' ? 'key' : 'host'] = value;
       i += 1;
     } else if (a === '--status') out.status = true;
+    else if (a === '--logout') out.logout = true;
     else if (a === '--no-browser') out.noBrowser = true;
   }
   return out;
 }
 
-function readConfig() {
-  try {
-    return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
-  } catch {
-    return {};
+/** `codex`, `claude-code` or a full client id, as the OAuth `client_id`. */
+function clientIdFor(name) {
+  if (!name) return auth.DEFAULT_CLIENT_ID;
+  const id = auth.CLIENTS[name] || (Object.values(auth.CLIENTS).includes(name) ? name : null);
+  if (!id) {
+    console.error(`Unknown client "${name}". Use claude-code or codex.`);
+    process.exit(1);
   }
+  return id;
 }
 
-function writeConfig(host, key) {
-  fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
-  fs.writeFileSync(CONFIG_FILE, `${JSON.stringify({ apiHost: host, apiKey: key }, null, 2)}\n`, { mode: 0o600 });
-  // `mode` only applies when the file is created, so an existing looser file would keep
-  // its permissions and leave the credential readable by everyone on the machine.
-  fs.chmodSync(CONFIG_FILE, 0o600);
-}
-
-function request(apiHost, route, { method = 'GET', headers = {}, body } = {}) {
-  return new Promise((resolve, reject) => {
-    const url = new URL(apiHost);
-    url.pathname = `${url.pathname.replace(/\/+$/, '')}${route}`;
-    const client = url.protocol === 'https:' ? https : http;
-    const payload = body === undefined ? undefined : JSON.stringify(body);
-    const req = client.request(
-      url,
-      {
-        method,
-        timeout: 10000,
-        headers: {
-          ...headers,
-          ...(payload ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } : {}),
-        },
-      },
-      (res) => {
-        let data = '';
-        res.on('data', (c) => (data += c));
-        res.on('end', () => resolve({ status: res.statusCode, body: data }));
-      },
-    );
-    req.on('timeout', () => req.destroy(new Error('timeout')));
-    req.on('error', reject);
-    if (payload) req.write(payload);
-    req.end();
-  });
-}
-
-/** The API wraps every response in `{ status, result }`; older builds did not. */
-function unwrap(res, what) {
+/** `GET /api/me`, with a refresh-and-retry on a `401`. Throws with a sentence a person can act on. */
+async function verify(creds) {
+  const res = await auth.authorized(creds, '/api/me');
+  if (res.revoked) throw new Error(auth.messageFor('revoked'));
+  if (res.status !== 200) throw new Error(`HTTP ${res.status}: ${res.body.slice(0, 200)}`);
   let json;
   try {
     json = JSON.parse(res.body);
   } catch {
-    throw new Error(`${what} did not return JSON — is that the Pravex API host?`);
+    throw new Error(`${creds.apiHost} did not return JSON — is that the Pravex API host?`);
   }
-  if (res.status >= 400) {
-    const message = (json.error && json.error.message) || json.message || `HTTP ${res.status}`;
-    throw new Error(message);
-  }
+  // The API wraps every response in `{ status, result }`.
   return json.result === undefined ? json : json.result;
-}
-
-async function verify(apiHost, apiKey) {
-  const res = await request(apiHost, '/api/me', { headers: { Authorization: `Bearer ${apiKey}` } });
-  if (res.status !== 200) throw new Error(`HTTP ${res.status}: ${res.body.slice(0, 200)}`);
-  return unwrap(res, apiHost);
 }
 
 /**
@@ -149,15 +98,13 @@ function openBrowser(url) {
   }
 }
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
 /**
  * Ask for this credential's seat and cache the answer, so the status line and the
  * next session start agree with what is printed here. Null when the server could
  * not say. The caller then prints nothing about the seat.
  */
-async function seatFor(host, apiKey) {
-  const seat = await seatLib.fetchSeat(host, apiKey, { timeoutMs: SEAT_TIMEOUT_MS });
+async function seatFor(host, accessToken) {
+  const seat = await seatLib.fetchSeat(host, accessToken, { timeoutMs: SEAT_TIMEOUT_MS });
   if (seat) seatLib.writeSeat(seat);
   return seat;
 }
@@ -166,9 +113,9 @@ async function seatFor(host, apiKey) {
  * After a login. A cached answer belongs to the previous credential, which may be
  * another workspace, so it goes first. Then the new answer, when there is one.
  */
-async function refreshSeat(host, apiKey) {
+async function refreshSeat(host, accessToken) {
   seatLib.forgetSeat();
-  return seatFor(host, apiKey);
+  return seatFor(host, accessToken);
 }
 
 /** "Every session is reported", unless the new seat says otherwise. */
@@ -180,105 +127,88 @@ function afterLogin(seat) {
   return 'Nothing else to do — every session is reported automatically when it ends.';
 }
 
-async function deviceFlow(host, { noBrowser } = {}) {
-  const clientName = `Claude Code on ${os.hostname()}`;
-  const start = unwrap(
-    await request(host, '/api/auth/device/code', { method: 'POST', body: { clientName } }),
-    host,
-  );
+/** Print the code, open the browser, and wait for the approval. Resolves the new `{ accessToken, refreshToken, expiresAt }`. */
+async function deviceFlow(host, { clientId = auth.DEFAULT_CLIENT_ID, noBrowser, ...poll } = {}) {
+  const start = await auth.startDeviceAuth(host, clientId);
 
   console.log('');
-  console.log(`  Your code:  ${start.userCode}`);
-  console.log(`  Open:       ${start.verificationUri}`);
+  console.log(`  Your code:  ${start.user_code}`);
+  console.log(`  Open:       ${start.verification_uri}`);
   console.log('');
 
-  const opened = noBrowser ? false : openBrowser(start.verificationUriComplete);
+  const opened = noBrowser ? false : openBrowser(start.verification_uri_complete || start.verification_uri);
   console.log(
     opened
       ? 'Opening your browser. Approve the code above, and this will finish on its own.'
       : 'Open that page, sign in if you need to, and enter the code. This is waiting.',
   );
 
-  // The server tells us how often to poll and pushes back if we ignore it, so the
-  // interval is read from the response rather than assumed.
-  let intervalMs = (start.interval || 5) * 1000;
-  const deadline = Date.now() + Math.min(POLL_CEILING_MS, (start.expiresIn || 600) * 1000);
+  return auth.pollDeviceToken(host, start, { clientId, ...poll });
+}
 
-  while (Date.now() < deadline) {
-    await sleep(intervalMs);
-    const result = unwrap(
-      await request(host, '/api/auth/device/token', { method: 'POST', body: { deviceCode: start.deviceCode } }),
-      host,
-    );
-
-    if (result.status === 'approved') return result;
-    if (result.status === 'denied') throw new Error('That request was refused in the browser. Nothing was connected.');
-    if (result.status === 'expired') throw new Error('That code expired. Run /pravex:login again.');
-    // `slow_down` carries the new floor. Honour it — the server enforces it, so
-    // ignoring it only makes every subsequent poll slower.
-    if (result.status === 'slow_down' && result.interval) intervalMs = result.interval * 1000;
+/** The whole sign-in: the device flow, storing the pair, the seat, and who this is. */
+async function connect(host, options = {}) {
+  const clientId = options.clientId || auth.DEFAULT_CLIENT_ID;
+  const tokens = await deviceFlow(host, { ...options, clientId });
+  await auth.saveLogin(host, clientId, tokens);
+  const seat = await refreshSeat(host, tokens.accessToken);
+  let account = {};
+  try {
+    account = await verify({ apiHost: host, accessToken: tokens.accessToken });
+  } catch {
+    /* connected all the same; only the greeting loses the name */
   }
+  return { account, seat };
+}
 
-  throw new Error('Timed out waiting for approval. Run /pravex:login again.');
+async function showStatus() {
+  if (process.env.PRAVEX_API_KEY) console.log('Note: PRAVEX_API_KEY is no longer used. Pravex signs in with /pravex:login.');
+  const creds = await auth.getCredentials();
+  if (!creds.ok) {
+    const quiet = creds.reason === 'signed-out';
+    console.log(quiet ? 'Pravex: not configured. Run /pravex:login' : creds.message);
+    if (!quiet) process.exitCode = 1;
+    return;
+  }
+  let me;
+  try {
+    me = await verify(creds);
+  } catch (err) {
+    console.error(`Pravex: not connected to ${creds.apiHost} — ${err.message}`);
+    process.exit(1);
+  }
+  console.log(`Pravex: connected to ${creds.apiHost} as ${me.email} (${me.orgName})`);
+  // On any error, or from a server that has no seats, nothing about the seat.
+  const seatLine = seatLib.statusLine(await seatFor(creds.apiHost, creds.accessToken));
+  if (seatLine) console.log(seatLine);
 }
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const file = readConfig();
-  const current = {
-    apiHost: process.env.PRAVEX_API_HOST || file.apiHost,
-    apiKey: process.env.PRAVEX_API_KEY || file.apiKey,
-  };
 
-  if (args.status) {
-    if (!current.apiKey || !current.apiHost) {
-      console.log('Pravex: not configured. Run /pravex:login');
-      return;
-    }
-    let me;
-    try {
-      me = await verify(current.apiHost, current.apiKey);
-    } catch (err) {
-      console.error(`Pravex: not connected to ${current.apiHost} — ${err.message}`);
-      process.exit(1);
-    }
-    console.log(`Pravex: connected to ${current.apiHost} as ${me.email} (${me.orgName})`);
-    // On any error, or from a server that has no seats, nothing about the seat.
-    const seatLine = seatLib.statusLine(await seatFor(current.apiHost, current.apiKey));
-    if (seatLine) console.log(seatLine);
-    return;
-  }
-
-  const host = (args.host || current.apiHost || DEFAULT_HOST).replace(/\/+$/, '');
-
-  // `--key` still works, for a CI box that cannot open a browser or approve
-  // anything. It is not what /install tells anyone to do, and the warning says why.
   if (args.key) {
-    if (!args.key.startsWith('pvx_')) {
-      console.error('An API key must start with "pvx_".');
-      process.exit(1);
-    }
-    const me = await verify(host, args.key);
-    writeConfig(host, args.key);
-    const seat = await refreshSeat(host, args.key);
-    console.log('');
-    console.log('⚠  A pasted key is now in your clipboard, your scrollback, and this session transcript.');
-    console.log('   Run /pravex:login with no arguments instead — it never displays the key.');
-    console.log('');
-    console.log(`Pravex: configured. Sessions will be reported as ${me.email} (${me.orgName}).`);
-    console.log(`Config: ${CONFIG_FILE}`);
-    if (seat && seat.status !== 'active') console.log(afterLogin(seat));
+    console.error('API keys (pvx_…) are gone: Pravex now signs in with OAuth. Run /pravex:login with no key.');
+    process.exit(1);
+  }
+  if (args.status) return showStatus();
+
+  if (args.logout) {
+    const { wasConnected, revoked } = await auth.logout();
+    seatLib.forgetSeat();
+    if (!wasConnected) console.log('Pravex: this machine was not connected.');
+    else if (revoked) console.log('Pravex: disconnected. This machine\u2019s access was revoked on the server and its credentials removed.');
+    else console.log('Pravex: disconnected locally. The server could not be reached, so remove this machine on the Install page too.');
     return;
   }
 
-  const approved = await deviceFlow(host, { noBrowser: args.noBrowser });
-  writeConfig(host, approved.apiKey);
-  const seat = await refreshSeat(host, approved.apiKey);
+  const stored = auth.readConfig();
+  const host = (args.host || stored.apiHost || auth.DEFAULT_HOST).replace(/\/+$/, '');
+  const clientId = clientIdFor(args.client);
 
-  const account = approved.account || {};
+  const { account, seat } = await connect(host, { clientId, noBrowser: args.noBrowser });
   console.log('');
   console.log(`Pravex: connected. Sessions will be reported as ${account.email || 'you'}${account.orgName ? ` (${account.orgName})` : ''}.`);
-  console.log(`Config: ${CONFIG_FILE}`);
+  console.log(`Config: ${auth.CONFIG_FILE}`);
   console.log(afterLogin(seat));
   console.log('Tip: /pravex:statusline shows in the status line whether a session is recorded, and /pravex:incognito keeps one private.');
 }
@@ -290,4 +220,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { afterLogin, deviceFlow, parseArgs, readConfig, unwrap, verify, writeConfig };
+module.exports = { afterLogin, clientIdFor, connect, deviceFlow, parseArgs, verify };

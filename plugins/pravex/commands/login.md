@@ -21,8 +21,9 @@ re-parse it. Do not ask for one otherwise: it defaults to
 
 What happens: the script prints a short code and opens the browser. The user
 approves it on a page they are already signed in to, and the script collects the
-credential itself. **Nothing is copied and nothing is pasted** — never ask the
-user for an API key, and never print one.
+credentials itself (OAuth device grant). **Nothing is copied and nothing is pasted**
+— never ask the user for a key or token, and never print one. If the user brings a
+`pvx_` key: those no longer exist; the login replaces them.
 
 The script waits, polling, for up to ten minutes. That is expected; do not
 interrupt it or re-run it while it is waiting.

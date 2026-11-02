@@ -80,7 +80,7 @@ test('a swept session is filed under the repo it ran in, not the one starting', 
     writeTranscript(home, 'from-other', { cwd: other, gitBranch: 'feature/slt-207' });
     writeTranscript(home, 'no-cwd');
 
-    const env = { ...process.env, HOME: home, USERPROFILE: home, PRAVEX_API_KEY: 'pvx_test', PRAVEX_API_HOST: host };
+    const env = { ...process.env, HOME: home, USERPROFILE: home, PRAVEX_ACCESS_TOKEN: 'test-access-token', PRAVEX_API_HOST: host };
     const code = await run(['--start'], {
       input: JSON.stringify({ session_id: 'starting', source: 'startup', cwd: current }),
       env,
