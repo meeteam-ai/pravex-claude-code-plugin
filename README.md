@@ -15,7 +15,7 @@ machine (`/pravex:codex --install`) or on its own
 ```
 
 `/pravex:login` prints a short code and opens your browser. Approve it on a page
-you are already signed in to, and the plugin collects its credential itself.
+you are already signed in to, and the plugin collects its credentials itself.
 
 **Nothing is copied and nothing is pasted.** This is the OAuth 2.0 Device
 Authorization Grant (RFC 8628), the flow `gh auth login` and `docker login` use,
@@ -24,9 +24,41 @@ in terminal scrollback, and in the session transcript **this plugin uploads**.
 One real key was burned exactly that way.
 
 `--api-url` points it elsewhere (`/pravex:login --api-url http://localhost:3000`).
-`/pravex:status` says whether this machine is connected and whether you hold a seat, and the **Install** page
-disconnects it — each login is its own connection, so one machine can be cut off
-without touching the others.
+`/pravex:status` says whether this machine is connected and whether you hold a
+seat. `/pravex:logout` disconnects it: the server revokes this machine's access
+and the credentials are removed. The **Install** page disconnects a machine
+remotely. Each login is its own connection, so one machine can be cut off without
+touching the others.
+
+### How the sign-in is kept alive
+
+Pravex is its own OAuth 2.1 authorization server. The login returns a short-lived
+**access token** (15 minutes, sent as `Authorization: Bearer`) and a **refresh
+token** (30 days of non-use, rotated on every use). Both live in
+`~/.pravex/config.json` (mode 600):
+
+```json
+{ "version": 2, "apiHost": "https://pravex.tenox.ai", "clientId": "pravex-claude-code",
+  "accessToken": "…", "refreshToken": "…", "expiresAt": 1762100000000 }
+```
+
+The hooks renew the access token a minute before it lapses. A refresh token works
+once: the server replaces it on every refresh, and **presenting a used one revokes
+the whole connection**. Hooks of several sessions overlap, so a refresh takes the
+lock file `~/.pravex/auth.lock`, re-reads the config in case another hook already
+renewed, and writes the new pair atomically before anything uses it. A lock left by
+a killed hook is broken after 30 seconds. An unreachable server costs nothing: the
+credentials stay and the next hook tries again.
+
+If the connection was revoked (from the Install page, by a workspace admin, or by
+30 idle days) the plugin removes the credentials and says so: the next prompt after
+a `Stop` shows *Pravex: this machine was disconnected… Run /pravex:login to connect
+again*, and so does the next session start. A final report that could not be sent
+is kept in the spool and goes out after you log in.
+
+**Upgrading from a version with `pvx_` keys:** the old key no longer exists on the
+server. The first run drops it from `~/.pravex/config.json` and asks you to run
+`/pravex:login` once more. `PRAVEX_API_KEY` is no longer read.
 
 ## Know when Pravex is watching
 
@@ -172,13 +204,14 @@ logged to `~/.pravex/last-report.log`.
 plugins/pravex/
 ├── .claude-plugin/plugin.json
 ├── hooks/hooks.json               SessionEnd → scripts/report-session.js
-├── commands/{login,status}.md      /pravex:login, /pravex:status
+├── commands/{login,logout,status}.md /pravex:login, :logout, :status
 └── scripts/
     ├── report-session.js           reads the transcript, posts the session
     ├── report-session.test.js
     ├── seat.js                     whether you hold a seat; caches ~/.pravex/seat.json
-    ├── login.js                    the device flow; writes ~/.pravex/config.json
-    └── login.test.js
+    ├── auth.js                     OAuth: device grant, token refresh behind a lock, logout
+    ├── login.js                    /pravex:login, --status, --logout; writes ~/.pravex/config.json
+    └── login.test.js, auth.test.js, auth-hooks.test.js
 ```
 
 ## Development
@@ -192,9 +225,10 @@ session, so it must not pull anything at install time. The scripts import only
 the Node standard library, the tests use `node:test`, and CI asserts that nothing
 else creeps in.
 
-Configuration comes from `PRAVEX_API_KEY` / `PRAVEX_API_HOST`, or
-`~/.pravex/config.json`, in that order — the environment variables are how the
-tests drive it against a local server.
+Credentials come from `~/.pravex/config.json`. `PRAVEX_ACCESS_TOKEN` +
+`PRAVEX_API_HOST` in the environment override them without renewal; that is how the
+tests drive the real scripts against a local server, and it is not for daily use
+(an access token lives 15 minutes).
 
 ## Licence
 
