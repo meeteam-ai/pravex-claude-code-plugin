@@ -207,6 +207,31 @@ waste — the server summarises once, when the transcript arrives.
 - Idempotent: re-posting the same `session_id` updates the row.
 - Never blocks Claude Code — errors go to `~/.pravex/last-report.log`. Check with `/pravex:status`.
 
+### Coding sessions only, never chat
+
+The plugin reports **coding sessions** from Claude Code and Codex. It never reports a
+Pravex chat. Chats in Pravex are recorded by Pravex itself, so if the plugin reported
+them too, the same work would count twice.
+
+- **What it reads:** only Claude Code transcripts (`~/.claude/projects`) and Codex
+  rollouts (`~/.codex/sessions`). A chat in Pravex never touches this machine's
+  transcripts.
+- **What it sends:** the `agent` is always `claude-code` or `codex`, even if
+  `--agent` names something else, and a report never carries a `kind`. The server
+  files every report from the plugin as a coding session.
+- **Where it sends it:** only `POST /api/sessions` and the seat check
+  (`GET /api/me/seat`). It calls no chat route.
+- **The server enforces it as well:**
+  - it refuses a `pravex-chat` agent with `400`;
+  - it drops a `kind` sent in the body;
+  - it answers `409` to a report whose id belongs to a chat. A `4xx` is never
+    retried, so such a report is dropped, not spooled.
+
+`/pravex:status` and the status line describe this machine's coding sessions: the
+connection, your seat, and whether the current session is recorded. Your seat
+concerns coding sessions only, and chatting in Pravex never depends on this plugin.
+`scripts/chat-boundary.test.js` pins all of this.
+
 ## What it sends about the conversation
 
 The session report carries an **extracted** transcript, not the file on disk.
