@@ -198,6 +198,43 @@ If a session ends offline the report is spooled to `~/.pravex/spool` and sent at
 the start of the next one. A failure never blocks or fails your session; it is
 logged to `~/.pravex/last-report.log`.
 
+## The setup snapshot
+
+Since 0.13.0, a session start that holds a seat also sends a snapshot of how this
+machine's Claude Code is set up, so the workspace can see which MCP servers,
+agents, skills, commands, plugins and hooks you have, and suggest improvements.
+**Your workspace admins can see it.** It goes to `PUT /api/claude-setup/snapshot`,
+in the background (two seconds at most, never delaying the start), and only when
+it changed or 24 hours after the last one the server accepted for this machine and
+repository (`~/.pravex/setup-sent.json`).
+
+It is **names and shapes, never values**:
+
+| Part | What is sent |
+| --- | --- |
+| Machine | A random id kept in `~/.pravex/machine-id` (not derived from the hardware), the hostname's first label, platform, architecture, plugin and Claude Code versions |
+| MCP servers | Name, transport (`stdio`, `http`, `sse`), scope (`user`, `project`, `local`, `plugin`), the launcher's base name for stdio (`npx`, `uvx`, `docker`) or the URL's **host** for http |
+| Agents, skills, commands | Name, the first 160 characters of the frontmatter description, and an agent's model and tool names |
+| Plugins | Installed plugin ids, whether each is enabled, and its version |
+| Hooks | Event and how many hooks run on it, per source |
+| Permissions | How many allow, ask and deny rules there are, the default mode, the model and effort, whether a deny rule covers `.env` files or secrets, whether the dangerous-mode prompt is skipped, whether a status line is set |
+| `CLAUDE.md` | Whether it exists, and how many lines |
+| Workflows | How many GitHub workflows the repository has, and how many use `anthropics/claude-code-action` |
+
+It reads `~/.claude/settings*.json`, `~/.claude.json`, `~/.claude/{agents,skills,commands}`,
+each enabled plugin's directory, and in the session's repository `CLAUDE.md`,
+`.claude/CLAUDE.md`, `.mcp.json`, `.claude/settings*.json`, `.claude/{agents,skills,commands}`
+and `.github/workflows/`. **Never sent:** MCP `env`, `headers` or `args`, URL paths
+or queries, permission rule strings, hook commands, or the content of any file
+beyond those frontmatter fields. A name that does not look like one (letters,
+digits and `.:@/_-`, at most 64 characters) is dropped, and every list stops at 100.
+A broken file is skipped.
+
+Nothing is sent for an incognito session or without a seat, and nothing reads
+your setup for Codex. Set `PRAVEX_SETUP=0` to turn it off on this machine.
+`scripts/setup-snapshot.test.js` builds a fixture full of fake keys and asserts
+that none of them reaches the snapshot.
+
 ## Layout
 
 ```
@@ -209,6 +246,7 @@ plugins/pravex/
     ├── report-session.js           reads the transcript, posts the session
     ├── report-session.test.js
     ├── seat.js                     whether you hold a seat; caches ~/.pravex/seat.json
+    ├── setup-snapshot.js           the setup snapshot: names of MCP servers, agents, skills, hooks
     ├── auth.js                     OAuth: device grant, token refresh behind a lock, logout
     ├── login.js                    /pravex:login, --status, --logout; writes ~/.pravex/config.json
     └── login.test.js, auth.test.js, auth-hooks.test.js

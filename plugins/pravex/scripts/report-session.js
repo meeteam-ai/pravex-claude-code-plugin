@@ -30,6 +30,10 @@
  * is sent and the session is told so once: at the start, or on the `Stop` after
  * the seat changes. The start waits for the seat check, 1.5 s at most. Nothing
  * else is ever blocked or slowed down.
+ *
+ * With a seat, the start also sends the setup snapshot (`setup-snapshot.js`) to
+ * `PUT /api/claude-setup/snapshot`: what this machine's Claude Code has installed,
+ * by name only. In the background, two seconds at most, never when incognito.
  */
 'use strict';
 
@@ -45,6 +49,7 @@ const codex = require('./codex-rollout.js');
 const facetsLib = require('./session-facets.js');
 const seatLib = require('./seat.js');
 const auth = require('./auth.js');
+const setupLib = require('./setup-snapshot.js');
 
 const CONFIG_DIR = path.join(os.homedir(), '.pravex');
 const PLUGIN_VERSION = (() => {
@@ -1291,15 +1296,15 @@ function apiUrl(apiHost, route) {
   return base;
 }
 
-function postOnce(apiHost, accessToken, body) {
+function postOnce(apiHost, accessToken, body, { method = 'POST', route = '/api/sessions' } = {}) {
   return new Promise((resolve, reject) => {
-    const url = apiUrl(apiHost, '/api/sessions');
+    const url = apiUrl(apiHost, route);
     const payload = JSON.stringify(body);
     const client = url.protocol === 'https:' ? https : http;
     const req = client.request(
       url,
       {
-        method: 'POST',
+        method,
         headers: {
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(payload),
@@ -1331,11 +1336,11 @@ function postOnce(apiHost, accessToken, body) {
  * A renewal that could not reach the server throws, so a final report is spooled
  * rather than lost.
  */
-async function post(apiHost, accessToken, body) {
-  const res = await postOnce(apiHost, accessToken, body);
+async function post(apiHost, accessToken, body, request) {
+  const res = await postOnce(apiHost, accessToken, body, request);
   if (res.status !== 401) return res;
   const next = await auth.refreshAfterRejection(accessToken);
-  if (next.ok) return postOnce(apiHost, next.accessToken, body);
+  if (next.ok) return postOnce(apiHost, next.accessToken, body, request);
   if (next.reason === 'unavailable') throw new Error('the access token was refused and could not be renewed');
   return { ...res, revoked: next.reason === 'revoked' };
 }
@@ -1393,6 +1398,33 @@ async function goIncognito(sessionId, agent = 'claude-code') {
   } catch (err) {
     // The marker is what matters; the next Stop or SessionEnd sends the scrubbed report.
     log(`error (incognito) ${sessionId} -> ${err && err.message}`);
+  }
+}
+
+/**
+ * The setup snapshot this start kicked off (`setup-snapshot.js`), or null. Fire and
+ * forget: nothing in the hook waits on it, and the process waits at most what is left of
+ * its two seconds before exiting.
+ */
+let setupPending = null;
+
+/** Start the setup snapshot in the background. Never throws, never delays the start line. */
+function startSetupSnapshot({ apiHost, accessToken, cwd, repo, incognito, seat, claudeVersion }) {
+  try {
+    setupPending = setupLib
+      .maybeSendSetup({
+        cwd,
+        repo,
+        incognito,
+        seat,
+        claudeVersion,
+        pluginVersion: PLUGIN_VERSION,
+        send: (route, body) => post(apiHost, accessToken, body, { method: 'PUT', route }),
+      })
+      .then((r) => log(`setup: ${r.reason}`))
+      .catch(() => {});
+  } catch {
+    setupPending = null;
   }
 }
 
@@ -1473,6 +1505,21 @@ async function main() {
 
   // Resolved before aggregating: it is what a pull-request URL has to match.
   const repo = repoSlug(cwd);
+
+  // After the seat check and the start line, in the background: what this machine's
+  // Claude Code has installed, by name. Skipped without a seat and when incognito.
+  // Claude Code's setup only: a Codex session start has nothing of its own to say here.
+  if (mode === 'start' && agent === 'claude-code') {
+    startSetupSnapshot({
+      apiHost,
+      accessToken,
+      cwd,
+      repo,
+      incognito: isIncognito(sessionId),
+      seat: startSends,
+      claudeVersion: input.version,
+    });
+  }
 
   // The sweep runs first and only on start. It is the fix for sessions whose
   // terminal was closed, which `SessionEnd` never reported at all.
@@ -1584,7 +1631,8 @@ async function main() {
 if (require.main === module) {
   main()
     .catch((err) => log(`fatal: ${err && err.stack}`))
-    .finally(() => process.exit(0));
+    // The setup snapshot caps itself at two seconds and never rejects.
+    .finally(() => Promise.resolve(setupPending).finally(() => process.exit(0)));
 }
 
 module.exports = {

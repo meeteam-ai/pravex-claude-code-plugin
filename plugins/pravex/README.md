@@ -174,7 +174,7 @@ The plugin reports at three points in a session's life:
 
 | Hook | What it does |
 | --- | --- |
-| `SessionStart` | Reports the session as **live**, and sweeps for any earlier session that was never reported at all |
+| `SessionStart` | Reports the session as **live**, sweeps for any earlier session that was never reported at all, and sends the [setup snapshot](#the-setup-snapshot) when it changed |
 | `Stop` | Updates the running numbers after each assistant turn |
 | `SessionEnd` | The final report, with the transcript |
 
@@ -219,8 +219,10 @@ them too, the same work would count twice.
 - **What it sends:** the `agent` is always `claude-code` or `codex`, even if
   `--agent` names something else, and a report never carries a `kind`. The server
   files every report from the plugin as a coding session.
-- **Where it sends it:** only `POST /api/sessions` and the seat check
-  (`GET /api/me/seat`). It calls no chat route.
+- **Where it sends it:** only `POST /api/sessions`, the seat check
+  (`GET /api/me/seat`) and, at session start, the setup snapshot
+  (`PUT /api/claude-setup/snapshot`, see [below](#the-setup-snapshot)), which
+  carries no conversation at all. It calls no chat route.
 - **The server enforces it as well:**
   - it refuses a `pravex-chat` agent with `400`;
   - it drops a `kind` sent in the body;
@@ -292,3 +294,40 @@ and MCP servers — no path, file name, command line or argument leaves the mach
 It is computed in the same pass over the transcript (and its subagents'), and simply
 absent if it could not be computed. An incognito report carries `usage`, timing and `tz`, and
 never `facets`. The full field list is in the [root README](../../README.md#what-it-sends).
+
+## The setup snapshot
+
+Since 0.13.0, a session start that holds a seat also sends a snapshot of how this
+machine's Claude Code is set up, so the workspace can see which MCP servers,
+agents, skills, commands, plugins and hooks you have, and suggest improvements.
+**Your workspace admins can see it.** It goes to `PUT /api/claude-setup/snapshot`,
+in the background (two seconds at most, never delaying the start), and only when
+it changed or 24 hours after the last one the server accepted for this machine and
+repository (`~/.pravex/setup-sent.json`).
+
+It is **names and shapes, never values**:
+
+| Part | What is sent |
+| --- | --- |
+| Machine | A random id kept in `~/.pravex/machine-id` (not derived from the hardware), the hostname's first label, platform, architecture, plugin and Claude Code versions |
+| MCP servers | Name, transport (`stdio`, `http`, `sse`), scope (`user`, `project`, `local`, `plugin`), the launcher's base name for stdio (`npx`, `uvx`, `docker`) or the URL's **host** for http |
+| Agents, skills, commands | Name, the first 160 characters of the frontmatter description, and an agent's model and tool names |
+| Plugins | Installed plugin ids, whether each is enabled, and its version |
+| Hooks | Event and how many hooks run on it, per source |
+| Permissions | How many allow, ask and deny rules there are, the default mode, the model and effort, whether a deny rule covers `.env` files or secrets, whether the dangerous-mode prompt is skipped, whether a status line is set |
+| `CLAUDE.md` | Whether it exists, and how many lines |
+| Workflows | How many GitHub workflows the repository has, and how many use `anthropics/claude-code-action` |
+
+It reads `~/.claude/settings*.json`, `~/.claude.json`, `~/.claude/{agents,skills,commands}`,
+each enabled plugin's directory, and in the session's repository `CLAUDE.md`,
+`.claude/CLAUDE.md`, `.mcp.json`, `.claude/settings*.json`, `.claude/{agents,skills,commands}`
+and `.github/workflows/`. **Never sent:** MCP `env`, `headers` or `args`, URL paths
+or queries, permission rule strings, hook commands, or the content of any file
+beyond those frontmatter fields. A name that does not look like one (letters,
+digits and `.:@/_-`, at most 64 characters) is dropped, and every list stops at 100.
+A broken file is skipped.
+
+Nothing is sent for an incognito session or without a seat, and nothing reads
+your setup for Codex. Set `PRAVEX_SETUP=0` to turn it off on this machine.
+`scripts/setup-snapshot.test.js` builds a fixture full of fake keys and asserts
+that none of them reaches the snapshot.

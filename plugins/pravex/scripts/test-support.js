@@ -47,18 +47,30 @@ function runHook(input, env, args = []) {
  * Captures every POST body; `nth(n)` resolves with all bodies once `n` have arrived. Call `listen()` first.
  *
  * `GET /api/me/seat` is answered on its own and never counted as a body; each one
- * is recorded in `seatRequests`. `seat` decides the answer: absent or null is a
+ * is recorded in `seatRequests`. So is the setup snapshot (`PUT /api/claude-setup/snapshot`),
+ * recorded in `setupBodies` and answered `setup` (`{ tracked: true }` by default). `seat` decides the answer: absent or null is a
  * 404, a server from before seats; an object is that seat; `'error'` is a 500;
  * `'hang'` never answers, so only the hook's own timeout can end it; a function is
  * asked on every request.
  * `ingest` is the POST's `result` (`{ created: true }` by default), or a function
  * of the posted body.
  */
-function captureServer({ seat, ingest } = {}) {
+function captureServer({ seat, ingest, setup } = {}) {
   const bodies = [];
   const seatRequests = [];
+  const setupBodies = [];
   const waiters = [];
   const server = http.createServer((req, res) => {
+    if (req.method === 'PUT' && req.url === '/api/claude-setup/snapshot') {
+      let raw = '';
+      req.on('data', (c) => (raw += c));
+      req.on('end', () => {
+        setupBodies.push(JSON.parse(raw || '{}'));
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ status: 200, result: setup || { tracked: true } }));
+      });
+      return;
+    }
     if (req.method === 'GET' && req.url === '/api/me/seat') {
       seatRequests.push({ auth: req.headers.authorization, at: Date.now() });
       const answer = typeof seat === 'function' ? seat() : seat;
@@ -90,7 +102,7 @@ function captureServer({ seat, ingest } = {}) {
     server.close();
     server.closeAllConnections();
   };
-  return { server, bodies, seatRequests, nth, listen, close };
+  return { server, bodies, seatRequests, setupBodies, nth, listen, close };
 }
 
 const DEVICE_GRANT = 'urn:ietf:params:oauth:grant-type:device_code';

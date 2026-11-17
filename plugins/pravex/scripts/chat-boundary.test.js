@@ -10,6 +10,11 @@
  * - what it sends: one coding agent and never a `kind`, so the server files every report as coding;
  * - where it sends it: `POST /api/sessions` (and the seat check), never a chat route.
  *
+ * Plugin 0.13.0 adds one more request (PL-X03, ADR 0044): the setup snapshot,
+ * `PUT /api/claude-setup/snapshot`, sent at session start. It describes the machine's
+ * Claude Code by name (MCP servers, agents, skills, commands, plugins, hooks, permission
+ * counts) and carries nothing from any conversation. Its fields are pinned here too.
+ *
  * The server holds the same line on its side: a `pravex-chat` agent is a 400, a `kind` in the body
  * is dropped, and a report whose id is a chat's is a 409 that the spool discards rather than retries.
  */
@@ -44,6 +49,14 @@ const REPORT_FIELDS = new Set([
   'facets',
   'transcript',
 ]);
+
+/** Every field a setup snapshot may carry, and every field of its user and project scopes. */
+const SETUP_FIELDS = new Set(['v', 'machineId', 'hostname', 'platform', 'arch', 'pluginVersion', 'claudeVersion', 'user', 'project']);
+const SCOPE_FIELDS = new Set(['claudeMd', 'settings', 'mcpServers', 'plugins', 'agents', 'skills', 'commands', 'hooks']);
+const PROJECT_FIELDS = new Set([...SCOPE_FIELDS, 'repo', 'workflows']);
+
+/** Method and route of every request the plugin may make. */
+const ROUTES = new Set(['POST /api/sessions', 'GET /api/me/seat', 'PUT /api/claude-setup/snapshot']);
 
 const AGG = {
   title: 'Fix the uploader',
@@ -101,6 +114,7 @@ function recordingServer() {
       requests.push({ method: req.method, url: req.url, body: raw ? JSON.parse(raw) : null });
       if (req.method === 'GET') return res.writeHead(404, { 'content-type': 'application/json' }).end('{}');
       res.writeHead(200, { 'content-type': 'application/json' });
+      if (req.method === 'PUT') return res.end(JSON.stringify({ status: 200, result: { tracked: true } }));
       res.end(JSON.stringify({ status: 200, result: { created: true, tracked: true, seat: 'active' } }));
     });
   });
@@ -131,7 +145,7 @@ test('the real hook, even told it is pravex-chat, posts one coding report to /ap
     const posts = requests.filter((r) => r.method === 'POST');
     assert.ok(posts.length >= 1, 'nothing was reported');
     for (const r of requests) {
-      assert.ok(['/api/sessions', '/api/me/seat'].includes(r.url), `called ${r.method} ${r.url}`);
+      assert.ok(ROUTES.has(`${r.method} ${r.url}`), `called ${r.method} ${r.url}`);
       assert.ok(!r.url.startsWith('/api/chat'), `called a chat route: ${r.url}`);
     }
     for (const { body } of posts) {
@@ -139,6 +153,72 @@ test('the real hook, even told it is pravex-chat, posts one coding report to /ap
       assert.strictEqual(body.agent, 'claude-code');
       assert.ok(!('kind' in body), 'the report named a kind');
     }
+  } finally {
+    server.close();
+    server.closeAllConnections();
+  }
+});
+
+/** A transcript with a prompt and a reply in it, so the test can look for them where they must not be. */
+function chattyTranscript() {
+  const transcript = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-')), 'transcript.jsonl');
+  const lines = [
+    { type: 'user', timestamp: '2026-01-01T00:00:00.000Z', message: { role: 'user', content: 'PROMPT-ZEBRA-7731 please refactor the uploader' } },
+    {
+      type: 'assistant',
+      timestamp: '2026-01-01T00:00:05.000Z',
+      message: { id: 'm1', model: 'claude-opus-5', usage: { input_tokens: 3, output_tokens: 2 }, content: [{ type: 'text', text: 'REPLY-OKAPI-4410 done' }] },
+    },
+  ];
+  fs.writeFileSync(transcript, lines.map((l) => JSON.stringify(l)).join('\n'));
+  return transcript;
+}
+
+test('at session start the setup snapshot is the only other request, with pinned fields and no conversation in it', async () => {
+  const { server, requests } = recordingServer();
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const home = tempHome();
+  const transcript = chattyTranscript();
+  try {
+    const { code } = await runHook(
+      { session_id: 'coding-session', transcript_path: transcript, cwd: process.cwd(), source: 'startup' },
+      envFor(home, server.address().port),
+      ['--start'],
+    );
+    assert.strictEqual(code, 0);
+
+    for (const r of requests) assert.ok(ROUTES.has(`${r.method} ${r.url}`), `called ${r.method} ${r.url}`);
+    const setups = requests.filter((r) => r.method === 'PUT');
+    assert.strictEqual(setups.length, 1, 'one setup snapshot per start');
+    const body = setups[0].body;
+    for (const key of Object.keys(body)) assert.ok(SETUP_FIELDS.has(key), `unexpected setup field ${key}`);
+    for (const key of Object.keys(body.user)) assert.ok(SCOPE_FIELDS.has(key), `unexpected user field ${key}`);
+    if (body.project) for (const key of Object.keys(body.project)) assert.ok(PROJECT_FIELDS.has(key), `unexpected project field ${key}`);
+    assert.ok(!('kind' in body), 'the setup named a kind');
+    const json = JSON.stringify(body);
+    for (const said of ['PROMPT-ZEBRA-7731', 'REPLY-OKAPI-4410', 'coding-session']) {
+      assert.ok(!json.includes(said), `the setup carried ${said}`);
+    }
+  } finally {
+    server.close();
+    server.closeAllConnections();
+  }
+});
+
+test('an incognito session start sends no setup snapshot at all', async () => {
+  const { server, requests } = recordingServer();
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const home = tempHome();
+  fs.mkdirSync(path.join(home, '.pravex', 'incognito'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.pravex', 'incognito', 'private-session'), '');
+  try {
+    const { code } = await runHook(
+      { session_id: 'private-session', transcript_path: chattyTranscript(), cwd: process.cwd(), source: 'resume' },
+      envFor(home, server.address().port),
+      ['--start'],
+    );
+    assert.strictEqual(code, 0);
+    assert.deepStrictEqual(requests.filter((r) => r.method === 'PUT'), []);
   } finally {
     server.close();
     server.closeAllConnections();

@@ -21,7 +21,7 @@ delete process.env.PRAVEX_ACCESS_TOKEN;
 delete process.env.PRAVEX_API_HOST;
 
 const auth = require('./auth.js');
-const { clientIdFor, connect, deviceFlow, parseArgs, afterLogin } = require('./login.js');
+const { SETUP_NOTICE, clientIdFor, connect, deviceFlow, parseArgs, afterLogin } = require('./login.js');
 const { PENDING, oauthServer } = require('./test-support.js');
 
 const LOGIN = path.join(__dirname, 'login.js');
@@ -52,6 +52,13 @@ test('parseArgs accepts --api-url and the older --host as the same flag', () => 
   assert.strictEqual(parseArgs(['--logout']).logout, true);
   assert.strictEqual(parseArgs(['--client', 'codex']).client, 'codex');
   assert.strictEqual(parseArgs([]).host, undefined);
+});
+
+test('sign-in says, in one line, that the Claude Code setup is shared by name only', () => {
+  assert.ok(!SETUP_NOTICE.includes('\n'));
+  assert.match(SETUP_NOTICE, /setup is shared with the workspace/);
+  assert.match(SETUP_NOTICE, /names/);
+  assert.match(SETUP_NOTICE, /Never their contents, keys or commands/);
 });
 
 test('the client names map to the OAuth client ids', () => {
