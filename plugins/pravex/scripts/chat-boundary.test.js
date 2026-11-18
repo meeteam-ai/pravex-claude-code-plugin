@@ -51,12 +51,14 @@ const REPORT_FIELDS = new Set([
 ]);
 
 /** Every field a setup snapshot may carry, and every field of its user and project scopes. */
-const SETUP_FIELDS = new Set(['v', 'machineId', 'hostname', 'platform', 'arch', 'pluginVersion', 'claudeVersion', 'user', 'project']);
+const SETUP_FIELDS = new Set(['v', 'machineId', 'hostname', 'platform', 'arch', 'pluginVersion', 'claudeVersion', 'user', 'project', 'environment']);
+/** The machine status every start sends (plan 0011): plan usage and the flow runner, nothing from the session. */
+const STATUS_FIELDS = new Set(['machineId', 'planUsage', 'runner']);
 const SCOPE_FIELDS = new Set(['claudeMd', 'settings', 'mcpServers', 'plugins', 'agents', 'skills', 'commands', 'hooks']);
 const PROJECT_FIELDS = new Set([...SCOPE_FIELDS, 'repo', 'workflows']);
 
 /** Method and route of every request the plugin may make. */
-const ROUTES = new Set(['POST /api/sessions', 'GET /api/me/seat', 'PUT /api/claude-setup/snapshot']);
+const ROUTES = new Set(['POST /api/sessions', 'GET /api/me/seat', 'PUT /api/claude-setup/snapshot', 'PUT /api/claude-setup/machine-status']);
 
 const AGG = {
   title: 'Fix the uploader',
@@ -188,8 +190,12 @@ test('at session start the setup snapshot is the only other request, with pinned
     assert.strictEqual(code, 0);
 
     for (const r of requests) assert.ok(ROUTES.has(`${r.method} ${r.url}`), `called ${r.method} ${r.url}`);
-    const setups = requests.filter((r) => r.method === 'PUT');
+    const setups = requests.filter((r) => r.method === 'PUT' && r.url === '/api/claude-setup/snapshot');
     assert.strictEqual(setups.length, 1, 'one setup snapshot per start');
+    const statuses = requests.filter((r) => r.url === '/api/claude-setup/machine-status');
+    assert.strictEqual(statuses.length, 1, 'one machine status per start');
+    for (const key of Object.keys(statuses[0].body)) assert.ok(STATUS_FIELDS.has(key), `unexpected status field ${key}`);
+    assert.ok(!JSON.stringify(statuses[0].body).includes('coding-session'), 'the status carried the session');
     const body = setups[0].body;
     for (const key of Object.keys(body)) assert.ok(SETUP_FIELDS.has(key), `unexpected setup field ${key}`);
     for (const key of Object.keys(body.user)) assert.ok(SCOPE_FIELDS.has(key), `unexpected user field ${key}`);

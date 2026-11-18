@@ -39,6 +39,8 @@ const UPDATE_FILE = path.join(CONFIG_DIR, 'update-check.json');
 // Written by `seat.js` at session start and after every report. Same path there; change both together.
 const SEAT_FILE = path.join(CONFIG_DIR, 'seat.json');
 const SETTINGS_FILE = path.join(os.homedir(), '.claude', 'settings.json');
+// Read by `setup-snapshot.js` and `flow-runner.js` (plan 0011). Same path there; change all three together.
+const PLAN_USAGE_FILE = path.join(CONFIG_DIR, 'plan-usage.json');
 /** The status line blocks the UI while it runs; a slow chained command must not. */
 const CHAIN_TIMEOUT_MS = 2000;
 
@@ -147,6 +149,47 @@ function readStdinSync() {
   }
 }
 
+/**
+ * `{ fiveHour, sevenDay }` out of the session JSON's `rate_limits` (Claude Code gives the status
+ * line `used_percentage` and `resets_at` per window), or null when this session carries none: an
+ * API key, an older Claude Code, or a plan without limits.
+ */
+function planUsageOf(session) {
+  const limits = session && session.rate_limits;
+  if (!limits || typeof limits !== 'object') return null;
+  const win = (w) => {
+    if (!w || typeof w.used_percentage !== 'number' || !Number.isFinite(w.used_percentage)) return null;
+    // Seconds or milliseconds since the epoch, or an ISO date: kept in milliseconds.
+    const raw = typeof w.resets_at === 'number' ? w.resets_at : typeof w.resets_at === 'string' ? Date.parse(w.resets_at) : null;
+    const resets = typeof raw === 'number' && raw > 0 && raw < 1e12 ? raw * 1000 : raw;
+    return { pct: Math.max(0, Math.min(100, Math.round(w.used_percentage * 10) / 10)), resetsAt: Number.isFinite(resets) ? resets : null };
+  };
+  const fiveHour = win(limits.five_hour);
+  const sevenDay = win(limits.seven_day);
+  return fiveHour || sevenDay ? { fiveHour, sevenDay } : null;
+}
+
+/**
+ * Keep the latest plan usage for the runner and the setup snapshot. Written only when it changed or
+ * a minute passed, so a refresh costs at most one small write.
+ */
+function rememberPlanUsage(session, now = Date.now(), file = PLAN_USAGE_FILE) {
+  const usage = planUsageOf(session);
+  if (!usage) return false;
+  const previous = readJson(file, null);
+  const same = previous && JSON.stringify({ fiveHour: previous.fiveHour, sevenDay: previous.sevenDay }) === JSON.stringify(usage);
+  if (same && typeof previous.at === 'number' && now - previous.at < 60_000) return false;
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+    const tmp = `${file}.${process.pid}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify({ ...usage, at: now }), { mode: 0o600 });
+    fs.renameSync(tmp, file);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function render() {
   const stdin = readStdinSync();
   let session = {};
@@ -155,6 +198,7 @@ function render() {
   } catch {
     /* render the segment anyway */
   }
+  rememberPlanUsage(session);
   const previous = runPrevious(stdin);
   process.stdout.write(`${compose(previous || basics(session), segmentFor(stateFor(session.session_id), { update: updateAvailable() }))}\n`);
 }
@@ -235,4 +279,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { INCOGNITO_DIR, INSTALLED_COPY, SEAT_FILE, UPDATE_FILE, basics, compose, install, newerThan, refreshCopy, segmentFor, stateFor, uninstall };
+module.exports = { INCOGNITO_DIR, INSTALLED_COPY, PLAN_USAGE_FILE, SEAT_FILE, UPDATE_FILE, basics, planUsageOf, rememberPlanUsage, compose, install, newerThan, refreshCopy, segmentFor, stateFor, uninstall };

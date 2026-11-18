@@ -71,6 +71,14 @@ function captureServer({ seat, ingest, setup } = {}) {
       });
       return;
     }
+    if (req.method === 'PUT' && req.url === '/api/claude-setup/machine-status') {
+      req.resume();
+      req.on('end', () => {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ status: 200, result: { tracked: true } }));
+      });
+      return;
+    }
     if (req.method === 'GET' && req.url === '/api/me/seat') {
       seatRequests.push({ auth: req.headers.authorization, at: Date.now() });
       const answer = typeof seat === 'function' ? seat() : seat;

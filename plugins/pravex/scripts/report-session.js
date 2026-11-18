@@ -323,6 +323,8 @@ function refreshStatusline() {
   try {
     const statusline = require('./statusline.js');
     if (fs.existsSync(statusline.INSTALLED_COPY)) statusline.refreshCopy(path.join(__dirname, 'statusline.js'));
+    // The flow runner's schedule points at its copy in ~/.pravex/runner (plan 0011); keep it as new as the plugin.
+    if (fs.existsSync(path.join(os.homedir(), '.pravex', 'runner', 'flow-runner.js'))) require('./flow-runner').refreshCopy(__dirname);
   } catch (err) {
     log(`statusline refresh failed: ${err && err.message}`);
   }
@@ -1423,6 +1425,10 @@ function startSetupSnapshot({ apiHost, accessToken, cwd, repo, incognito, seat, 
       })
       .then((r) => log(`setup: ${r.reason}`))
       .catch(() => {});
+    const status = setupLib
+      .maybeSendStatus({ incognito, seat, send: (route, body) => post(apiHost, accessToken, body, { method: 'PUT', route }) })
+      .catch(() => {});
+    setupPending = Promise.all([setupPending, status]);
   } catch {
     setupPending = null;
   }

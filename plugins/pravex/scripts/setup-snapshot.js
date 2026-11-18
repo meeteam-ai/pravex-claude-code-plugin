@@ -23,6 +23,11 @@
  * - `CLAUDE.md`: present, and how many lines;
  * - workflows: how many, and how many run `anthropics/claude-code-action`.
  *
+ * Since version 2 (pravex-backend plan 0011, `environment.js`): the folders Claude can reach
+ * (home as `~`), the environments the developer is connected to (names and states from the
+ * tools' config files, never a token), whether the permission rules allow, ask or deny a fixed
+ * list of capabilities (never the rules), and each agent's prompt, masked and capped.
+ *
  * Every name must match the server's facet name pattern or the entry is dropped (never
  * rewritten), and every list stops at 100.
  *
@@ -36,8 +41,10 @@ const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const { execFileSync } = require('child_process');
+const envLib = require('./environment');
 
-const SETUP_VERSION = 1;
+/** 2: folders, connections, capabilities and agent prompts (plan 0011). */
+const SETUP_VERSION = 2;
 const SETUP_ROUTE = '/api/claude-setup/snapshot';
 /** The server's `FACET_NAME_RE`. An entry whose name does not match is dropped, not mangled. */
 const FACET_NAME_RE = /^[A-Za-z0-9][\w.:@/-]{0,63}$/;
@@ -228,7 +235,7 @@ function ruleList(settings, kind) {
  * One scope's settings, from `settings.json` and `settings.local.json` together: the
  * local file wins on a value, and rules are counted once across both.
  */
-function settingsSummary(files) {
+function settingsSummary(files, projectAllowed = []) {
   const present = files.filter(isObject);
   const pick = (get) => {
     for (const f of [...present].reverse()) {
@@ -247,6 +254,7 @@ function settingsSummary(files) {
     ask: rules('ask').size,
     deny: deny.size,
     denyCoversSecrets: [...deny].some((r) => SECRET_RULE_RE.test(r)),
+    capabilities: envLib.capabilitiesOf({ settingsFiles: present, projectAllowed }),
     skipDangerousPrompt: present.some((f) => f.skipDangerousModePermissionPrompt === true),
     statusLine: present.some((f) => Boolean(f.statusLine)),
   };
@@ -374,6 +382,7 @@ function agentsIn(dir, source, plugin = null) {
       description: cleanDescription(fm.description),
       model: cleanValue(fm.model),
       tools: cleanTools(fm.tools),
+      prompt: envLib.agentPrompt(file),
       source,
       plugin,
     });
@@ -471,10 +480,10 @@ function pluginContents(id, installPath) {
 // The snapshot
 // ---------------------------------------------------------------------------
 
-function scope({ md, settingsFiles, mcpServers, plugins, agents, skills, commands, hooks }) {
+function scope({ md, settingsFiles, projectAllowed, mcpServers, plugins, agents, skills, commands, hooks }) {
   return {
     claudeMd: md,
-    settings: settingsSummary(settingsFiles),
+    settings: settingsSummary(settingsFiles, projectAllowed),
     mcpServers: capped(mcpServers, (m) => `${m.scope}\u0000${m.plugin || ''}\u0000${m.name}`),
     plugins: capped(plugins, (p) => p.id),
     agents: capped(agents, itemKey),
@@ -584,11 +593,13 @@ function buildSnapshot({ home = os.homedir(), cwd = process.cwd(), repo = '', ro
     const fromProjectPlugins = contentsFor(projectPluginIds);
     const projectHooks = {};
     for (const f of projectSettings) hookCounts(isObject(f) ? f.hooks : null, projectHooks);
+    const projectAllowed = isObject(local) && Array.isArray(local.allowedTools) ? local.allowedTools : [];
     body.project = {
       repo,
       ...scope({
         md: claudeMd([path.join(projectRoot, 'CLAUDE.md'), path.join(projectRoot, '.claude', 'CLAUDE.md')]),
         settingsFiles: projectSettings,
+        projectAllowed,
         mcpServers: [
           ...mcpEntries(mcpFile(path.join(projectRoot, '.mcp.json')), 'project'),
           ...mcpEntries(isObject(local) ? local.mcpServers : null, 'local'),
@@ -602,7 +613,16 @@ function buildSnapshot({ home = os.homedir(), cwd = process.cwd(), repo = '', ro
       }),
       workflows: workflows(projectRoot),
     };
+    // What Claude may do in this repository: user and project rules together, as Claude Code applies them.
+    body.project.settings.capabilities = envLib.capabilitiesOf({ settingsFiles: [...userSettings, ...projectSettings].filter(isObject), projectAllowed });
   }
+  envLib.capPrompts([...body.user.agents, ...(body.project ? body.project.agents : [])]);
+  const { connections, clis } = envLib.connectionsOf({ home, env });
+  body.environment = {
+    directories: envLib.directoriesOf({ home, claudeJson, settingsFiles: [...userSettings, ...projectSettings] }),
+    connections,
+    clis,
+  };
   return body;
 }
 
@@ -742,8 +762,33 @@ function maybeSendSetup({
   return Promise.race([work, cap]).finally(() => clearTimeout(timer));
 }
 
+const STATUS_ROUTE = '/api/claude-setup/machine-status';
+
+/**
+ * The plan usage the status line last saw and the flow runner's state, on every session start
+ * (plan 0011). Small and not throttled: unlike the snapshot it changes all the time, and the
+ * flow guard is only as good as its freshness. Same rules as the snapshot: never incognito,
+ * never without a seat, never with `PRAVEX_SETUP=0`, capped in time, never rejects.
+ */
+function maybeSendStatus({ home = os.homedir(), env = process.env, incognito = false, seat = true, send, timeoutMs = SEND_TIMEOUT_MS } = {}) {
+  if (incognito || !seat || (env && env.PRAVEX_SETUP === '0') || typeof send !== 'function') return Promise.resolve({ sent: false });
+  const work = (async () => {
+    const id = machineId(home);
+    if (!id) return { sent: false };
+    const res = await send(STATUS_ROUTE, { machineId: id, planUsage: envLib.readPlanUsage(home), runner: envLib.readRunnerState(home) });
+    return { sent: true, status: res && res.status };
+  })().catch(() => ({ sent: false }));
+  let timer;
+  const cap = new Promise((resolve) => {
+    timer = setTimeout(() => resolve({ sent: false, reason: 'timeout' }), timeoutMs);
+    if (timer.unref) timer.unref();
+  });
+  return Promise.race([work, cap]).finally(() => clearTimeout(timer));
+}
+
 module.exports = {
   FACET_NAME_RE,
+  STATUS_ROUTE,
   MAX_DESCRIPTION,
   MAX_LIST,
   RESEND_AFTER_MS,
@@ -761,5 +806,6 @@ module.exports = {
   launcherOf,
   machineId,
   maybeSendSetup,
+  maybeSendStatus,
   shortHostname,
 };

@@ -295,6 +295,30 @@ It is computed in the same pass over the transcript (and its subagents'), and si
 absent if it could not be computed. An incognito report carries `usage`, timing and `tz`, and
 never `facets`. The full field list is in the [root README](../../README.md#what-it-sends).
 
+## Agent flows on this machine (0.14.0)
+
+Since 0.14.0 the setup snapshot (below) also carries what an agent flow needs to know
+before it runs here, and the plugin can run flows for you:
+
+| Part | What is sent |
+| --- | --- |
+| Folders | The folders Claude Code was opened in (from `~/.claude.json`), `permissions.additionalDirectories`, and the folders Claude Desktop's filesystem server may read; your home directory is written `~`; each with the repository (`owner/name`) it holds |
+| Connections | GitHub, GitLab, AWS, Google Cloud, Azure, Kubernetes, Docker, Vercel, Supabase, npm: whether each is connected, configured or only installed, read from the tools' own config files. Only names come out (gh's account name, registry hosts, profile and context counts); **no token is ever read into the snapshot** |
+| Capabilities | Whether your permission rules allow, ask or deny `edit`, `write`, `bash`, `git-push`, `gh-pr`, `run-tests` and `web-fetch`. The rules themselves stay here |
+| Agent prompts | The body of each agent file, with key-shaped strings masked, at most 6,000 characters each and 250,000 in all |
+
+Every session start also sends a small machine status to `PUT /api/claude-setup/machine-status`:
+the plan usage the Pravex status line last saw (Claude Code's 5-hour and 7-day
+`used_percentage`, kept in `~/.pravex/plan-usage.json`) and the flow runner's state.
+
+**The flow runner** is opt-in: `/pravex:flows install` schedules `flow-runner.js --tick`
+every 15 minutes (launchd, cron or Task Scheduler). It runs only the flows **you**
+assigned to this machine in Pravex, with your Claude Code, each live run in its own
+git worktree on a new branch, and respects each flow's plan limits (start only below
+a percentage, stop above another). `/pravex:flow-test <flow>` tests a flow here
+without changing anything: agents run in plan mode and say whether they could do
+their task. `/pravex:flows uninstall` removes the schedule.
+
 ## The setup snapshot
 
 Since 0.13.0, a session start that holds a seat also sends a snapshot of how this
