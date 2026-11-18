@@ -1018,3 +1018,19 @@ test('aggregate skips extraction when the caller does not want the transcript', 
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('a session inside a Pravex flow in GitHub Actions reports the run id, digits only', () => {
+  const { buildBody } = require('./report-session.js');
+  const agg = { startedAt: '2026-11-18T00:00:00.000Z', usage: [], assistantMessages: 1 };
+  const before = process.env.PRAVEX_FLOW_RUN;
+  try {
+    process.env.PRAVEX_FLOW_RUN = '9876543210';
+    assert.strictEqual(buildBody('s', 'acme/api', agg, null, 'active', { incognito: false }).flowRun, '9876543210');
+    assert.strictEqual(buildBody('s', '', agg, null, 'active', { incognito: true }).flowRun, '9876543210');
+    process.env.PRAVEX_FLOW_RUN = '12; rm -rf /';
+    assert.strictEqual(buildBody('s', 'acme/api', agg, null, 'active', { incognito: false }).flowRun, undefined);
+  } finally {
+    if (before === undefined) delete process.env.PRAVEX_FLOW_RUN;
+    else process.env.PRAVEX_FLOW_RUN = before;
+  }
+});

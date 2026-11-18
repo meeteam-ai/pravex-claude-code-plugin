@@ -1173,6 +1173,15 @@ function facetsOf(agg) {
 }
 
 /** The payload, shared by every report so the three hooks cannot drift apart. */
+/**
+ * The GitHub Actions run id when this session runs inside a Pravex flow there: the generated workflow sets
+ * `PRAVEX_FLOW_RUN` (pravex-backend plan 0009) so the session's cost lands on the flow's run. Digits only, or nothing.
+ */
+function flowRunId(env = process.env) {
+  const id = String(env.PRAVEX_FLOW_RUN || '').trim();
+  return /^\d{1,20}$/.test(id) ? id : undefined;
+}
+
 function buildBody(sessionId, repo, agg, cwd, status, { incognito = isIncognito(sessionId), agent = 'claude-code' } = {}) {
   if (incognito) {
     // Usage and cost only. No title (it is the first prompt, or a summary of it),
@@ -1192,6 +1201,7 @@ function buildBody(sessionId, repo, agg, cwd, status, { incognito = isIncognito(
       usage: agg.usage,
       status,
       tz: timeZone(),
+      ...(flowRunId() ? { flowRun: flowRunId() } : {}),
     };
   }
   return {
@@ -1212,6 +1222,7 @@ function buildBody(sessionId, repo, agg, cwd, status, { incognito = isIncognito(
     prUrl: agg.prUrl,
     status,
     tz: timeZone(),
+    ...(flowRunId() ? { flowRun: flowRunId() } : {}),
     // Counts and categories only — no paths, names or commands. Absent when the
     // parser could not compute them; the rest of the report stands on its own.
     facets: facetsOf(agg),
