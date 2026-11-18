@@ -278,6 +278,8 @@ jobs:
           node --check plugins/pravex/scripts/seat.js
           node --check plugins/pravex/scripts/setup-snapshot.js
           node --check plugins/pravex/scripts/codex-install.js
+          node --check plugins/pravex/scripts/environment.js
+          node --check plugins/pravex/scripts/flow-runner.js
           node --check packages/pravex-codex/cli.js
           node --check packages/pravex-codex/sync-scripts.js
 

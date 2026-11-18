@@ -29,7 +29,6 @@ const SECRETS = [
   'curl -H',
   'CLAUDE_MD_BODY_FAKE_LINE',
   'PROJECT_MD_BODY_FAKE_LINE',
-  'AGENT_PROMPT_BODY_FAKE',
   'SKILL_BODY_FAKE',
   'COMMAND_BODY_FAKE',
   'Read(./.env)',
@@ -216,17 +215,18 @@ test('a fixture full of secrets produces a snapshot that contains none of them',
 test('emits exactly the wire shape', () => {
   const fx = fixture();
   const s = build(fx, { claudeVersion: '2.3.1' });
-  assert.deepStrictEqual(Object.keys(s), ['v', 'machineId', 'hostname', 'platform', 'arch', 'pluginVersion', 'claudeVersion', 'user', 'project']);
-  assert.strictEqual(s.v, 1);
+  assert.deepStrictEqual(Object.keys(s), ['v', 'machineId', 'hostname', 'platform', 'arch', 'pluginVersion', 'claudeVersion', 'user', 'project', 'environment']);
+  assert.strictEqual(s.v, 2);
+  assert.deepStrictEqual(Object.keys(s.environment), ['directories', 'connections', 'clis']);
   assert.strictEqual(s.machineId, 'machine-1');
   assert.strictEqual(s.pluginVersion, '0.13.0');
   assert.strictEqual(s.claudeVersion, '2.3.1');
   const scopeKeys = ['claudeMd', 'settings', 'mcpServers', 'plugins', 'agents', 'skills', 'commands', 'hooks'];
   assert.deepStrictEqual(Object.keys(s.user), scopeKeys);
   assert.deepStrictEqual(Object.keys(s.project), ['repo', ...scopeKeys, 'workflows']);
-  assert.deepStrictEqual(Object.keys(s.user.settings), ['model', 'effort', 'defaultMode', 'allow', 'ask', 'deny', 'denyCoversSecrets', 'skipDangerousPrompt', 'statusLine']);
+  assert.deepStrictEqual(Object.keys(s.user.settings), ['model', 'effort', 'defaultMode', 'allow', 'ask', 'deny', 'denyCoversSecrets', 'capabilities', 'skipDangerousPrompt', 'statusLine']);
   for (const m of [...s.user.mcpServers, ...s.project.mcpServers]) assert.deepStrictEqual(Object.keys(m), ['name', 'transport', 'scope', 'launcher', 'host', 'plugin']);
-  for (const a of s.user.agents) assert.deepStrictEqual(Object.keys(a), ['name', 'description', 'model', 'tools', 'source', 'plugin']);
+  for (const a of s.user.agents) assert.deepStrictEqual(Object.keys(a), ['name', 'description', 'model', 'tools', 'prompt', 'source', 'plugin']);
   for (const k of s.user.skills) assert.deepStrictEqual(Object.keys(k), ['name', 'description', 'source', 'plugin']);
   for (const c of s.user.commands) assert.deepStrictEqual(Object.keys(c), ['name', 'source', 'plugin']);
   for (const h of s.user.hooks) assert.deepStrictEqual(Object.keys(h), ['event', 'count', 'source', 'plugin']);
@@ -251,9 +251,11 @@ test('settings: values, rule counts across both files, secrets coverage, never a
     ask: 1,
     deny: 2,
     denyCoversSecrets: true,
+    capabilities: { edit: 'allow', write: 'allow', bash: user.settings.capabilities.bash, 'git-push': user.settings.capabilities['git-push'], 'gh-pr': user.settings.capabilities['gh-pr'], 'run-tests': user.settings.capabilities['run-tests'], 'web-fetch': user.settings.capabilities['web-fetch'] },
     skipDangerousPrompt: true,
     statusLine: true,
   });
+  assert.ok(Object.values(user.settings.capabilities).every((v) => ['allow', 'ask', 'deny'].includes(v)));
   // The broken settings.local.json is skipped; settings.json still counts.
   assert.deepStrictEqual(project.settings, {
     model: null,
@@ -263,6 +265,7 @@ test('settings: values, rule counts across both files, secrets coverage, never a
     ask: 0,
     deny: 1,
     denyCoversSecrets: false,
+    capabilities: project.settings.capabilities,
     skipDangerousPrompt: false,
     statusLine: false,
   });
@@ -311,7 +314,7 @@ test('plugins: installed and enabled, with versions; only enabled plugins bring 
     { id: 'off@acme', enabled: false, version: '0.1.0' },
     { id: 'ops@acme', enabled: true, version: '1.2.3' },
   ]);
-  assert.deepStrictEqual(byName(user.agents, 'oncall'), { name: 'oncall', description: 'Handles pages', model: null, tools: ['Bash'], source: 'plugin', plugin: 'ops@acme' });
+  assert.deepStrictEqual(byName(user.agents, 'oncall'), { name: 'oncall', description: 'Handles pages', model: null, tools: ['Bash'], prompt: 'AGENT_PROMPT_BODY_FAKE', source: 'plugin', plugin: 'ops@acme' });
   assert.deepStrictEqual(byName(user.skills, 'rollback'), { name: 'rollback', description: 'Rolls back', source: 'plugin', plugin: 'ops@acme' });
   assert.deepStrictEqual(byName(user.commands, 'page'), { name: 'page', source: 'plugin', plugin: 'ops@acme' });
   const pluginHooks = user.hooks.filter((h) => h.source === 'plugin');
@@ -340,6 +343,7 @@ test('agents, skills and commands: frontmatter only, tools as a string or a list
     description: 'Reviews diffs for bugs',
     model: 'sonnet',
     tools: ['Read', 'Grep', 'Bash'],
+    prompt: 'AGENT_PROMPT_BODY_FAKE',
     source: 'user',
     plugin: null,
   });
@@ -348,11 +352,12 @@ test('agents, skills and commands: frontmatter only, tools as a string or a list
     description: 'Line one line two',
     model: 'haiku',
     tools: ['Read', 'mcp__github__search'],
+    prompt: 'AGENT_PROMPT_BODY_FAKE',
     source: 'user',
     plugin: null,
   });
   assert.deepStrictEqual(byName(user.agents, 'inline').tools, ['Read', 'Edit']);
-  assert.deepStrictEqual(byName(user.agents, 'nofront'), { name: 'nofront', description: null, model: null, tools: null, source: 'user', plugin: null });
+  assert.deepStrictEqual(byName(user.agents, 'nofront'), { name: 'nofront', description: null, model: null, tools: null, prompt: 'AGENT_PROMPT_BODY_FAKE with no frontmatter', source: 'user', plugin: null });
   assert.ok(!user.agents.some((a) => a.name.startsWith('evil')), 'a name that is not one is dropped, not rewritten');
 
   const deploy = byName(user.skills, 'deploy');
