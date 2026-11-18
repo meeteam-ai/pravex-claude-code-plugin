@@ -717,7 +717,9 @@ async function doAction({ node, mode, gh, git, workdir, flow, branch, steps }) {
     const status = await run(git, ['status', '--porcelain'], { cwd: workdir });
     if (status.out.trim()) {
       await run(git, ['add', '-A'], { cwd: workdir });
-      await run(git, ['commit', '-m', `${flow.name} (Pravex flow)`, '--no-verify'], { cwd: workdir });
+      const committed = await run(git, ['commit', '-m', `${flow.name} (Pravex flow)`, '--no-verify'], { cwd: workdir });
+      // Most often a machine without a git identity (user.name / user.email).
+      if (committed.code !== 0) return { ok: false, summary: { code: 'commit-failed', params: { output: tail(committed.err || committed.out, 300) } } };
     }
     const ahead = await run(git, ['rev-list', '--count', '@{upstream}..HEAD'], { cwd: workdir });
     const commits = await run(git, ['log', '--oneline', 'HEAD', '--not', '--remotes'], { cwd: workdir });

@@ -121,7 +121,8 @@ async function withServer(opts, fn) {
   }
 }
 
-const envFor = (fx, host) => ({ ...process.env, HOME: fx.home, USERPROFILE: fx.home, PATH: `${fx.bin}${path.delimiter}${process.env.PATH}`, PRAVEX_ACCESS_TOKEN: 'test-token', PRAVEX_API_HOST: host });
+const IDENTITY = { GIT_AUTHOR_NAME: 'Pravex Test', GIT_AUTHOR_EMAIL: 'test@pravex.test', GIT_COMMITTER_NAME: 'Pravex Test', GIT_COMMITTER_EMAIL: 'test@pravex.test' };
+const envFor = (fx, host, extra = IDENTITY) => ({ ...process.env, HOME: fx.home, USERPROFILE: fx.home, PATH: `${fx.bin}${path.delimiter}${process.env.PATH}`, PRAVEX_ACCESS_TOKEN: 'test-token', PRAVEX_API_HOST: host, ...extra });
 const stepsOf = (patches) => {
   const last = {};
   for (const p of patches) for (const s of p.steps || []) last[s.nodeId] = s;
@@ -171,5 +172,18 @@ test('a live run works in its own worktree, opens a pull request and cleans up',
     assert.ok(!fs.existsSync(path.join(fx.home, '.pravex', 'runs', 'run-1')));
     assert.equal(patches.at(-1).status, 'passed');
     assert.ok(Math.abs(patches.at(-1).costUsd - 0.2) < 1e-9);
+  });
+});
+
+test('a live run without a git identity says the commit failed instead of opening an empty pull request', { skip: process.platform === 'win32' }, async () => {
+  const fx = setUp();
+  await withServer({}, async (host, patches) => {
+    const env = envFor(fx, host, { GIT_CONFIG_GLOBAL: path.join(fx.home, 'no-gitconfig'), GIT_CONFIG_NOSYSTEM: '1' });
+    for (const k of Object.keys(IDENTITY)) delete env[k];
+    for (const k of ['EMAIL', 'GIT_AUTHOR_DATE']) delete env[k];
+    execFileSync('git', ['config', 'user.useConfigOnly', 'true'], { cwd: fx.repo });
+    const { code } = await runNow(env, ['--run', 'f1']);
+    assert.equal(code, 1);
+    assert.equal(stepsOf(patches).p.summary.code, 'commit-failed');
   });
 });
