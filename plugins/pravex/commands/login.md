@@ -29,5 +29,6 @@ The script waits, polling, for up to ten minutes. That is expected; do not
 interrupt it or re-run it while it is waiting.
 
 On success, tell the user every session from now on is reported automatically
-when it ends. On failure, show the error — "expired" and "refused" both just mean
+when it ends, and that their Claude Code setup (names only: MCP servers, agents,
+skills, commands, plugins, hooks, permission counts) is shared with the workspace. On failure, show the error — "expired" and "refused" both just mean
 running `/pravex:login` again.

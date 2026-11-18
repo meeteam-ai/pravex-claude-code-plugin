@@ -52,6 +52,10 @@ function parseArgs(argv) {
 }
 
 /** `codex`, `claude-code` or a full client id, as the OAuth `client_id`. */
+/** Said once, at sign-in: the workspace sees this machine's Claude Code setup, by name (ADR 0044). */
+const SETUP_NOTICE =
+  'Your Claude Code setup is shared with the workspace too: the names of your MCP servers, agents, skills, commands, plugins and hooks, and permission counts. Never their contents, keys or commands.';
+
 function clientIdFor(name) {
   if (!name) return auth.DEFAULT_CLIENT_ID;
   const id = auth.CLIENTS[name] || (Object.values(auth.CLIENTS).includes(name) ? name : null);
@@ -210,6 +214,8 @@ async function main() {
   console.log(`Pravex: connected. Sessions will be reported as ${account.email || 'you'}${account.orgName ? ` (${account.orgName})` : ''}.`);
   console.log(`Config: ${auth.CONFIG_FILE}`);
   console.log(afterLogin(seat));
+  // Claude Code only: the setup snapshot (setup-snapshot.js) is never sent for Codex.
+  if (clientId === auth.CLIENTS['claude-code']) console.log(SETUP_NOTICE);
   console.log('Tip: /pravex:statusline shows in the status line whether a session is recorded, and /pravex:incognito keeps one private.');
 }
 
@@ -220,4 +226,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { afterLogin, clientIdFor, connect, deviceFlow, parseArgs, verify };
+module.exports = { SETUP_NOTICE, afterLogin, clientIdFor, connect, deviceFlow, parseArgs, verify };
