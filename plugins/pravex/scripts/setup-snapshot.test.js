@@ -536,7 +536,10 @@ test('skipped when incognito, without a seat, or with PRAVEX_SETUP=0 — before 
 test('never waits past its cap for a server that does not answer', async () => {
   const fx = fixture();
   const started = Date.now();
-  const r = await sendWith(fx, { send: () => new Promise(() => {}), timeoutMs: 150 });
+  // The cap's timer is unref'd so a real hook can exit; with a send that never settles, nothing else would keep this
+  // test's event loop alive (Node 22 then cancels the test), so hold it open for the test's duration.
+  const keepAlive = setInterval(() => {}, 1000);
+  const r = await sendWith(fx, { send: () => new Promise(() => {}), timeoutMs: 150 }).finally(() => clearInterval(keepAlive));
   assert.deepStrictEqual(r, { sent: false, reason: 'timeout' });
   assert.ok(Date.now() - started < 1000);
   assert.strictEqual(setup.SEND_TIMEOUT_MS, 2000);
