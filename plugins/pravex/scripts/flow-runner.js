@@ -126,19 +126,25 @@ function zoned(date, timeZone) {
   return { minute: Number(get('minute')), hour: Number(get('hour')), day: Number(get('day')), month: Number(get('month')), weekday: days[get('weekday')] };
 }
 
-/** Whether a five-field cron matches `date` in `timeZone`. Sunday is 0 or 7. */
+const DAY_NAMES = { SUN: 0, MON: 1, TUE: 2, WED: 3, THU: 4, FRI: 5, SAT: 6 };
+const MONTH_NAMES = { JAN: 1, FEB: 2, MAR: 3, APR: 4, MAY: 5, JUN: 6, JUL: 7, AUG: 8, SEP: 9, OCT: 10, NOV: 11, DEC: 12 };
+const named = (field, names) => String(field).toUpperCase().replace(/[A-Z]{3}/g, (n) => (n in names ? String(names[n]) : n));
+
+/**
+ * Whether a five-field cron matches `date` in `timeZone`, as cron reads it: Sunday is 0 or 7, day and month names
+ * are allowed, and when both day of month and weekday are restricted either one matching is enough.
+ */
 function cronMatches(cron, date, timeZone) {
   const f = String(cron || '').trim().split(/\s+/);
   if (f.length !== 5) return false;
   const z = zoned(date, timeZone);
-  const dow = f[4].replace(/\b7\b/g, '0');
-  return (
-    fieldMatches(f[0], z.minute, 0, 59) &&
-    fieldMatches(f[1], z.hour, 0, 23) &&
-    fieldMatches(f[2], z.day, 1, 31) &&
-    fieldMatches(f[3], z.month, 1, 12) &&
-    fieldMatches(dow, z.weekday, 0, 6)
-  );
+  const dom = f[2];
+  const dow = named(f[4], DAY_NAMES);
+  const dayOfMonth = fieldMatches(dom, z.day, 1, 31);
+  // 0-7 covers Sunday at both ends: try the day as 0 and, for Sunday, as 7.
+  const weekday = fieldMatches(dow, z.weekday, 0, 7) || (z.weekday === 0 && fieldMatches(dow, 7, 0, 7));
+  const day = dom !== '*' && f[4] !== '*' ? dayOfMonth || weekday : dayOfMonth && weekday;
+  return fieldMatches(f[0], z.minute, 0, 59) && fieldMatches(f[1], z.hour, 0, 23) && fieldMatches(named(f[3], MONTH_NAMES), z.month, 1, 12) && day;
 }
 
 /** The minutes in `(from, to]` the cron matches, newest last, at most a day back. */
@@ -194,12 +200,20 @@ function guardOf(definition) {
   };
 }
 
-/** The usage of the guard's window, or null when unknown or stale. */
+/**
+ * The usage of the guard's window, or null when unknown. A reading whose window has reset since is 0 % (nothing was
+ * used in the new window that anyone saw); otherwise a reading older than the window's freshness says nothing.
+ */
 function usagePct(usage, window, now = Date.now()) {
-  if (!isObject(usage) || typeof usage.at !== 'number' || now - usage.at > USAGE_FRESH_MS[window]) return null;
+  if (!isObject(usage) || typeof usage.at !== 'number') return null;
   const w = window === 'seven_day' ? usage.sevenDay : usage.fiveHour;
-  return isObject(w) && typeof w.pct === 'number' ? w.pct : null;
+  if (!isObject(w) || typeof w.pct !== 'number') return null;
+  if (typeof w.resetsAt === 'number' && w.resetsAt > usage.at && now >= w.resetsAt) return 0;
+  return now - usage.at > USAGE_FRESH_MS[window] ? null : w.pct;
 }
+
+/** The newer of two readings. */
+const newerUsage = (a, b) => (!a ? b : !b ? a : (b.at || 0) > (a.at || 0) ? b : a);
 
 /**
  * `{ ok: true }` or `{ ok: false, code, params }`. `phase` is `start` (days and `runBelowPct`) or
@@ -366,16 +380,31 @@ function run(cmd, args, { cwd, timeoutMs = COMMAND_TIMEOUT_MS, shell = false, on
     let pending = '';
     let child;
     try {
-      child = spawn(cmd, args, { cwd, shell, env: process.env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+      // Its own process group, so a timeout stops everything a shell command started, not just the shell.
+      child = spawn(cmd, args, { cwd, shell, env: process.env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, detached: process.platform !== 'win32' });
     } catch (e) {
       resolve({ code: -1, out: '', err: String(e && e.message), timedOut: false });
       return;
     }
+    let timedOut = false;
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(value);
+    };
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill('SIGTERM');
+      try {
+        if (process.platform !== 'win32' && child.pid) process.kill(-child.pid, 'SIGTERM');
+        else child.kill('SIGTERM');
+      } catch {
+        child.kill('SIGTERM');
+      }
+      // Children that ignore the signal still hold the pipes; do not wait on them.
+      setTimeout(() => finish({ code: -1, out, err, timedOut: true }), 5000).unref();
     }, timeoutMs);
-    let timedOut = false;
     child.stdout.on('data', (d) => {
       const s = d.toString();
       if (out.length < 2_000_000) out += s;
@@ -389,14 +418,10 @@ function run(cmd, args, { cwd, timeoutMs = COMMAND_TIMEOUT_MS, shell = false, on
     child.stderr.on('data', (d) => {
       if (err.length < 200_000) err += d.toString();
     });
-    child.on('error', (e) => {
-      clearTimeout(timer);
-      resolve({ code: -1, out, err: String(e && e.message), timedOut });
-    });
+    child.on('error', (e) => finish({ code: -1, out, err: String(e && e.message), timedOut }));
     child.on('close', (code) => {
-      clearTimeout(timer);
       if (onLine && pending) onLine(pending);
-      resolve({ code: code === null ? -1 : code, out, err, timedOut });
+      finish({ code: code === null ? -1 : code, out, err, timedOut });
     });
   });
 }
@@ -437,8 +462,14 @@ function machineIdOf() {
 // Running a flow
 // ---------------------------------------------------------------------------
 
-/** One run, start to finish (or to a live approval). Reports each step as it goes; never throws. */
-async function executeRun({ run: record, flow, mode, fromNodeId = null, branch: knownBranch = null, manual = false }) {
+/**
+ * One run, start to finish (or to a live approval). Reports each step as it goes; never throws.
+ *
+ * `trusted` is false for a test of a flow not assigned to this machine by its owner (a `/pravex:flow-test` of a
+ * colleague's flow): its agents still run in plan mode, but its check commands are not run, because nobody here
+ * chose them. `startCost` carries what a resumed run had already spent.
+ */
+async function executeRun({ run: record, flow, mode, fromNodeId = null, branch: knownBranch = null, manual = false, trusted = true, startCost = 0 }) {
   const runId = record.id;
   const definition = flow.definition || {};
   const guard = guardOf(definition);
@@ -449,11 +480,15 @@ async function executeRun({ run: record, flow, mode, fromNodeId = null, branch: 
   const maxUsd = typeof budget.maxUsd === 'number' ? budget.maxUsd : 5;
   const maxTurns = typeof budget.maxTurns === 'number' ? budget.maxTurns : 60;
   const steps = [];
-  let costUsd = 0;
+  let costUsd = startCost;
   let usage = envLib.readPlanUsage(HOME);
   const startUsage = usage;
-
   let cancelled = false;
+  let workdir = null;
+  let repoDir = null;
+  let git = null;
+  let final = false;
+
   const patch = async (body) => {
     try {
       const res = await api('PATCH', `/api/agent-flow-runs/${runId}`, body);
@@ -470,140 +505,193 @@ async function executeRun({ run: record, flow, mode, fromNodeId = null, branch: 
     await patch({ steps: [entry], costUsd });
   };
   const finish = async (status, code = null, params = {}) => {
+    final = true;
     await patch({ status, reason: code ? { code, params } : null, costUsd, planUsage: { start: startUsage, end: usage } });
     log(`run ${runId}: ${status}${code ? ` (${code})` : ''}`);
     return { status, code };
   };
 
-  if (!fromNodeId) {
-    const g = guardDecision(guard, usage, { phase: 'start', timeZone, manual: manual || mode === 'dry' });
-    if (!g.ok && mode === 'live') return finish('skipped', g.code, g.params);
-  }
+  try {
+    if (!fromNodeId) {
+      const g = guardDecision(guard, usage, { phase: 'start', timeZone, manual: manual || mode === 'dry' });
+      if (!g.ok && mode === 'live') return await finish('skipped', g.code, g.params);
+    }
 
-  const repoDir = findRepoDir(flow.repo);
-  if (!repoDir) return finish('failed', 'repo-not-found', { repo: flow.repo || '' });
-  const git = which('git');
-  const claude = which('claude');
-  const gh = which('gh');
-  if (!git) return finish('failed', 'cli-missing', { cli: 'git' });
-  if (!claude && order.some((n) => n.type === 'agent')) return finish('failed', 'cli-missing', { cli: 'claude' });
+    repoDir = findRepoDir(flow.repo);
+    if (!repoDir) return await finish('failed', 'repo-not-found', { repo: flow.repo || '' });
+    git = which('git');
+    const claude = which('claude');
+    const gh = which('gh');
+    if (!git) return await finish('failed', 'cli-missing', { cli: 'git' });
+    if (!claude && order.some((n) => n.type === 'agent')) return await finish('failed', 'cli-missing', { cli: 'claude' });
 
-  // A live run works on its own branch in its own worktree; a dry run reads the developer's copy.
-  let workdir = repoDir;
-  let branch = knownBranch;
-  if (mode === 'live') {
-    branch = branch || `pravex/${String(flow.slug || 'flow').slice(0, 40)}-${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '')}`;
-    workdir = path.join(RUNS_DIR, runId);
-    if (!fs.existsSync(workdir)) {
-      await run(git, ['fetch', 'origin', '--quiet'], { cwd: repoDir, timeoutMs: 120000 });
-      const base = (await run(git, ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'], { cwd: repoDir })).out.trim() || 'origin/main';
-      fs.mkdirSync(RUNS_DIR, { recursive: true, mode: 0o700 });
-      const added = await run(git, ['worktree', 'add', '-b', branch, workdir, base], { cwd: repoDir, timeoutMs: 120000 });
-      if (added.code !== 0) return finish('failed', 'worktree-failed', { output: tail(added.err, 300) });
-      const install = installCommand(workdir);
-      if (install) {
-        const r = await run(install, [], { cwd: workdir, shell: true });
-        if (r.code !== 0) return finish('failed', 'install-failed', { command: install, output: tail(r.err || r.out, 300) });
-      }
-    }
-    await patch({ status: 'running', branch });
-  } else {
-    await patch({ status: 'running' });
-  }
-
-  let started = !fromNodeId;
-  let failures = 0;
-  for (const [i, node] of order.entries()) {
-    if (!started) {
-      if (node.id === fromNodeId) started = true;
-      continue; // the approval itself was settled in Pravex
-    }
-    const data = node.data || {};
-    const index = i + 1;
-    if (cancelled) {
-      log(`run ${runId}: cancelled from Pravex`);
-      if (mode === 'live') cleanupWorktree(git, repoDir, workdir);
-      return { status: 'cancelled' };
-    }
-    if (node.type === 'trigger') {
-      await step(node, 'passed', { summary: { code: 'trigger', params: { type: data.type || 'manual' } } });
-      continue;
-    }
-    if (costUsd >= maxUsd) return finish(mode === 'dry' ? 'passed' : 'stopped', 'budget', { maxUsd });
+    // A live run works on its own branch in its own worktree; a dry run reads the developer's copy.
+    workdir = repoDir;
+    let branch = knownBranch;
     if (mode === 'live') {
-      usage = envLib.readPlanUsage(HOME) || usage;
-      const g = guardDecision(guard, usage, { phase: 'step', timeZone });
-      if (!g.ok) {
-        await step(node, 'skipped', { summary: { code: g.code, params: g.params } });
-        return finish('stopped', g.code, g.params);
+      branch = branch || `pravex/${String(flow.slug || 'flow').slice(0, 40)}-${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '')}`;
+      workdir = path.join(RUNS_DIR, runId);
+      if (!fs.existsSync(workdir)) {
+        fs.mkdirSync(RUNS_DIR, { recursive: true, mode: 0o700 });
+        let added;
+        if (knownBranch) {
+          // Resuming after an approval whose worktree is gone: the branch is still there.
+          added = await run(git, ['worktree', 'add', workdir, branch], { cwd: repoDir, timeoutMs: 120000 });
+        } else {
+          await run(git, ['fetch', 'origin', '--quiet'], { cwd: repoDir, timeoutMs: 120000 });
+          const base = (await run(git, ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'], { cwd: repoDir })).out.trim() || 'origin/main';
+          added = await run(git, ['worktree', 'add', '-b', branch, workdir, base], { cwd: repoDir, timeoutMs: 120000 });
+        }
+        if (added.code !== 0) return await finish('failed', 'worktree-failed', { output: tail(added.err, 300) });
+        const install = installCommand(workdir);
+        if (install) {
+          const r = await run(install, [], { cwd: workdir, shell: true });
+          if (r.code !== 0) return await finish('failed', 'install-failed', { command: install, output: tail(r.err || r.out, 300) });
+        }
       }
+      await patch({ status: 'running', branch });
+    } else {
+      await patch({ status: 'running' });
     }
-    await step(node, 'running');
-    const began = Date.now();
 
-    if (node.type === 'agent') {
-      const prompt = agentPrompt(flow, node, { mode, branch, index, total: order.length });
-      const acc = { costUsd: 0, turns: 0, isError: false, result: '', usage: null, limited: false };
-      const r = await run(claude, agentArgs(flow, node, { mode, maxTurns: mode === 'dry' ? Math.min(maxTurns, 15) : maxTurns, prompt }), {
-        cwd: workdir,
-        timeoutMs: AGENT_TIMEOUT_MS[mode],
-        onLine: (l) => foldStream(acc, l),
-      });
-      costUsd += acc.costUsd;
-      if (acc.usage) usage = { ...(usage || {}), ...acc.usage, at: Date.now() };
-      const ms = Date.now() - began;
-      if (acc.limited) {
-        await step(node, 'failed', { ms, costUsd: acc.costUsd, turns: acc.turns, summary: { code: 'plan-limited', params: {} } });
-        return finish('stopped', 'plan-limited', {});
-      }
-      if (r.timedOut || r.code !== 0 || acc.isError) {
-        failures += 1;
-        await step(node, 'failed', { ms, costUsd: acc.costUsd, turns: acc.turns, summary: { code: r.timedOut ? 'timeout' : 'agent-error', params: { output: tail(acc.result || r.err, 400) } } });
-        if (mode === 'live') return finish('failed', 'step-failed', { label: data.label || node.id });
+    let started = !fromNodeId;
+    let failures = 0;
+    for (const [i, node] of order.entries()) {
+      if (!started) {
+        if (node.id === fromNodeId) {
+          started = true;
+          // The gate was settled in Pravex; record it as passed so a later gate is the one to resume from.
+          await step(node, 'passed', { summary: { code: 'approval-given', params: {} } });
+        }
         continue;
       }
-      if (mode === 'dry') {
-        const v = verdictOf(acc.result);
-        const ok = v ? v.canRun : true;
+      if (cancelled) {
+        log(`run ${runId}: cancelled from Pravex`);
+        final = true;
+        return { status: 'cancelled' };
+      }
+      const data = node.data || {};
+      const index = i + 1;
+      if (node.type === 'trigger') {
+        await step(node, 'passed', { summary: { code: 'trigger', params: { type: data.type || 'manual' } } });
+        continue;
+      }
+      if (costUsd >= maxUsd) return await finish(mode === 'dry' ? 'passed' : 'stopped', 'budget', { maxUsd });
+      if (mode === 'live') {
+        usage = newerUsage(usage, envLib.readPlanUsage(HOME));
+        const g = guardDecision(guard, usage, { phase: 'step', timeZone });
+        if (!g.ok) {
+          await step(node, 'skipped', { summary: { code: g.code, params: g.params } });
+          return await finish('stopped', g.code, g.params);
+        }
+      }
+      await step(node, 'running');
+      const began = Date.now();
+
+      if (node.type === 'agent') {
+        const prompt = agentPrompt(flow, node, { mode, branch, index, total: order.length });
+        const acc = { costUsd: 0, turns: 0, isError: false, result: '', usage: null, limited: false };
+        const r = await run(claude, agentArgs(flow, node, { mode, maxTurns: mode === 'dry' ? Math.min(maxTurns, 15) : maxTurns, prompt }), {
+          cwd: workdir,
+          timeoutMs: AGENT_TIMEOUT_MS[mode],
+          onLine: (l) => foldStream(acc, l),
+        });
+        costUsd += acc.costUsd;
+        if (acc.usage) usage = { ...(usage || {}), ...acc.usage, at: Date.now() };
+        const ms = Date.now() - began;
+        if (acc.limited) {
+          await step(node, 'failed', { ms, costUsd: acc.costUsd, turns: acc.turns, summary: { code: 'plan-limited', params: {} } });
+          return await finish('stopped', 'plan-limited', {});
+        }
+        if (r.timedOut || r.code !== 0 || acc.isError) {
+          failures += 1;
+          await step(node, 'failed', { ms, costUsd: acc.costUsd, turns: acc.turns, summary: { code: r.timedOut ? 'timeout' : 'agent-error', params: { output: tail(acc.result || r.err, 400) } } });
+          if (mode === 'live') return await finish('failed', 'step-failed', { label: data.label || node.id });
+          continue;
+        }
+        if (mode === 'dry') {
+          const v = verdictOf(acc.result);
+          const ok = v ? v.canRun : true;
+          if (!ok) failures += 1;
+          const params = v
+            ? { text: envLib.maskSecrets(v.summary), missing: v.missing.map((m) => envLib.maskSecrets(m)) }
+            : { text: tail(acc.result, 300), missing: [] };
+          await step(node, ok ? 'passed' : 'failed', { ms, costUsd: acc.costUsd, turns: acc.turns, summary: { code: v ? 'agent-verdict' : 'agent-done', params } });
+        } else {
+          await step(node, 'passed', { ms, costUsd: acc.costUsd, turns: acc.turns, summary: { code: 'agent-done', params: { text: tail(acc.result, 300) } } });
+        }
+        continue;
+      }
+
+      if (node.type === 'check') {
+        const command = String(data.command || '').trim() || (data.type === 'lint_pass' ? 'npm run lint' : data.type === 'build_pass' ? 'npm run build' : 'npm test');
+        if (!trusted) {
+          await step(node, 'skipped', { ms: 0, summary: { code: 'check-not-run', params: { command } } });
+          continue;
+        }
+        const r = await run(command, [], { cwd: workdir, shell: true });
+        const ok = r.code === 0;
         if (!ok) failures += 1;
-        await step(node, ok ? 'passed' : 'failed', { ms, costUsd: acc.costUsd, turns: acc.turns, summary: { code: v ? 'agent-verdict' : 'agent-done', params: { text: v ? v.summary : tail(acc.result, 300), missing: v ? v.missing : [] } } });
-      } else {
-        await step(node, 'passed', { ms, costUsd: acc.costUsd, turns: acc.turns, summary: { code: 'agent-done', params: { text: tail(acc.result, 300) } } });
-      }
-      continue;
-    }
-
-    if (node.type === 'check') {
-      const command = String(data.command || '').trim() || (data.type === 'lint_pass' ? 'npm run lint' : data.type === 'build_pass' ? 'npm run build' : 'npm test');
-      const r = await run(command, [], { cwd: workdir, shell: true });
-      const ok = r.code === 0;
-      if (!ok) failures += 1;
-      await step(node, ok ? 'passed' : 'failed', { ms: Date.now() - began, summary: { code: ok ? 'check-passed' : r.timedOut ? 'timeout' : 'check-failed', params: { command, exit: r.code, output: ok ? '' : tail(r.out + r.err, 600) } } });
-      if (!ok && mode === 'live' && failures >= (budget.stopAfterFailures || 1)) return finish('failed', 'step-failed', { label: data.label || node.id });
-      continue;
-    }
-
-    if (node.type === 'approval') {
-      if (mode === 'dry') {
-        await step(node, 'passed', { ms: 0, summary: { code: 'approval-would-wait', params: { approvers: String(data.approvers || '') } } });
+        await step(node, ok ? 'passed' : 'failed', { ms: Date.now() - began, summary: { code: ok ? 'check-passed' : r.timedOut ? 'timeout' : 'check-failed', params: { command, exit: r.code, output: ok ? '' : tail(r.out + r.err, 600) } } });
+        if (!ok && mode === 'live' && failures >= (budget.stopAfterFailures || 1)) return await finish('failed', 'step-failed', { label: data.label || node.id });
         continue;
       }
-      await step(node, 'waiting', { summary: { code: 'approval-waiting', params: { approvers: String(data.approvers || '') } } });
-      await patch({ status: 'waiting', branch });
-      log(`run ${runId}: waiting for approval at ${node.id}`);
-      return { status: 'waiting' };
+
+      if (node.type === 'approval') {
+        if (mode === 'dry') {
+          await step(node, 'passed', { ms: 0, summary: { code: 'approval-would-wait', params: { approvers: String(data.approvers || '') } } });
+          continue;
+        }
+        await step(node, 'waiting', { summary: { code: 'approval-waiting', params: { approvers: String(data.approvers || '') } } });
+        await patch({ status: 'waiting', branch });
+        log(`run ${runId}: waiting for approval at ${node.id}`);
+        return { status: 'waiting' };
+      }
+
+      if (node.type === 'action') {
+        const r = await doAction({ node, mode, gh, git, workdir, flow, branch, steps });
+        if (!r.ok) failures += 1;
+        await step(node, r.ok ? (r.skipped ? 'skipped' : 'passed') : 'failed', { ms: Date.now() - began, summary: r.summary });
+        if (!r.ok && mode === 'live') return await finish('failed', 'step-failed', { label: data.label || node.id });
+      }
     }
 
-    if (node.type === 'action') {
-      const r = await doAction({ node, mode, gh, git, workdir, flow, branch, steps });
-      if (!r.ok) failures += 1;
-      await step(node, r.ok ? (r.skipped ? 'skipped' : 'passed') : 'failed', { ms: Date.now() - began, summary: r.summary });
-      if (!r.ok && mode === 'live') return finish('failed', 'step-failed', { label: data.label || node.id });
+    return await finish(failures ? 'failed' : 'passed', failures ? 'steps-failed' : null, failures ? { count: failures } : {});
+  } catch (e) {
+    log(`run ${runId}: crashed: ${e && e.message}`);
+    return await finish('failed', 'runner-error', { output: tail(e && e.message, 300) });
+  } finally {
+    // Whatever ended the run (passed, failed, stopped, cancelled), its worktree goes; a paused one stays for the resume.
+    if (final && mode === 'live' && git && repoDir && workdir && workdir !== repoDir) cleanupWorktree(git, repoDir, workdir);
+  }
+}
+
+/** Worktrees of runs Pravex no longer lists as open (cancelled while paused, or left by a crash). */
+function sweepWorktrees(active) {
+  let names = [];
+  try {
+    names = fs.readdirSync(RUNS_DIR);
+  } catch {
+    return;
+  }
+  const git = which('git');
+  for (const name of names) {
+    if (active.includes(name)) continue;
+    const dir = path.join(RUNS_DIR, name);
+    let repo = null;
+    try {
+      const m = /gitdir:\s*(.+)/.exec(fs.readFileSync(path.join(dir, '.git'), 'utf8'));
+      if (m) repo = path.resolve(m[1].trim(), '..', '..', '..');
+    } catch {
+      /* not a worktree */
+    }
+    if (git && repo) cleanupWorktree(git, repo, dir);
+    try {
+      fs.rmSync(dir, { recursive: true, force: true });
+    } catch {
+      /* left for next time */
     }
   }
-
-  if (mode === 'live') cleanupWorktree(git, repoDir, workdir);
-  return finish(failures ? 'failed' : 'passed', failures ? 'steps-failed' : null, failures ? { count: failures } : {});
 }
 
 async function ghOk(gh, args, cwd) {
@@ -709,22 +797,25 @@ async function tick({ now = Date.now() } = {}) {
     const machineId = machineIdOf();
     if (!machineId) throw new Error('no machine id yet: start a Claude Code session with the plugin first');
     const lastTickAt = typeof state.lastTickAt === 'number' ? state.lastTickAt : now - TICK_MINUTES * 60000;
-    saveState({ lastTickAt: now });
     const work = await api('POST', '/api/agent-flows/runner', {
       machineId,
       planUsage: envLib.readPlanUsage(HOME),
       runner: { ...envLib.readRunnerState(HOME), lastTickAt: now },
     });
+    // Only once Pravex answered: a tick that fails offline keeps its schedules for the next one.
+    saveState({ lastTickAt: now });
     const flows = Array.isArray(work && work.flows) ? work.flows : [];
+    sweepWorktrees(Array.isArray(work && work.active) ? work.active : []);
 
     // Approved live runs pick up where they paused.
     for (const r of Array.isArray(work && work.resume) ? work.resume : []) {
       const flow = flows.find((f) => f.id === r.flowId);
-      if (flow) await executeRun({ run: { id: r.runId }, flow, mode: 'live', fromNodeId: r.fromNodeId, branch: r.branch });
+      if (flow) await executeRun({ run: { id: r.runId }, flow, mode: 'live', fromNodeId: r.fromNodeId, branch: r.branch, startCost: Number(r.costUsd) || 0 });
     }
     // Runs requested from the app (a test or "run now").
     for (const r of Array.isArray(work && work.requests) ? work.requests : []) {
-      const flow = flows.find((f) => f.id === r.flowId) || r.flow;
+      // Pravex hands over only requests for flows this machine's owner assigned here, at the version asked for.
+      const flow = flows.find((f) => f.id === r.flowId);
       if (!flow) continue;
       try {
         await api('POST', `/api/agent-flow-runs/${r.runId}/claim`, { machineId });
@@ -774,7 +865,8 @@ async function runNow(flowId, { dry = true } = {}) {
   }
   const flow = created.flow;
   console.log(`Pravex: ${dry ? 'testing' : 'running'} "${flow.name}" on this machine…`);
-  const result = await executeRun({ run: created, flow, mode: dry ? 'dry' : 'live', manual: true });
+  if (!created.assigned) console.log("  This flow is not assigned to this machine by you, so its commands are not run: only its agents check, in plan mode.");
+  const result = await executeRun({ run: created, flow, mode: dry ? 'dry' : 'live', manual: true, trusted: created.assigned === true });
   let final = null;
   try {
     final = await api('GET', `/api/agent-flow-runs/${created.id}`);
@@ -963,4 +1055,6 @@ module.exports = {
   usagePct,
   verdictOf,
   zoned,
+  newerUsage,
+  sweepWorktrees,
 };

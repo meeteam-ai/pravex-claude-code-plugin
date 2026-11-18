@@ -118,3 +118,25 @@ test('launchd plist escapes paths and runs the tick every 15 minutes', () => {
   assert.match(plist, /a&amp;b/);
   assert.match(plist, /--tick/);
 });
+
+test('cron reads like cron: names, Sunday as 7, day of month or weekday', () => {
+  const wed = new Date('2026-11-18T12:00:00Z'); // Wednesday the 18th
+  assert.ok(runner.cronMatches('0 12 * * WED', wed, 'UTC'));
+  assert.ok(runner.cronMatches('0 12 * NOV *', wed, 'UTC'));
+  assert.ok(runner.cronMatches('0 12 * * 1-7', new Date('2026-11-22T12:00:00Z'), 'UTC'), 'Sunday inside 1-7');
+  assert.ok(runner.cronMatches('0 12 1 * 3', wed, 'UTC'), 'weekday matches although the day of month does not');
+  assert.ok(!runner.cronMatches('0 12 1 * 4', wed, 'UTC'));
+});
+
+test('usage: a window that reset since the reading is 0 %, and the newer reading wins', () => {
+  const now = Date.parse('2026-11-19T07:00:00Z');
+  const evening = { fiveHour: { pct: 70, resetsAt: Date.parse('2026-11-18T23:00:00Z') }, sevenDay: { pct: 40, resetsAt: null }, at: Date.parse('2026-11-18T20:00:00Z') };
+  assert.equal(runner.usagePct(evening, 'five_hour', now), 0);
+  assert.equal(runner.usagePct(evening, 'seven_day', now), 40);
+  assert.equal(runner.usagePct({ ...evening, at: now - 26 * 3600000 }, 'seven_day', now), null);
+  const a = { at: 1 };
+  const b = { at: 2 };
+  assert.equal(runner.newerUsage(a, b), b);
+  assert.equal(runner.newerUsage(b, a), b);
+  assert.equal(runner.newerUsage(null, a), a);
+});

@@ -159,7 +159,9 @@ function planUsageOf(session) {
   if (!limits || typeof limits !== 'object') return null;
   const win = (w) => {
     if (!w || typeof w.used_percentage !== 'number' || !Number.isFinite(w.used_percentage)) return null;
-    const resets = typeof w.resets_at === 'number' ? w.resets_at : typeof w.resets_at === 'string' ? Date.parse(w.resets_at) : null;
+    // Seconds or milliseconds since the epoch, or an ISO date: kept in milliseconds.
+    const raw = typeof w.resets_at === 'number' ? w.resets_at : typeof w.resets_at === 'string' ? Date.parse(w.resets_at) : null;
+    const resets = typeof raw === 'number' && raw > 0 && raw < 1e12 ? raw * 1000 : raw;
     return { pct: Math.max(0, Math.min(100, Math.round(w.used_percentage * 10) / 10)), resetsAt: Number.isFinite(resets) ? resets : null };
   };
   const fiveHour = win(limits.five_hour);

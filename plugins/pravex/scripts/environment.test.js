@@ -111,7 +111,7 @@ test('the status line keeps the plan usage Claude Code gives it', () => {
   const file = path.join(tempHome(), '.pravex', 'plan-usage.json');
   assert.equal(statusline.planUsageOf({}), null);
   const session = { rate_limits: { five_hour: { used_percentage: 23.46, resets_at: 1800000000 }, seven_day: { used_percentage: 61 } } };
-  assert.deepEqual(statusline.planUsageOf(session), { fiveHour: { pct: 23.5, resetsAt: 1800000000 }, sevenDay: { pct: 61, resetsAt: null } });
+  assert.deepEqual(statusline.planUsageOf(session), { fiveHour: { pct: 23.5, resetsAt: 1800000000000 }, sevenDay: { pct: 61, resetsAt: null } });
   assert.equal(statusline.rememberPlanUsage(session, 1000, file), true);
   assert.equal(statusline.rememberPlanUsage(session, 2000, file), false, 'unchanged within a minute');
   assert.equal(statusline.rememberPlanUsage(session, 70000, file), true);
