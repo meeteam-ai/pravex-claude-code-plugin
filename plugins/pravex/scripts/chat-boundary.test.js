@@ -30,6 +30,7 @@ const { envFor, runHook, tempHome } = require('./test-support.js');
 
 /** Every field a report may carry. A new one is a decision; `kind` must never be one. */
 const REPORT_FIELDS = new Set([
+  'flowRun',
   'externalId',
   'agent',
   'incognito',
