@@ -319,6 +319,13 @@ a percentage, stop above another). `/pravex:flow-test <flow>` tests a flow here
 without changing anything: agents run in plan mode and say whether they could do
 their task. `/pravex:flows uninstall` removes the schedule.
 
+In a live run (0.15.1): while a check is failing nothing leaves the machine (no pull
+request, deploy or approval); each agent's report is handed to the next one; an agent
+that edits may run the flow's own check commands, exactly as written; and work that
+did not reach a pull request is committed to the run's local branch, never pushed.
+A run ends early, saying so, when Claude Code is signed out on the machine
+(`claude auth login`).
+
 ## The setup snapshot
 
 Since 0.13.0, a session start that holds a seat also sends a snapshot of how this
