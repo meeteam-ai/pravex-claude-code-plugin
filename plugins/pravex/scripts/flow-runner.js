@@ -24,9 +24,9 @@
  * approval to wait for. What each agent reports is handed to the next one. Work that did not reach a pull request is
  * committed to the run's local branch before its worktree goes.
  *
- * **The guard.** Before starting and between steps, the plan usage the status line last saw
- * (`~/.pravex/plan-usage.json`, and any `rate_limit_event` in Claude's output) is compared with the
- * flow's limits: start only below `runBelowPct`, stop above `stopAbovePct`.
+ * **The guard.** Before starting and between steps, the plan usage is compared with the flow's limits. It comes from
+ * Claude itself: a one-word question to the smallest model before a guarded run, the `rate_limit_event`s of the agents
+ * as they work, and otherwise what the status line last saw (`~/.pravex/plan-usage.json`). The limits are: start only below `runBelowPct`, stop above `stopAbovePct`.
  *
  * Standard library only. Copied to `~/.pravex/runner/` on install, with what it needs, so the
  * schedule survives plugin updates; the SessionStart hook keeps the copy fresh.
@@ -342,9 +342,16 @@ function foldStream(acc, line) {
     acc.result = typeof msg.result === 'string' ? msg.result : acc.result;
   } else if (msg.type === 'rate_limit_event' && isObject(msg.rate_limit_info)) {
     const info = msg.rate_limit_info;
+    const windows = isObject(info.unifiedWindows) ? info.unifiedWindows : {};
+    for (const [key, name] of [['five_hour', 'fiveHour'], ['seven_day', 'sevenDay']]) {
+      const w = windows[key];
+      if (isObject(w) && typeof w.utilization === 'number' && Number.isFinite(w.utilization)) {
+        acc.usage = { ...(acc.usage || {}), [name]: { pct: Math.max(0, Math.min(100, Math.round(w.utilization * 100))), resetsAt: resetOf(w.resetsAt) } };
+      }
+    }
     const pct = typeof info.utilization === 'number' ? Math.round(info.utilization * (info.utilization <= 1 ? 100 : 1)) : null;
     const window = info.rateLimitType === 'seven_day' ? 'sevenDay' : info.rateLimitType === 'five_hour' ? 'fiveHour' : null;
-    if (pct !== null && window) acc.usage = { ...(acc.usage || {}), [window]: { pct, resetsAt: resetOf(info.resetsAt) } };
+    if (pct !== null && window && !(acc.usage && acc.usage[window] && isObject(windows[info.rateLimitType]))) acc.usage = { ...(acc.usage || {}), [window]: { pct, resetsAt: resetOf(info.resetsAt) } };
     if (info.status === 'rejected') acc.limited = true;
   }
   return acc;
@@ -523,7 +530,7 @@ async function executeRun({ run: record, flow, mode, fromNodeId = null, branch: 
   const steps = [];
   let costUsd = startCost;
   let usage = envLib.readPlanUsage(HOME);
-  const startUsage = usage;
+  let startUsage = usage;
   let cancelled = false;
   let workdir = null;
   let repoDir = null;
@@ -561,6 +568,14 @@ async function executeRun({ run: record, flow, mode, fromNodeId = null, branch: 
   };
 
   try {
+    // A live run that has limits asks Claude where the plan stands, unless today is not one of its days anyway.
+    if (mode === 'live' && guarded(guard) && guardDecision({ ...guard, runBelowPct: null }, null, { phase: 'start', timeZone, manual }).ok) {
+      const cli = which('claude');
+      // Signed out is the reason to give, not the unknown usage that follows from it.
+      if (cli && order.some((n) => n.type === 'agent') && (await claudeSignedOut(cli))) return await finish('failed', 'claude-not-signed-in', {});
+      if (cli) usage = (await probePlanUsage(cli)) || usage;
+      startUsage = usage;
+    }
     if (!fromNodeId) {
       const g = guardDecision(guard, usage, { phase: 'start', timeZone, manual: manual || mode === 'dry' });
       if (!g.ok && mode === 'live') return await finish('skipped', g.code, g.params);
@@ -653,7 +668,10 @@ async function executeRun({ run: record, flow, mode, fromNodeId = null, branch: 
           onLine: (l) => foldStream(acc, l),
         });
         costUsd += acc.costUsd;
-        if (acc.usage) usage = { ...(usage || {}), ...acc.usage, at: Date.now() };
+        if (acc.usage) {
+          usage = { ...(usage || {}), ...acc.usage, at: Date.now() };
+          rememberUsage({ ...acc.usage, at: usage.at });
+        }
         const ms = Date.now() - began;
         if (acc.limited) {
           await step(node, 'failed', { ms, costUsd: acc.costUsd, turns: acc.turns, summary: { code: 'plan-limited', params: {} } });
@@ -744,6 +762,32 @@ async function executeRun({ run: record, flow, mode, fromNodeId = null, branch: 
       else cleanupWorktree(git, repoDir, workdir);
     }
   }
+}
+
+const PROBE_EVERY_MS = 60 * 60 * 1000;
+const guarded = (guard) => guard.runBelowPct !== null || guard.stopAbovePct !== null;
+
+/** Keeps a reading for the next guard and the machine status. A window it lacks stays unknown, never borrowed. */
+function rememberUsage(usage) {
+  try {
+    writeJson(path.join(PRAVEX_DIR, 'plan-usage.json'), { fiveHour: usage.fiveHour || null, sevenDay: usage.sevenDay || null, at: usage.at });
+  } catch {
+    /* the run goes on with the reading it holds */
+  }
+}
+
+/**
+ * The plan usage as Claude reports it now, or null (signed out, offline, an API key, an older Claude Code). One word
+ * asked of the smallest model, with no tools, no hooks and no saved session: it needs no terminal and is not a session.
+ */
+async function probePlanUsage(claude) {
+  const acc = { usage: null };
+  const args = ['-p', 'Reply with: ok', '--model', 'haiku', '--max-turns', '1', '--tools', '', '--output-format', 'stream-json', '--verbose', '--no-session-persistence', '--settings', '{"disableAllHooks":true}'];
+  await run(claude, args, { cwd: HOME, timeoutMs: 60000, onLine: (l) => foldStream(acc, l) });
+  if (!acc.usage) return null;
+  const usage = { fiveHour: acc.usage.fiveHour || null, sevenDay: acc.usage.sevenDay || null, at: Date.now() };
+  rememberUsage(usage);
+  return usage;
 }
 
 /** True only when Claude Code itself says nobody is signed in; an older one without `auth status` is given the benefit. */
@@ -946,6 +990,14 @@ async function tick({ now = Date.now() } = {}) {
     saveState({ lastTickAt: now });
     const flows = Array.isArray(work && work.flows) ? work.flows : [];
     await sweepWorktrees(Array.isArray(work && work.active) ? work.active : []);
+
+    // A guarded flow whose window nobody has read lately: ask, so Pravex can say whether it would run. Hourly at most.
+    const unread = flows.map((f) => guardOf(f.definition)).some((g) => guarded(g) && usagePct(envLib.readPlanUsage(HOME), g.window, now) === null);
+    const claude = which('claude');
+    if (unread && claude && !(typeof state.lastProbeAt === 'number' && now - state.lastProbeAt < PROBE_EVERY_MS)) {
+      saveState({ lastProbeAt: now });
+      await probePlanUsage(claude);
+    }
 
     // Approved live runs pick up where they paused.
     for (const r of Array.isArray(work && work.resume) ? work.resume : []) {
