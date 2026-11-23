@@ -326,6 +326,11 @@ did not reach a pull request is committed to the run's local branch, never pushe
 A run ends early, saying so, when Claude Code is signed out on the machine
 (`claude auth login`).
 
+A flow with plan limits asks Claude where the plan stands before it runs (0.15.2): one
+word to the smallest model, with no tools, hooks or saved session, so no terminal has
+to be open. The scheduled check asks too, at most once an hour, when nothing has read
+the plan lately.
+
 ## The setup snapshot
 
 Since 0.13.0, a session start that holds a seat also sends a snapshot of how this

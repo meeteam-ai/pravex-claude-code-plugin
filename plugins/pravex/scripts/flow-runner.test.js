@@ -177,3 +177,10 @@ test('a rate limit event keeps when its window resets', () => {
   const acc = runner.foldStream({}, JSON.stringify({ type: 'rate_limit_event', rate_limit_info: { status: 'allowed_warning', utilization: 0.8, rateLimitType: 'five_hour', resetsAt: 1795000000 } }));
   assert.deepEqual(acc.usage, { fiveHour: { pct: 80, resetsAt: 1795000000000 } });
 });
+
+test('a rate limit event with every window gives both readings', () => {
+  const info = { status: 'allowed', resetsAt: 1795488000, rateLimitType: 'five_hour', unifiedWindows: { five_hour: { utilization: 0.13, resetsAt: 1795488000 }, seven_day: { utilization: 1, resetsAt: 1795878000 } } };
+  const acc = runner.foldStream({}, JSON.stringify({ type: 'rate_limit_event', rate_limit_info: info }));
+  assert.deepEqual(acc.usage, { fiveHour: { pct: 13, resetsAt: 1795488000000 }, sevenDay: { pct: 100, resetsAt: 1795878000000 } });
+  assert.equal(runner.foldStream({}, JSON.stringify({ type: 'rate_limit_event', rate_limit_info: { status: 'allowed', unifiedWindows: { five_hour: { utilization: 'x' } } } })).usage, undefined);
+});

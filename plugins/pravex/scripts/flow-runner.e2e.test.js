@@ -296,3 +296,53 @@ test('work is kept on a machine without a git identity', posix, async () => {
     assert.match(fx.git(['ls-tree', '-r', '--name-only', branches(fx)[0]], fx.repo), /half\.txt/);
   });
 });
+
+/** A claude whose plan stands at `pct` of the five-hour window when asked. */
+const planAt = (pct) => `case "$*" in *"Reply with: ok"*) printf '%s\\n' '${JSON.stringify({ type: 'rate_limit_event', rate_limit_info: { status: 'allowed', rateLimitType: 'five_hour', unifiedWindows: { five_hour: { utilization: pct / 100, resetsAt: 4102444800 } } } })}'; exit 0 ;; esac`;
+const guardedFlow = { ...chain([T, agent('a'), check('c', 'true'), PR]), guard: { days: null, window: 'five_hour', runBelowPct: 30, stopAbovePct: 80, whenUnknown: 'skip' } };
+
+test('a guarded live run asks Claude where the plan stands: below the limit it runs, above it does not', posix, async () => {
+  for (const [pct, status, code] of [
+    [13, 'passed', null],
+    [45, 'skipped', 'plan-above-start'],
+  ]) {
+    const fx = setUp();
+    fakeClaude(fx, `${planAt(pct)}; echo x > x.txt; ${say('done')}`);
+    await withServer({ definition: guardedFlow }, async (host, patches) => {
+      await runNow(envFor(fx, host), ['--run', 'f1']);
+      assert.equal(patches.at(-1).status, status);
+      assert.equal(patches.at(-1).reason ? patches.at(-1).reason.code : null, code);
+      assert.equal(patches.at(-1).planUsage.start.fiveHour.pct, pct);
+      assert.equal(JSON.parse(fs.readFileSync(path.join(fx.home, '.pravex', 'plan-usage.json'), 'utf8')).fiveHour.pct, pct);
+    });
+  }
+});
+
+test('a guarded run is still skipped when Claude does not say', posix, async () => {
+  const fx = setUp();
+  fakeClaude(fx, say('done'));
+  await withServer({ definition: guardedFlow }, async (host, patches) => {
+    await runNow(envFor(fx, host), ['--run', 'f1']);
+    assert.equal(patches.at(-1).reason.code, 'plan-unknown');
+  });
+});
+
+test('a fresh answer replaces an old reading whose window has reset', posix, async () => {
+  const fx = setUp();
+  const at = Date.now() - 86400000;
+  fs.writeFileSync(path.join(fx.home, '.pravex', 'plan-usage.json'), JSON.stringify({ fiveHour: { pct: 2, resetsAt: at + 1000 }, sevenDay: null, at }));
+  fakeClaude(fx, `${planAt(90)}; ${say('done')}`);
+  await withServer({ definition: guardedFlow }, async (host, patches) => {
+    await runNow(envFor(fx, host), ['--run', 'f1']);
+    assert.equal(patches.at(-1).reason.code, 'plan-above-start');
+  });
+});
+
+test('a guarded run on a signed-out machine says so instead of an unknown plan', posix, async () => {
+  const fx = setUp();
+  fs.writeFileSync(path.join(fx.bin, 'claude'), `#!/bin/sh\necho '{"loggedIn": false}'; exit 1\n`, { mode: 0o755 });
+  await withServer({ definition: guardedFlow }, async (host, patches) => {
+    await runNow(envFor(fx, host), ['--run', 'f1']);
+    assert.equal(patches.at(-1).reason.code, 'claude-not-signed-in');
+  });
+});
