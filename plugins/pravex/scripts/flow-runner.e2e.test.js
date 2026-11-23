@@ -76,7 +76,7 @@ const flowDef = {
   budget: { maxUsd: 5, maxTurns: 20, stopAfterFailures: 1 },
 };
 
-function pravex({ assigned = true } = {}) {
+function pravex({ assigned = true, definition = flowDef } = {}) {
   const patches = [];
   const server = http.createServer((req, res) => {
     let raw = '';
@@ -88,7 +88,7 @@ function pravex({ assigned = true } = {}) {
         res.end(JSON.stringify({ status, result }));
       };
       if (req.method === 'POST' && req.url === '/api/agent-flow-runs') {
-        return send({ id: 'run-1', created: true, assigned, flow: { id: 'f1', name: 'Write a file', slug: 'write-a-file', version: 1, repo: 'acme/app', definition: flowDef }, mode: body.mode }, 201);
+        return send({ id: 'run-1', created: true, assigned, flow: { id: 'f1', name: 'Write a file', slug: 'write-a-file', version: 1, repo: 'acme/app', definition }, mode: body.mode }, 201);
       }
       if (req.method === 'PATCH' && req.url === '/api/agent-flow-runs/run-1') {
         patches.push(body);
@@ -185,5 +185,114 @@ test('a live run without a git identity says the commit failed instead of openin
     const { code } = await runNow(env, ['--run', 'f1']);
     assert.equal(code, 1);
     assert.equal(stepsOf(patches).p.summary.code, 'commit-failed');
+  });
+});
+
+// What a live run promises -------------------------------------------------
+
+/** A claude that records how it was called and then does `script`. */
+function fakeClaude(fx, script) {
+  fs.writeFileSync(
+    path.join(fx.bin, 'claude'),
+    `#!/bin/sh
+if [ "$1" = auth ]; then echo '{"loggedIn": true}'; exit 0; fi
+n=$(ls "${fx.home}"/call-* 2>/dev/null | wc -l | tr -d ' ')
+printf '%s\\n' "$@" > "${fx.home}/call-$n"
+${script}
+`,
+    { mode: 0o755 },
+  );
+}
+const say = (text) => `printf '%s\\n' '${JSON.stringify({ type: 'result', subtype: 'success', is_error: false, total_cost_usd: 0.1, num_turns: 1, result: text })}'`;
+const chain = (nodes, budget = {}) => ({
+  nodes: nodes.map((n) => ({ position: { x: 0, y: 0 }, ...n })),
+  edges: nodes.slice(1).map((n, i) => ({ id: `e${i}`, source: nodes[i].id, target: n.id })),
+  budget: { maxUsd: 5, maxTurns: 20, stopAfterFailures: 3, ...budget },
+});
+const T = { id: 't', type: 'trigger', data: { label: 'Now', type: 'manual' } };
+const agent = (id, tools = ['Read', 'Write']) => ({ id, type: 'agent', data: { label: `Agent ${id}`, model: 'sonnet', tools, instructions: `Task ${id}` } });
+const check = (id, command) => ({ id, type: 'check', data: { label: `Check ${id}`, type: 'custom', command } });
+const PR = { id: 'p', type: 'action', data: { label: 'Open PR', type: 'open_pr' } };
+const branches = (fx) => fx.git(['branch', '--list', 'pravex/*', '--format=%(refname:short)'], fx.repo).trim().split('\n').filter(Boolean);
+const posix = { skip: process.platform === 'win32' };
+
+test('a failing check stops the pull request even below the failure limit, and the work stays on the local branch', posix, async () => {
+  const fx = setUp();
+  fakeClaude(fx, `echo half > half.txt; ${say('Half done')}`);
+  await withServer({ definition: chain([T, agent('a'), check('c', 'false'), PR]) }, async (host, patches) => {
+    const { code, out } = await runNow(envFor(fx, host), ['--run', 'f1']);
+    assert.equal(code, 1, out);
+    const steps = stepsOf(patches);
+    assert.equal(steps.p.status, 'skipped');
+    assert.deepEqual(steps.p.summary, { code: 'blocked-by-check', params: { label: 'Check c' } });
+    const [branch] = branches(fx);
+    assert.deepEqual(patches.at(-1).reason, { code: 'step-failed', params: { label: 'Check c', branch } });
+    assert.match(fx.git(['ls-tree', '-r', '--name-only', branch], fx.repo), /half\.txt/);
+    assert.equal(fx.git(['branch', '--list', 'pravex/*'], fx.origin).trim(), '', 'nothing was pushed');
+    assert.ok(!fs.existsSync(path.join(fx.home, '.pravex', 'runs', 'run-1')));
+    assert.equal(fx.git(['status', '--porcelain'], fx.repo).trim(), '', "the developer's copy is untouched");
+  });
+});
+
+test('a failing check also stops an approval from being asked for', posix, async () => {
+  const fx = setUp();
+  fakeClaude(fx, say('ok'));
+  await withServer({ definition: chain([T, check('c', 'false'), { id: 'g', type: 'approval', data: { label: 'Gate' } }, PR]) }, async (host, patches) => {
+    await runNow(envFor(fx, host), ['--run', 'f1']);
+    assert.equal(stepsOf(patches).g.status, 'skipped');
+    assert.ok(!patches.some((p) => p.status === 'waiting'));
+    assert.equal(patches.at(-1).status, 'failed');
+  });
+});
+
+test('an agent after a failed check reads its output, and the same check passing opens the pull request', posix, async () => {
+  const fx = setUp();
+  fakeClaude(fx, `case "$*" in *"Task b"*) echo ok > fixed.txt ;; *) echo x > x.txt ;; esac; ${say('Report of the step')}`);
+  const command = 'test -f fixed.txt || (echo MISSING-FIXED-FILE; exit 1)';
+  await withServer({ definition: chain([T, agent('a'), check('c1', command), agent('b'), check('c2', command), PR]) }, async (host, patches) => {
+    const { code, out } = await runNow(envFor(fx, host), ['--run', 'f1']);
+    assert.equal(code, 0, out);
+    assert.equal(stepsOf(patches).p.summary.code, 'pr-opened');
+    assert.equal(patches.at(-1).status, 'passed');
+    const second = fs.readFileSync(path.join(fx.home, 'call-1'), 'utf8');
+    assert.match(second, /### Agent a\nReport of the step/);
+    assert.match(second, /MISSING-FIXED-FILE/);
+    assert.doesNotMatch(fs.readFileSync(path.join(fx.home, 'call-0'), 'utf8'), /earlier steps/);
+  });
+});
+
+test('a night with nothing to change passes without pushing a branch or opening a pull request', posix, async () => {
+  const fx = setUp();
+  fakeClaude(fx, say('Nothing safe to change'));
+  await withServer({ definition: chain([T, agent('a'), check('c', 'true'), PR]) }, async (host, patches) => {
+    const { code, out } = await runNow(envFor(fx, host), ['--run', 'f1']);
+    assert.equal(code, 0, out);
+    assert.deepEqual(stepsOf(patches).p.summary, { code: 'nothing-to-commit', params: {} });
+    assert.equal(fx.git(['branch', '--list', 'pravex/*'], fx.origin).trim(), '');
+  });
+});
+
+test('a signed-out Claude Code ends the run before anything is copied, dry or live', posix, async () => {
+  const fx = setUp();
+  fs.writeFileSync(path.join(fx.bin, 'claude'), `#!/bin/sh\necho '{"loggedIn": false}'; exit 1\n`, { mode: 0o755 });
+  for (const args of [['--run', 'f1'], ['--run', 'f1', '--dry']]) {
+    await withServer({}, async (host, patches) => {
+      const { code } = await runNow(envFor(fx, host), args);
+      assert.equal(code, 1);
+      assert.deepEqual(patches.at(-1).reason, { code: 'claude-not-signed-in', params: {} });
+      assert.deepEqual(branches(fx), []);
+    });
+  }
+});
+
+test('work is kept on a machine without a git identity', posix, async () => {
+  const fx = setUp();
+  fakeClaude(fx, `echo half > half.txt; ${say('Half done')}`);
+  await withServer({ definition: chain([T, agent('a'), check('c', 'false'), PR]) }, async (host) => {
+    const env = envFor(fx, host, { GIT_CONFIG_GLOBAL: path.join(fx.home, 'no-gitconfig'), GIT_CONFIG_NOSYSTEM: '1' });
+    for (const k of [...Object.keys(IDENTITY), 'EMAIL']) delete env[k];
+    execFileSync('git', ['config', 'user.useConfigOnly', 'true'], { cwd: fx.repo });
+    await runNow(env, ['--run', 'f1']);
+    assert.match(fx.git(['ls-tree', '-r', '--name-only', branches(fx)[0]], fx.repo), /half\.txt/);
   });
 });

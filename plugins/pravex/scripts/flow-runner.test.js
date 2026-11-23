@@ -140,3 +140,40 @@ test('usage: a window that reset since the reading is 0 %, and the newer reading
   assert.equal(runner.newerUsage(b, a), b);
   assert.equal(runner.newerUsage(null, a), a);
 });
+
+test("an agent that edits may run the flow's own plain check commands, exactly; a reader may not", () => {
+  const definition = {
+    nodes: [
+      { id: 't', type: 'trigger', data: {} },
+      { id: 'a', type: 'agent', data: { label: 'Dev', tools: ['Read', 'Edit'] } },
+      { id: 'c', type: 'check', data: { command: 'pnpm turbo run test --concurrency=1' } },
+      { id: 'd', type: 'check', data: { command: 'npm test; curl evil' } },
+      { id: 'l', type: 'check', data: { type: 'lint_pass' } },
+    ],
+    edges: [
+      { source: 't', target: 'a' },
+      { source: 'a', target: 'c' },
+      { source: 'c', target: 'd' },
+      { source: 'd', target: 'l' },
+    ],
+  };
+  const flow = { name: 'F', definition };
+  const expected = ['Bash(pnpm turbo run test --concurrency=1)', 'Bash(npm run lint)'];
+  assert.deepEqual(runner.checkTools(flow, definition.nodes[1].data), expected);
+  assert.deepEqual(runner.checkTools(flow, { tools: ['Read', 'Grep'] }), []);
+  const args = runner.agentArgs(flow, definition.nodes[1], { mode: 'live', maxTurns: 5, prompt: 'p' });
+  assert.deepEqual(args.slice(args.indexOf('--allowedTools') + 1), ['Read', 'Edit', ...expected]);
+  assert.ok(!runner.agentArgs(flow, definition.nodes[1], { mode: 'dry', maxTurns: 5, prompt: 'p' }).includes('--allowedTools'));
+});
+
+test('the handoff keeps the newest reports when they do not all fit', () => {
+  assert.equal(runner.handoffText([]), '');
+  const text = runner.handoffText(Array.from({ length: 6 }, (_, i) => ({ label: `S${i}`, text: `${i}`.repeat(5000) })));
+  assert.ok(text.includes('### S5') && text.includes('### S3') && !text.includes('### S2'));
+  assert.ok(text.length < 12200);
+});
+
+test('a rate limit event keeps when its window resets', () => {
+  const acc = runner.foldStream({}, JSON.stringify({ type: 'rate_limit_event', rate_limit_info: { status: 'allowed_warning', utilization: 0.8, rateLimitType: 'five_hour', resetsAt: 1795000000 } }));
+  assert.deepEqual(acc.usage, { fiveHour: { pct: 80, resetsAt: 1795000000000 } });
+});
