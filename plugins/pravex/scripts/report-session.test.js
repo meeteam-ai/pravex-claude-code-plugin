@@ -15,6 +15,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
+require('./test-support.js'); // no test reaches the real Claude Code
 const {
   SECRET_RE,
   activeMinutes,

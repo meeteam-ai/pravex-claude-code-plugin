@@ -596,3 +596,89 @@ test('the real start hook sends no snapshot without a seat', async () => {
     cap.close();
   }
 });
+
+test('the snapshot says the check commands of each folder, by name (plan 0013)', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-commands-'));
+  const app = path.join(home, 'app');
+  fs.mkdirSync(app);
+  fs.writeFileSync(path.join(app, 'package.json'), JSON.stringify({ scripts: { test: 'TOKEN=very-SECRET-value vitest', deploy: 'curl https://SECRET.example' } }));
+  fs.writeFileSync(path.join(app, 'pnpm-lock.yaml'), '');
+  fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({ projects: { [app]: { lastSessionModified: 1 } } }));
+  const s = setup.buildSnapshot({ home, cwd: home, root: '', env: {}, machineId: 'm' });
+  assert.deepStrictEqual(s.environment.directories[0].commands, { manager: 'pnpm', scripts: ['test', 'deploy'], suggested: [{ kind: 'test', command: 'pnpm test' }] });
+  assert.ok(!JSON.stringify(s).includes('SECRET'));
+});
+
+test('the machine status says the sign-in and not the account, and a slow or missing Claude Code never holds it back', { skip: process.platform === 'win32' }, async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-status-'));
+  const bin = path.join(home, 'bin');
+  fs.mkdirSync(bin);
+  const claude = (script) => fs.writeFileSync(path.join(bin, 'claude'), `#!/bin/sh\n${script}\n`, { mode: 0o755 });
+  const env = { PATH: `${bin}${path.delimiter}/usr/bin${path.delimiter}/bin`, CLAUDE_CODE_OAUTH_TOKEN: 'only-this-session' };
+  const status = async (extra = {}) => {
+    let body = null;
+    const began = Date.now();
+    const r = await setup.maybeSendStatus({ home, env, send: async (_route, b) => ((body = b), { status: 200 }), ...extra });
+    return { body, r, ms: Date.now() - began };
+  };
+  claude(`[ -z "$CLAUDE_CODE_OAUTH_TOKEN" ] || exit 1\necho '{"loggedIn": true, "email": "ada@acme.test", "orgName": "Acme", "loginExpiresAt": "2026-12-01T10:00:00.000Z"}'`);
+  const first = await status();
+  assert.deepStrictEqual(first.body.claude, { signedIn: true, expiresAt: '2026-12-01T10:00:00.000Z' });
+  assert.ok(!/ada|acme/i.test(JSON.stringify(first.body)));
+  claude('exec sleep 20');
+  const slow = await status();
+  assert.deepStrictEqual(slow.body.claude, first.body.claude, 'the last answer');
+  assert.ok(slow.ms < 1900, `${slow.ms} ms`);
+  fs.unlinkSync(path.join(home, '.pravex', 'claude-auth.json'));
+  fs.unlinkSync(path.join(bin, 'claude'));
+  assert.deepStrictEqual((await status()).body.claude, { signedIn: null, expiresAt: null });
+  claude(`touch "${home}/asked"; echo '{"loggedIn": true}'`);
+  for (const off of [{ incognito: true }, { seat: false }, { env: { ...env, PRAVEX_SETUP: '0' } }]) assert.strictEqual((await status(off)).body, null);
+  assert.ok(!fs.existsSync(path.join(home, 'asked')), 'not even asked');
+});
+
+/** A start against a server that takes `delay` ms to answer the snapshot (never, when null), and what it saw when. */
+async function startAgainst({ delay = 0, code = 200 }) {
+  const http = require('node:http');
+  const { envFor, runHook, tempHome } = require('./test-support.js');
+  const seen = [];
+  const server = http.createServer((req, res) => {
+    req.resume();
+    req.on('end', () => {
+      const answer = (status, result) => {
+        seen.push(`answered ${req.url}`);
+        res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify({ status, result }));
+      };
+      seen.push(`asked ${req.url}`);
+      if (req.url === '/api/me/seat') return answer(200, { status: 'active', workspace: { id: 'o', name: 'N' }, message: null });
+      if (req.url !== '/api/claude-setup/snapshot') return answer(200, { tracked: true });
+      if (delay !== null) setTimeout(() => answer(code, { tracked: true }), delay);
+    });
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const home = tempHome();
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-cwd-'));
+  try {
+    const run = await runHook({ session_id: 's-1', transcript_path: path.join(cwd, 'x.jsonl'), cwd, source: 'startup' }, envFor(home, server.address().port), ['--start']);
+    return { ...run, seen: seen.filter((s) => s.includes('claude-setup')).map((s) => s.replace('/api/claude-setup/', '')) };
+  } finally {
+    server.close();
+    server.closeAllConnections();
+  }
+}
+
+test("a machine's first status arrives after the snapshot that makes it known, and after one that failed", async () => {
+  for (const answer of [{ delay: 600 }, { delay: 300, code: 500 }]) {
+    const { code, seen, stdout } = await startAgainst(answer);
+    assert.strictEqual(code, 0);
+    assert.deepStrictEqual(seen.slice(0, 4), ['asked snapshot', 'answered snapshot', 'asked machine-status', 'answered machine-status']);
+    assert.match(stdout, /recording this session/);
+  }
+});
+
+test('a snapshot that is never answered does not take the status with it, nor more of the start than before', async () => {
+  const { code, ms, seen } = await startAgainst({ delay: null });
+  assert.strictEqual(code, 0);
+  assert.deepStrictEqual(seen, ['asked snapshot', 'asked machine-status', 'answered machine-status']);
+  assert.ok(ms < 4000, `${ms} ms`);
+});

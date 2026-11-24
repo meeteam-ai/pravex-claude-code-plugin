@@ -303,16 +303,19 @@ before it runs here, and the plugin can run flows for you:
 | Part | What is sent |
 | --- | --- |
 | Folders | The folders Claude Code was opened in (from `~/.claude.json`), `permissions.additionalDirectories`, and the folders Claude Desktop's filesystem server may read; your home directory is written `~`; each with the repository (`owner/name`) it holds |
+| Check commands (0.16.0) | For each of those folders with a `package.json`: the package manager, the **names** of its scripts (never their bodies, at most 60) and up to four commands worth checking with (lint, types, test, build). Read from `package.json` files, lock file names, `turbo.json` and the workspace list; nothing is run |
 | Connections | GitHub, GitLab, AWS, Google Cloud, Azure, Kubernetes, Docker, Vercel, Supabase, npm: whether each is connected, configured or only installed, read from the tools' own config files. Only names come out (gh's account name, registry hosts, profile and context counts); **no token is ever read into the snapshot** |
 | Capabilities | Whether your permission rules allow, ask or deny `edit`, `write`, `bash`, `git-push`, `gh-pr`, `run-tests` and `web-fetch`. The rules themselves stay here |
 | Agent prompts | The body of each agent file, with key-shaped strings masked, at most 6,000 characters each and 250,000 in all |
 
 Every session start also sends a small machine status to `PUT /api/claude-setup/machine-status`:
 the plan usage the Pravex status line last saw (Claude Code's 5-hour and 7-day
-`used_percentage`, kept in `~/.pravex/plan-usage.json`) and the flow runner's state.
+`used_percentage`, kept in `~/.pravex/plan-usage.json`), the flow runner's state and
+whether Claude Code is signed in and until when (`claude auth status --json`, 0.16.0;
+**never the account, e-mail or organisation**).
 
 **The flow runner** is opt-in: `/pravex:flows install` schedules `flow-runner.js --tick`
-every 15 minutes (launchd, cron or Task Scheduler). It runs only the flows **you**
+every minute (launchd, cron or Task Scheduler). It runs only the flows **you**
 assigned to this machine in Pravex, with your Claude Code, each live run in its own
 git worktree on a new branch, and respects each flow's plan limits (start only below
 a percentage, stop above another). `/pravex:flow-test <flow>` tests a flow here
@@ -330,6 +333,47 @@ A flow with plan limits asks Claude where the plan stands before it runs (0.15.2
 word to the smallest model, with no tools, hooks or saved session, so no terminal has
 to be open. The scheduled check asks too, at most once an hour, when nothing has read
 the plan lately.
+
+Since 0.16.0 flows are safer, sooner and visible:
+
+- **An agent may do what its flow lists, in its own copy of the repository.** Only the
+  listed tools exist for it (an empty list is a reader's: Read, Grep, Glob), every use no
+  rule allows is denied without asking, reading, searching and writing files is scoped to
+  the run's copy, and no MCP server is there unless the flow lists its tools. A test only
+  reads. Changing `.git`, `.claude`, `.mcp.json` or `.husky` is refused even when the task
+  asks for it, because they decide what runs next: such a change is yours to make. A copy
+  whose `.git` was replaced anyway fails the run and is left in `~/.pravex/runs`.
+  Your own and the repository's Claude Code settings are still read, so that its hooks
+  report the session: **an allow rule of yours (`Bash(npm:*)`, for example) also counts
+  for the agents that have that tool.** Bash is as wide as its rules: a command it allows
+  can reach whatever you can, outside the copy too. Claude Code must be recent enough to
+  know these limits; an older one refuses to start the agent.
+- **Agents and checks do not push.** Every agent starts with `git push`, `gh pr merge`
+  and `gh workflow run` denied, and agents, check commands and the dependency install
+  run with a git that has nowhere to push to, so a script an agent edited cannot push
+  either. The runner's own push, after the checks, is the only one. It is a strong
+  protection, not a sandbox: a command that rewrites its own environment or git options
+  can undo it, so give an agent no more tools than its task needs. A check whose own
+  tests push to a temporary repository fails under it.
+- **It goes on with what is next, and does not repeat.** A live run of a flow that opens
+  pull requests reads the flow's own open ones with `gh` (title and changed files) and
+  tells its agents what already waits for review. When everything it changed is already
+  changed by those, it opens no other: the work stays on the run's local branch and the
+  run passes. A schedule stops at the flow's limit of open pull requests (three unless
+  you set it; one means "wait for my review"); a run you ask for goes on. When `gh`
+  cannot answer, the run goes on without the list.
+- **You confirm the first scheduled run** of a flow on your machine, in Pravex.
+- **It starts within a minute.** A tick with nothing to do is one small request, and a
+  tick during a run is silent. A schedule installed before 0.16.0 moves from every 15
+  minutes to every minute at a session start, never during a run, and keeps its PATH.
+- **You see it work, and stop it at once.** While an agent works, Pravex is told its
+  turns and the *name* of its tool every 15 seconds, when they change. Stopping the run
+  in Pravex ends the agent or check and everything it started, and keeps the work on the
+  run's local branch.
+- **It says why it failed.** When a check or an agent fails a live run, one question to
+  the smallest model (no tools, hooks or saved session) reads the end of its output, with
+  key-shaped strings masked, and its answer is shown with the run. Not asked when Claude
+  Code is signed out or the plan limits say stop; its cost counts in the run's.
 
 ## The setup snapshot
 

@@ -619,7 +619,7 @@ function buildSnapshot({ home = os.homedir(), cwd = process.cwd(), repo = '', ro
   envLib.capPrompts([...body.user.agents, ...(body.project ? body.project.agents : [])]);
   const { connections, clis } = envLib.connectionsOf({ home, env });
   body.environment = {
-    directories: envLib.directoriesOf({ home, claudeJson, settingsFiles: [...userSettings, ...projectSettings] }),
+    directories: envLib.directoriesOf({ home, claudeJson, settingsFiles: [...userSettings, ...projectSettings], commands: true }),
     connections,
     clis,
   };
@@ -763,19 +763,31 @@ function maybeSendSetup({
 }
 
 const STATUS_ROUTE = '/api/claude-setup/machine-status';
+/** What the question to Claude Code may take of the status's own time; the last answer is sent after that. */
+const AUTH_TIMEOUT_MS = 1200;
+/** How long the status waits for the snapshot: what is left of its time is enough to send it anyway. */
+const AFTER_TIMEOUT_MS = 1500;
 
 /**
- * The plan usage the status line last saw and the flow runner's state, on every session start
- * (plan 0011). Small and not throttled: unlike the snapshot it changes all the time, and the
+ * The plan usage the status line last saw, the flow runner's state and whether Claude Code is signed
+ * in (plan 0013: never the account), on every session start (plan 0011). Small and not throttled: unlike the snapshot it changes all the time, and the
  * flow guard is only as good as its freshness. Same rules as the snapshot: never incognito,
  * never without a seat, never with `PRAVEX_SETUP=0`, capped in time, never rejects.
+ *
+ * `after` is the snapshot of the same start: Pravex knows a new machine only from it and drops a status that arrives
+ * first. The status is sent once it settled, whatever came of it, and inside the same time: Claude is asked meanwhile.
  */
-function maybeSendStatus({ home = os.homedir(), env = process.env, incognito = false, seat = true, send, timeoutMs = SEND_TIMEOUT_MS } = {}) {
+function maybeSendStatus({ home = os.homedir(), env = process.env, incognito = false, seat = true, send, after, timeoutMs = SEND_TIMEOUT_MS } = {}) {
   if (incognito || !seat || (env && env.PRAVEX_SETUP === '0') || typeof send !== 'function') return Promise.resolve({ sent: false });
   const work = (async () => {
     const id = machineId(home);
     if (!id) return { sent: false };
-    const res = await send(STATUS_ROUTE, { machineId: id, planUsage: envLib.readPlanUsage(home), runner: envLib.readRunnerState(home) });
+    let wait;
+    const settled = Promise.race([Promise.resolve(after).catch(() => {}), new Promise((r) => (wait = setTimeout(r, Math.min(AFTER_TIMEOUT_MS, timeoutMs * 0.75))))]);
+    const claude = await envLib.refreshClaudeAuth({ home, env: envLib.withoutSessionAuth(env), claude: envLib.cliPath('claude', env), timeoutMs: AUTH_TIMEOUT_MS });
+    await settled;
+    clearTimeout(wait);
+    const res = await send(STATUS_ROUTE, { machineId: id, planUsage: envLib.readPlanUsage(home), runner: envLib.readRunnerState(home), claude });
     return { sent: true, status: res && res.status };
   })().catch(() => ({ sent: false }));
   let timer;
