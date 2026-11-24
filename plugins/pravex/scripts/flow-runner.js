@@ -30,7 +30,8 @@
  * protection, not a sandbox: a process that rewrites its own environment or git options can undo it.
  *
  * **What an agent may do is what its flow lists.** Only those tools exist for it, everything else is denied without
- * asking, and its files are those of its own copy of the repository.
+ * asking, and its files are those of its own copy of the repository. After each agent and check the copy's `.git` must
+ * still be the one git made: otherwise the run fails and its folder is left, without the runner's git going near it.
  *
  * **It goes on with what is next.** A run reads its flow's open pull requests: its agents are told what already waits for
  * review, a run that only changed files one of them changes opens no other, and a scheduled one does not start with
@@ -89,7 +90,13 @@ const EXPLAIN = { output: 4000, answer: 280, timeoutMs: 60000 };
 /** What the next agents are told of the earlier steps: each report, and all of them together. */
 const HANDOFF_MAX = { each: 4000, all: 12000 };
 /** What no agent may do, whatever its tools: pushing and merging are the runner's and the person's. */
-const NEVER_TOOLS = ['Bash(git push:*)', 'Bash(gh pr merge:*)', 'Bash(gh workflow run:*)'];
+const NEVER_TOOLS = [
+  'Bash(git push:*)',
+  'Bash(gh pr merge:*)',
+  'Bash(gh workflow run:*)',
+  // What decides what the next agent, the runner's git or a hook does. Claude Code refuses these by itself; not relied on.
+  ...['Edit', 'Write'].flatMap((t) => ['.git', '.git/**', '**/.git/**', '.claude/**', '.mcp.json', '.husky/**'].map((p) => `${t}(./${p})`)),
+];
 /** The flow's open pull requests: how many have their files read and for how long, and what an agent is told of them. */
 const OPEN_PRS = { limit: 3, most: 10, read: 20, readMs: 60000, told: 10, files: 40, chars: 6000 };
 /** Where a step's git would push: a transport that does not exist, so it fails at once and says why. */
@@ -98,11 +105,10 @@ const NO_PUSH_URL = 'pravex-flow-steps-do-not-push://';
 const { PLAIN_COMMAND } = envLib;
 /** A tool rule: a name and what it is for. No second pair of brackets: the CLI would read the rest as another rule. */
 const TOOL_RULE_RE = /^([A-Za-z_][\w-]*)(?:\(([^()\u0000-\u001f\u007f]*)\))?$/;
-/** Claude Code's own tools a flow may give an agent: those that take a path, and the rest. Any other name is dropped. */
-const PATH_TOOLS = new Set(['Read', 'Grep', 'Glob', 'LS', 'Edit', 'MultiEdit', 'Write', 'NotebookRead', 'NotebookEdit']);
+/** Claude Code's own tools a flow may give an agent, besides Read. Any other name is dropped. */
+const SEARCH_TOOLS = new Set(['Grep', 'Glob', 'LS', 'NotebookRead']);
+const EDIT_TOOLS = new Set(['Edit', 'MultiEdit', 'Write', 'NotebookEdit']);
 const OTHER_TOOLS = new Set(['Bash', 'BashOutput', 'KillShell', 'WebFetch', 'WebSearch', 'TodoWrite', 'Task', 'Agent']);
-/** Those a bare rule would let out of the copy of the repository. Searching stays as it is written. */
-const SCOPED_TOOLS = new Set(['Read', 'Edit', 'MultiEdit', 'Write', 'NotebookRead', 'NotebookEdit']);
 /** What an agent has when its list says nothing that can be used, and in a test: never everything. */
 const READERS = ['Read', 'Grep', 'Glob'];
 
@@ -297,32 +303,49 @@ function insidePath(p) {
 }
 
 /**
- * The tool rules of an agent, as `--allowedTools` gets them: what is listed and nothing else, with everything that reads
- * or writes files kept inside the agent's folder (a bare `Edit` would edit anywhere on the machine). A rule that is not
- * one, names a tool nobody knows or points outside is dropped; a list with none left is a reader's.
+ * What an agent may use: `tools`, the built-in ones that exist for it (`--tools`), and `allow`, the rules that are not
+ * denied (`--allowedTools`). What the flow lists and nothing else, with every file kept inside the agent's folder.
+ *
+ * Searching has no rule of its own: a bare `Grep` or `Glob` searches the whole machine, while one `Read(./**)` covers
+ * reading and searching inside. A bare `Edit` would edit anywhere. Who edits has to read first. A rule that is not one,
+ * names a tool nobody knows or points outside is dropped; a list with none left is a reader's.
  */
-function toolsOf(data) {
-  const rules = [];
+function limitsOf(data) {
+  const tools = [];
+  const read = [];
+  const rest = [];
+  let reads = false;
   for (const t of Array.isArray(data && data.tools) ? data.tools : []) {
     const m = typeof t === 'string' ? TOOL_RULE_RE.exec(t.trim()) : null;
     if (!m) continue;
     const [, name, raw] = m;
     const content = raw === undefined ? '' : raw.trim();
-    if (PATH_TOOLS.has(name)) {
+    if (SEARCH_TOOLS.has(name)) reads = true;
+    else if (name === 'Read' || EDIT_TOOLS.has(name)) {
       const own = content && insidePath(content);
       if (content && !own) continue;
-      rules.push(own ? `${name}(${own})` : SCOPED_TOOLS.has(name) ? `${name}(./**)` : name);
-    } else if (OTHER_TOOLS.has(name)) rules.push(content ? `${name}(${content})` : name);
-    else if (/^mcp__\w[\w-]*$/.test(name) && !content) rules.push(name);
+      if (EDIT_TOOLS.has(name)) {
+        reads = true;
+        rest.push(`${name}(${own || './**'})`);
+      } else if (own) read.push(`Read(${own})`);
+      else reads = true;
+    } else if (OTHER_TOOLS.has(name)) rest.push(content ? `${name}(${content})` : name);
+    else {
+      if (/^mcp__\w[\w-]*$/.test(name) && !content) rest.push(name);
+      continue;
+    }
+    tools.push(name);
   }
-  const listed = [...new Set(rules)];
-  return listed.some((r) => !r.startsWith('mcp__')) ? listed : [...READERS.map((n) => (SCOPED_TOOLS.has(n) ? `${n}(./**)` : n)), ...listed];
+  if (!tools.length) {
+    tools.push(...READERS);
+    reads = true;
+  }
+  if (tools.some((n) => EDIT_TOOLS.has(n)) && !tools.includes('Read')) tools.unshift('Read');
+  return { tools: [...new Set(tools)], allow: [...new Set([...(reads ? ['Read(./**)'] : read), ...rest])] };
 }
 
-const toolName = (rule) => rule.split('(')[0];
-const usesMcp = (rules) => rules.some((r) => r.startsWith('mcp__'));
-/** What `--tools` gets: the built-in tools the rules are about. Without it an agent has every tool there is. */
-const builtIns = (rules) => [...new Set(rules.map(toolName).filter((n) => !n.startsWith('mcp__')))];
+/** The same, as the agent is told it. */
+const limitsText = ({ tools, allow }) => [...tools.filter((n) => SEARCH_TOOLS.has(n)), ...allow].join(', ');
 
 const checkCommandOf = (data) => String((data && data.command) || '').trim() || (data && data.type === 'lint_pass' ? 'npm run lint' : data && data.type === 'build_pass' ? 'npm run build' : 'npm test');
 
@@ -331,7 +354,7 @@ const checkCommandOf = (data) => String((data && data.command) || '').trim() || 
  * commands only, so a check never opens the door to other scripts of the same tool (a deploy, for example).
  */
 function checkTools(flow, data) {
-  if (!toolsOf(data).some((t) => ['Edit', 'MultiEdit', 'Write'].includes(toolName(t)))) return [];
+  if (!limitsOf(data).tools.some((t) => EDIT_TOOLS.has(t))) return [];
   const commands = runOrder(flow && flow.definition).filter((n) => n.type === 'check').map((n) => checkCommandOf(n.data));
   return [...new Set(commands)].filter((c) => PLAIN_COMMAND.test(c)).map((c) => `Bash(${c})`);
 }
@@ -387,7 +410,7 @@ const MODELS = new Set(['opus', 'sonnet', 'haiku']);
 function agentPrompt(flow, node, { mode, branch, index, total, handoff = [], openPrs = [] }) {
   const data = node.data || {};
   const task = String(data.instructions || '').trim() || String(data.label || '');
-  const tools = toolsOf(data);
+  const limits = limitsText(limitsOf(data));
   const commands = checkTools(flow, data).map((t) => t.slice(5, -1));
   if (mode === 'dry') {
     return [
@@ -397,7 +420,7 @@ function agentPrompt(flow, node, { mode, branch, index, total, handoff = [], ope
       '---',
       task,
       '---',
-      `It will work only inside its copy of the repository and be allowed only these tools: ${tools.join(', ')}. Anything else is denied.`,
+      `It will work only inside its copy of the repository and be allowed only these tools: ${limits}. Anything else is denied, and so is changing .git, .claude, .mcp.json or .husky.`,
       `In this test you have only ${READERS.join(', ')}, and you too look only inside this repository: do not count what you cannot do now as missing.`,
       ...(commands.length ? [`The flow checks its work with: ${commands.map((c) => `\`${c}\``).join(', ')}. When the flow runs for real it may run exactly these commands too. They are not run during this test: do not run them now, and do not count that as missing.`] : []),
       `Check, in this repository, whether that task can be done with those tools: the files and folders it needs exist and are readable, the scripts it would run are defined, nothing it needs is missing.`,
@@ -409,7 +432,7 @@ function agentPrompt(flow, node, { mode, branch, index, total, handoff = [], ope
   return [
     `You are the agent "${data.label || node.id}", step ${index} of ${total} of the Pravex flow "${flow.name}".`,
     `You work in a fresh copy of the repository on the branch ${branch}. Do not push and do not open pull requests: Pravex does that after the last step.`,
-    `You work only inside this copy: nothing outside it (an absolute path, "..", "~") is yours to read or change. You are allowed only these tools: ${tools.join(', ')}. Anything else is denied: do not look for a way around it, say what you could not do.`,
+    `You work only inside this copy: nothing outside it (an absolute path, "..", "~") is yours to read or change. You are allowed only these tools: ${limits}. Anything else is denied, and so is changing .git, .claude, .mcp.json or .husky: do not look for a way around it, say what you could not do.`,
     `Your task:`,
     task,
     ...(commands.length ? [`The flow will check your work with: ${commands.map((c) => `\`${c}\``).join(', ')}. You may run exactly these commands; leave them passing.`] : []),
@@ -427,15 +450,18 @@ function agentPrompt(flow, node, { mode, branch, index, total, handoff = [], ope
 function agentArgs(flow, node, { mode, maxTurns, prompt }) {
   const data = node.data || {};
   const dry = mode === 'dry';
-  const rules = dry ? READERS : [...new Set([...toolsOf(data), ...checkTools(flow, data)])];
+  const limits = limitsOf(data);
+  const checks = checkTools(flow, data);
+  const allow = [...new Set([...limits.allow, ...checks])];
+  const tools = dry ? READERS : [...new Set([...limits.tools, ...(checks.length ? ['Bash'] : [])])];
   const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose', '--max-turns', String(maxTurns)];
-  if (dry || !usesMcp(rules)) args.push('--strict-mcp-config');
+  if (dry || !allow.some((r) => r.startsWith('mcp__'))) args.push('--strict-mcp-config');
   // The tool lists take every word up to the next option, so each is followed by one or by the end.
-  args.push('--tools', builtIns(rules).join(','));
+  args.push('--tools', tools.join(','));
   args.push('--disallowedTools', ...NEVER_TOOLS);
   if (MODELS.has(data.model)) args.push('--model', data.model);
   args.push('--permission-mode', dry ? 'plan' : 'dontAsk');
-  if (!dry) args.push('--allowedTools', ...rules);
+  if (!dry) args.push('--allowedTools', ...allow);
   return args;
 }
 
@@ -772,6 +798,17 @@ async function executeRun({ run: record, flow, mode, fromNodeId = null, branch: 
   let repeats = null;
   /** Checks that failed and have not passed since, by command: what they are called and what they said. */
   const failing = new Map();
+  /** The worktree's `.git` file as it was made; an agent or a script may not point the runner's git anywhere else. */
+  let gitFile = null;
+  const intact = () => mode !== 'live' || (gitFile !== null && gitFileOf(workdir) === gitFile && gitDirOf(workdir) !== null);
+  const tampered = async (node) => {
+    const output = `The .git of the run's copy is not the one it was made with. Its folder was left in ~/.pravex/runs/${runId}.`;
+    log(`run ${runId}: ${output}`);
+    if (node) await step(node, 'failed', { summary: { code: 'runner-error', params: { output } } });
+    return await finish('failed', 'runner-error', { output });
+  };
+  /** Keeps the run's work on its branch; null, and nothing is run there, when its `.git` cannot be trusted. */
+  const keepWork = async () => (intact() ? await saveWork(git, workdir, flow.name) : null);
   const ownWorktree = () => Boolean(mode === 'live' && git && repoDir && workdir && workdir !== repoDir && fs.existsSync(workdir));
 
   const patch = async (body) => {
@@ -798,7 +835,7 @@ async function executeRun({ run: record, flow, mode, fromNodeId = null, branch: 
     final = true;
     const open = steps.find((s) => s.status === 'running');
     if (open) {
-      const saved = ownWorktree() ? await saveWork(git, workdir, flow.name) : false;
+      const saved = ownWorktree() ? await keepWork() : false;
       if (saved) log(`run ${runId}: unfinished work saved on the local branch ${liveBranch}`);
       const node = order.find((n) => n.id === open.nodeId);
       await step(node, 'skipped', { ms: Math.max(0, Date.now() - open.at), summary: { code: 'stopped-by-person', params: saved && liveBranch ? { branch: liveBranch } : {} } });
@@ -867,7 +904,7 @@ async function executeRun({ run: record, flow, mode, fromNodeId = null, branch: 
   const finish = async (status, code = null, params = {}) => {
     if (cancelled) return await stop();
     final = true;
-    const saved = ownWorktree() ? await saveWork(git, workdir, flow.name) : false;
+    const saved = ownWorktree() ? await keepWork() : false;
     if (saved) log(`run ${runId}: unfinished work saved on the local branch ${liveBranch}`);
     await patch({ status, reason: code ? { code, params: saved && liveBranch ? { ...params, branch: liveBranch } : params } : null, costUsd, planUsage: { start: startUsage, end: usage } });
     log(`run ${runId}: ${status}${code ? ` (${code})` : ''}`);
@@ -929,15 +966,20 @@ async function executeRun({ run: record, flow, mode, fromNodeId = null, branch: 
           added = await run(git, ['worktree', 'add', workdir, branch], { cwd: repoDir, timeoutMs: 120000 });
         }
         if (added.code !== 0) return await finish('failed', 'worktree-failed', { output: tail(added.err, 300) });
+        gitFile = gitFileOf(workdir);
         const install = installCommand(workdir);
         if (install) {
           const env = await noPushEnv(git, workdir);
           const r = await watched((signal) => run(install, [], { cwd: workdir, shell: true, env, signal }));
           if (cancelled) return await stop();
+          if (!intact()) return await tampered();
           if (r.code !== 0) return await finish('failed', 'install-failed', { command: install, output: tail(r.err || r.out, 300) });
         }
       }
       liveBranch = branch;
+      // A copy that waited for an approval was left sound; one that is not is not worked in.
+      gitFile = gitFile || gitFileOf(workdir);
+      if (!intact()) return await tampered();
       if (knownBranch) base = (await run(git, ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'], { cwd: repoDir })).out.trim() || base;
       handoff = await readHandoff(git, workdir);
       await patch({ status: 'running', branch });
@@ -1006,6 +1048,7 @@ async function executeRun({ run: record, flow, mode, fromNodeId = null, branch: 
           rememberUsage({ ...acc.usage, at: usage.at });
         }
         if (cancelled) return await stop();
+        if (!intact()) return await tampered(node);
         const ms = Date.now() - began;
         if (acc.limited) {
           await step(node, 'failed', { ms, costUsd: acc.costUsd, turns: acc.turns, summary: { code: 'plan-limited', params: {} } });
@@ -1046,6 +1089,7 @@ async function executeRun({ run: record, flow, mode, fromNodeId = null, branch: 
         const env = await noPushEnv(git, workdir);
         const r = await watched((signal) => run(command, [], { cwd: workdir, shell: true, env, signal }));
         if (cancelled) return await stop();
+        if (!intact()) return await tampered(node);
         const ok = r.code === 0;
         if (mode === 'live') {
           // In a row: a check that passes starts the count again, and settles an earlier failure of the same command.
@@ -1108,10 +1152,12 @@ async function executeRun({ run: record, flow, mode, fromNodeId = null, branch: 
   } finally {
     // Whatever ended the run (passed, failed, stopped, cancelled), its worktree goes; a paused one stays for the resume.
     if (final && ownWorktree()) {
-      const saved = await saveWork(git, workdir, flow.name);
+      const sound = intact();
+      const saved = await keepWork();
       if (saved) log(`run ${runId}: unfinished work saved on the local branch ${liveBranch}`);
       if (saved === null) log(`run ${runId}: unfinished work could not be committed; left in ${workdir}`);
       else cleanupWorktree(git, repoDir, workdir);
+      if (!sound) markLeft(workdir);
     }
   }
 }
@@ -1278,17 +1324,52 @@ async function writeHandoff(git, workdir, handoff) {
   }
 }
 
+/** The text of a worktree's `.git` file; null for a folder, a link, or nothing. */
+function gitFileOf(dir) {
+  try {
+    const file = path.join(dir, '.git');
+    const st = fs.lstatSync(file);
+    return st.isFile() && st.size < 4096 ? fs.readFileSync(file, 'utf8') : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The git folder of a run's worktree, or null when its `.git` is not one git made for it: the folder is a repository's
+ * `worktrees/<name>`, says it belongs to this very copy, and is not among the files of a run, which agents can write.
+ */
+function gitDirOf(dir) {
+  try {
+    const m = /^gitdir: ([^\n]+)\n?$/.exec(gitFileOf(dir) || '');
+    if (!m) return null;
+    const real = fs.realpathSync(path.resolve(dir, m[1]));
+    if (path.basename(path.dirname(real)) !== 'worktrees' || real.startsWith(fs.realpathSync(RUNS_DIR) + path.sep)) return null;
+    const back = path.resolve(real, fs.readFileSync(path.join(real, 'gitdir'), 'utf8').trim());
+    return fs.realpathSync(back) === fs.realpathSync(path.join(dir, '.git')) ? real : null;
+  } catch {
+    return null;
+  }
+}
+
+/** A run's folder that is kept for the person to look at: the sweep does not touch it. */
+const LEFT_FILE = '.pravex-left';
+function markLeft(dir) {
+  try {
+    fs.writeFileSync(path.join(dir, LEFT_FILE), 'This folder of a Pravex flow run was left as it is: its .git is not the one it was made with.\n', { flag: 'wx' });
+  } catch {
+    /* kept all the same: its .git says why */
+  }
+}
+
 /**
  * Commits what a run left uncommitted to its own local branch, so removing the worktree loses nothing. Never pushes.
  * A machine without a git identity gets one for this commit only. `null` when there was work and it could not be kept.
  */
 async function saveWork(git, workdir, name) {
   // Only a linked worktree: without its own `.git` file, git would walk up to whatever repository holds the folder.
-  try {
-    if (!fs.statSync(path.join(workdir, '.git')).isFile()) return false;
-  } catch {
-    return false;
-  }
+  if (gitFileOf(workdir) === null) return false;
+  if (gitDirOf(workdir) === null) return null;
   const opts = { cwd: workdir, timeoutMs: 120000 };
   const status = await run(git, ['status', '--porcelain'], opts);
   if (status.code !== 0 || !status.out.trim()) return false;
@@ -1296,6 +1377,17 @@ async function saveWork(git, workdir, name) {
   const commit = ['commit', '--no-verify', '-m', `${name || 'Pravex flow'} (unfinished Pravex run)`];
   if ((await run(git, ['-c', 'commit.gpgsign=false', ...commit], opts)).code === 0) return true;
   return (await run(git, ['-c', 'commit.gpgsign=false', '-c', 'user.name=Pravex flow', '-c', 'user.email=flows@pravex.invalid', ...commit], opts)).code === 0 ? true : null;
+}
+
+/** Whether a `.git` that is not a run's own still leads git to something: a folder, a link, or a file naming what exists. */
+function leadsSomewhere(dir) {
+  try {
+    if (!fs.lstatSync(path.join(dir, '.git')).isFile()) return true;
+    const m = /gitdir:\s*(.+)/.exec(gitFileOf(dir) || '');
+    return Boolean(m && fs.existsSync(path.resolve(dir, m[1].trim())));
+  } catch {
+    return false;
+  }
 }
 
 /** Worktrees of runs Pravex no longer lists as open (cancelled while paused, or left by a crash). */
@@ -1310,13 +1402,14 @@ async function sweepWorktrees(active) {
   for (const name of names) {
     if (active.includes(name)) continue;
     const dir = path.join(RUNS_DIR, name);
-    let repo = null;
-    try {
-      const m = /gitdir:\s*(.+)/.exec(fs.readFileSync(path.join(dir, '.git'), 'utf8'));
-      if (m) repo = path.resolve(m[1].trim(), '..', '..', '..');
-    } catch {
-      /* not a worktree */
+    if (fs.existsSync(path.join(dir, LEFT_FILE))) continue;
+    const gitDir = gitDirOf(dir);
+    if (!gitDir && leadsSomewhere(dir)) {
+      log(`run ${name}: its .git is not one git made for it; left in ${dir}`);
+      markLeft(dir);
+      continue;
     }
+    const repo = gitDir && path.resolve(gitDir, '..', '..', '..');
     if (git && repo) {
       const saved = await saveWork(git, dir, 'Pravex flow');
       if (saved === null) continue;
@@ -1873,6 +1966,7 @@ module.exports = {
   handoffText,
   installCommand,
   launchdPlist,
+  limitsOf,
   listOpenPrs,
   maxOpenPrsOf,
   moveSchedule,
@@ -1882,7 +1976,6 @@ module.exports = {
   run,
   runOrder,
   scheduleOutdated,
-  toolsOf,
   usagePct,
   verdictOf,
   zoned,

@@ -21,7 +21,8 @@ run only while the plan is below a percentage, and stops when it passes another.
 
 Its agents have only the tools their flow lists and only the files of their own copy of
 the repository; what you allow in your own Claude Code settings also counts for the tools
-they have. They may not push, merge or start workflows, and git in its agents and checks has
+they have. They cannot change `.git`, `.claude`, `.mcp.json` or `.husky`, even when the
+task asks for it. They may not push, merge or start workflows, and git in its agents and checks has
 nowhere to push to (a strong protection, not a sandbox): opening the pull request is the
 runner's, after the checks pass. A run is told which of the flow's pull
 requests already wait for review and does not open another that changes only the same

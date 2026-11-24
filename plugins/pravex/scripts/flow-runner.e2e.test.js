@@ -504,7 +504,7 @@ const argvOf = (fx, n) => {
   const words = fs.readFileSync(path.join(fx.home, `call-${n}`), 'utf8').split('\n').slice(0, -1);
   return words.slice(words.indexOf('--output-format'));
 };
-const DENIED = ['--disallowedTools', 'Bash(git push:*)', 'Bash(gh pr merge:*)', 'Bash(gh workflow run:*)'];
+const DENIED = ['--disallowedTools', ...require('./flow-runner.js').NEVER_TOOLS];
 
 test('every agent of a run is started with its own limits and nothing wider', posix, async () => {
   const fx = setUp();
@@ -515,9 +515,9 @@ test('every agent of a run is started with its own limits and nothing wider', po
   await withServer({ definition: chain(nodes) }, async (host) => {
     const { code, out } = await runNow(envFor(fx, host), ['--run', 'f1']);
     assert.equal(code, 0, out);
-    assert.deepEqual(argvOf(fx, 0), [...common(20), '--strict-mcp-config', '--tools', 'Read,Grep,Glob', ...tail('dontAsk'), '--allowedTools', 'Read(./**)', 'Grep', 'Glob']);
+    assert.deepEqual(argvOf(fx, 0), [...common(20), '--strict-mcp-config', '--tools', 'Read,Grep,Glob', ...tail('dontAsk'), '--allowedTools', 'Read(./**)']);
     assert.deepEqual(argvOf(fx, 1), [...common(20), '--strict-mcp-config', '--tools', 'Read,Edit,Bash', ...tail('dontAsk'), '--allowedTools', 'Read(./**)', 'Edit(./**)', 'Bash(test -f x.txt)']);
-    assert.deepEqual(argvOf(fx, 2), [...common(20), '--tools', 'Read,Grep,Glob', ...tail('dontAsk'), '--allowedTools', 'Read(./**)', 'Grep', 'Glob', 'mcp__github__get_file']);
+    assert.deepEqual(argvOf(fx, 2), [...common(20), '--tools', 'Read,Grep,Glob', ...tail('dontAsk'), '--allowedTools', 'Read(./**)', 'mcp__github__get_file']);
     assert.deepEqual(argvOf(fx, 3), argvOf(fx, 0), 'an empty list is a reader');
     assert.equal(calls(fx), 4);
   });
@@ -525,6 +525,90 @@ test('every agent of a run is started with its own limits and nothing wider', po
   await withServer({ definition: chain(nodes) }, async (host) => {
     await runNow(envFor(fx, host), ['--run', 'f1', '--dry']);
     for (let n = 0; n < 4; n += 1) assert.deepEqual(argvOf(fx, n), [...common(15), '--strict-mcp-config', '--tools', 'Read,Grep,Glob', ...tail('plan')]);
+  });
+});
+
+/** Ways to point the runner's git at something an agent wrote: a git folder whose config runs a program at `git status`. */
+const FORGED = (fx) => `cp -R "$(git rev-parse --git-common-dir)" evil; git --git-dir=evil config core.fsmonitor "touch ${fx.home}/pwned; false"; git --git-dir=evil config core.bare false`;
+const FORGERIES = {
+  'a file that points at a folder of its own': (fx) => `${FORGED(fx)}; echo "gitdir: ./evil" > .git`,
+  'a worktree of its own': (fx) => `${FORGED(fx)}; mkdir -p evil/worktrees/w; cp evil/HEAD evil/index evil/worktrees/w/; echo ../.. > evil/worktrees/w/commondir; echo "$PWD/.git" > evil/worktrees/w/gitdir; echo "gitdir: $PWD/evil/worktrees/w" > .git`,
+  'a folder': (fx) => `${FORGED(fx)}; rm .git; mv evil .git`,
+  'a link': (fx) => `${FORGED(fx)}; rm .git; ln -s evil .git`,
+  nothing: () => 'rm .git',
+  'another copy of the same repository': (fx) => `git worktree add -q -b other "${fx.home}/other-copy" main; cat "${fx.home}/other-copy/.git" > .git`,
+};
+
+test("a copy whose .git is not the one it was made with fails the run, and the runner's git does not go near it", posix, async () => {
+  for (const [name, forge] of Object.entries(FORGERIES)) {
+    const fx = setUp();
+    fakeClaude(fx, `echo x > x.txt; ${forge(fx)}; ${say('done')}`);
+    await withServer({ definition: chain([T, agent('a'), check('c', 'true'), PR]) }, async (host, patches) => {
+      const { code, out } = await runNow(envFor(fx, host), ['--run', 'f1']);
+      assert.equal(code, 1, `${name}: ${out}`);
+      const last = patches.at(-1);
+      assert.deepEqual([last.status, last.reason.code, 'branch' in last.reason.params], ['failed', 'runner-error', false], name);
+      assert.match(last.reason.params.output, /\.git of the run's copy/);
+      const a = stepsOf(patches).a;
+      assert.deepEqual([a.status, a.summary.code], ['failed', 'runner-error'], name);
+      assert.ok(!stepsOf(patches).c, `${name}: nothing ran after it`);
+      const folder = path.join(fx.home, '.pravex', 'runs', 'run-1');
+      assert.ok(fs.existsSync(path.join(folder, 'x.txt')), `${name}: the folder is left`);
+      assert.equal(remoteBranches(fx).length, 0);
+      // And the sweep of the next ticks leaves it too.
+      ticked(fx);
+      await runNow(envFor(fx, host), ['--tick']);
+      assert.ok(fs.existsSync(path.join(folder, 'x.txt')), `${name}: the sweep left it`);
+      assert.ok(!fs.existsSync(path.join(fx.home, 'pwned')), `${name}: nothing of it was run`);
+    });
+  }
+});
+
+test('the same after a check, when a run is stopped, and for what a crash left behind', posix, async () => {
+  const forge = FORGERIES['a file that points at a folder of its own'];
+  const viaCheck = setUp();
+  fakeClaude(viaCheck, `echo x > x.txt; ${say('done')}`);
+  await withServer({ definition: chain([T, agent('a'), check('c', forge(viaCheck)), PR]) }, async (host, patches) => {
+    await runNow(envFor(viaCheck, host), ['--run', 'f1']);
+    assert.deepEqual([stepsOf(patches).c.summary.code, patches.at(-1).reason.code], ['runner-error', 'runner-error']);
+    assert.ok(!fs.existsSync(path.join(viaCheck.home, 'pwned')));
+  });
+  const stopped = setUp();
+  const flag = path.join(stopped.home, 'forged');
+  fakeClaude(stopped, `${forge(stopped)}; touch "${flag}"; sleep 30; ${say('done')}`);
+  await withServer({ definition: chain([T, agent('a')]), onPatch: cancelOnce(flag) }, async (host, patches) => {
+    await runNow(envFor(stopped, host, { ...IDENTITY, ...FAST }), ['--run', 'f1']);
+    assert.deepEqual(patches.at(-1).steps[0].summary, { code: 'stopped-by-person', params: {} });
+    assert.ok(fs.existsSync(path.join(stopped.home, '.pravex', 'runs', 'run-1', 'evil')));
+    assert.ok(!fs.existsSync(path.join(stopped.home, 'pwned')));
+  });
+  // A runner that died with the forged copy in place: only the sweep sees it.
+  const crashed = setUp();
+  const dir = path.join(crashed.home, '.pravex', 'runs', 'run-9');
+  crashed.git(['worktree', 'add', '-q', '-b', 'pravex/x-202611230200', dir, 'main'], crashed.repo);
+  execFileSync('sh', ['-c', forge(crashed)], { cwd: dir });
+  ticked(crashed);
+  await withServer({}, async (host) => {
+    await runNow(envFor(crashed, host), ['--tick']);
+    assert.ok(fs.existsSync(path.join(dir, 'evil')));
+    assert.ok(!fs.existsSync(path.join(crashed.home, 'pwned')));
+    assert.match(logOf(crashed), /run-9: its \.git is not one git made/);
+    const lines = logOf(crashed).length;
+    await runNow(envFor(crashed, host), ['--tick']);
+    assert.equal(logOf(crashed).length, lines, 'said once');
+  });
+});
+
+test('a sound copy that a crash left behind still has its work kept and goes', posix, async () => {
+  const fx = setUp();
+  const dir = path.join(fx.home, '.pravex', 'runs', 'run-9');
+  fx.git(['worktree', 'add', '-q', '-b', 'pravex/x-202611230200', dir, 'main'], fx.repo);
+  fs.writeFileSync(path.join(dir, 'half.txt'), 'half');
+  ticked(fx);
+  await withServer({}, async (host) => {
+    await runNow(envFor(fx, host), ['--tick']);
+    assert.ok(!fs.existsSync(dir));
+    assert.match(fx.git(['ls-tree', '-r', '--name-only', 'pravex/x-202611230200'], fx.repo), /half\.txt/);
   });
 });
 
