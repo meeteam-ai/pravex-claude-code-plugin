@@ -324,7 +324,12 @@ function refreshStatusline() {
     const statusline = require('./statusline.js');
     if (fs.existsSync(statusline.INSTALLED_COPY)) statusline.refreshCopy(path.join(__dirname, 'statusline.js'));
     // The flow runner's schedule points at its copy in ~/.pravex/runner (plan 0011); keep it as new as the plugin.
-    if (fs.existsSync(path.join(os.homedir(), '.pravex', 'runner', 'flow-runner.js'))) require('./flow-runner').refreshCopy(__dirname);
+    if (fs.existsSync(path.join(os.homedir(), '.pravex', 'runner', 'flow-runner.js'))) {
+      const runner = require('./flow-runner');
+      runner.refreshCopy(__dirname);
+      // A schedule from before plan 0013 (every 15 minutes) moves to the current one, in a process of its own.
+      if (runner.scheduleOutdated()) spawnDetached([path.join(__dirname, 'flow-runner.js'), '--move-schedule'], 'flow schedule');
+    }
   } catch (err) {
     log(`statusline refresh failed: ${err && err.message}`);
   }
