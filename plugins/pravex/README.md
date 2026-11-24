@@ -336,9 +336,13 @@ the plan lately.
 
 Since 0.16.0 flows are safer, sooner and visible:
 
-- **Agents never push.** Every agent starts with `git push`, `gh pr merge` and
-  `gh workflow run` denied, and in its environment git has nowhere to push to. The
-  runner's own push, after the checks, is the only one.
+- **Agents and checks do not push.** Every agent starts with `git push`, `gh pr merge`
+  and `gh workflow run` denied, and agents, check commands and the dependency install
+  run with a git that has nowhere to push to, so a script an agent edited cannot push
+  either. The runner's own push, after the checks, is the only one. It is a strong
+  protection, not a sandbox: a command that rewrites its own environment or git options
+  can undo it, so give an agent no more tools than its task needs. A check whose own
+  tests push to a temporary repository fails under it.
 - **No repeated work.** A scheduled run of a flow that opens pull requests is skipped
   while its last one is still open. A run you ask for goes on.
 - **You confirm the first scheduled run** of a flow on your machine, in Pravex.

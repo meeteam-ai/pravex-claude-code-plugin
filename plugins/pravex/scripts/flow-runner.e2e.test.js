@@ -452,7 +452,7 @@ ${say('Pushed everything')}`,
     assert.equal(results[0], 'fetch 0', 'fetching still works');
     assert.equal(results.length, tries.length + 1);
     results.slice(1).forEach((r, i) => assert.notEqual(r, 'push 0', `git ${tries[i]} worked`));
-    assert.match(fs.readFileSync(path.join(fx.home, 'push-out'), 'utf8'), /pravex-agents-do-not-push/);
+    assert.match(fs.readFileSync(path.join(fx.home, 'push-out'), 'utf8'), /pravex-flow-steps-do-not-push/);
     assert.equal(fx.git(['rev-parse', 'main'], fx.origin), before, 'main is where it was');
     for (const dir of [fork, mirror]) assert.equal(fx.git(['for-each-ref'], dir), '');
     // The flow's own end: the check (the file is not there) stops the pull request, so run it again with one that passes.
@@ -484,6 +484,50 @@ test('the test of a flow runs its agents without a way to push either', posix, a
     const call = fs.readFileSync(path.join(fx.home, 'call-0'), 'utf8');
     assert.match(call, /--disallowedTools\nBash\(git push:\*\)/);
     assert.match(call, /`true`[^\n]*not run during this test/);
+  });
+});
+
+test('a script an agent edited cannot push from a check or the install; the pull request of the runner still can', posix, async () => {
+  const fx = setUp();
+  fx.git(['config', `url.${path.join(fx.home, 'remote')}/.pushInsteadOf`, 'short:'], fx.repo);
+  // The repository's own check, and an install that runs when the copy is made.
+  fs.writeFileSync(path.join(fx.repo, 'check.sh'), 'exit 0\n');
+  fs.writeFileSync(path.join(fx.repo, 'package-lock.json'), '{}\n');
+  fx.git(['add', '.'], fx.repo);
+  fx.git(['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-m', 'scripts'], fx.repo);
+  fx.git(['push', 'origin', 'main'], fx.repo);
+  const before = fx.git(['rev-parse', 'main'], fx.origin);
+  const trial = (what, times) => `git ${what} >> "${fx.home}/push-out" 2>&1; echo "${times} $?" >> "${fx.home}/pushes"`;
+  fs.writeFileSync(path.join(fx.bin, 'npm'), `#!/bin/sh\n${trial('push origin HEAD:installed', 'install')}\n`, { mode: 0o755 });
+  fs.writeFileSync(
+    path.join(fx.home, 'edited.sh'),
+    `${['push origin HEAD:main', `push "${fx.origin}" HEAD:stolen`, 'push'].map((t) => trial(t, 'check')).join('\n')}\ngit fetch -q origin; echo "fetch $?" >> "${fx.home}/pushes"\n`,
+  );
+  fakeClaude(fx, `cp "${fx.home}/edited.sh" check.sh; git add -A; git commit -q -m edited; ${say('done')}`);
+  await withServer({ definition: chain([T, agent('a'), check('c', 'sh check.sh'), PR]) }, async (host, patches) => {
+    const { code, out } = await runNow(envFor(fx, host), ['--run', 'f1']);
+    assert.equal(code, 0, out);
+    const results = fs.readFileSync(path.join(fx.home, 'pushes'), 'utf8').trim().split('\n');
+    assert.deepEqual(results.map((r) => r.split(' ')[0]), ['install', 'check', 'check', 'check', 'fetch']);
+    for (const r of results.slice(0, 4)) assert.doesNotMatch(r, / 0$/, r);
+    assert.equal(results[4], 'fetch 0', 'fetching still works');
+    assert.match(fs.readFileSync(path.join(fx.home, 'push-out'), 'utf8'), /pravex-flow-steps-do-not-push/);
+    assert.equal(fx.git(['rev-parse', 'main'], fx.origin), before, 'main is where it was');
+    // The runner's own push, afterwards.
+    const { branch } = patches.find((p) => p.branch);
+    assert.equal(stepsOf(patches).p.summary.code, 'pr-opened');
+    assert.deepEqual(fx.git(['branch', '--format=%(refname:short)'], fx.origin).trim().split('\n').sort(), ['main', branch].sort());
+    assert.match(fx.git(['show', `${branch}:check.sh`], fx.origin), /push origin HEAD:main/);
+  });
+});
+
+test('a check of a test run has no way to push either', posix, async () => {
+  const fx = setUp();
+  fakeClaude(fx, say('ok'));
+  await withServer({ definition: chain([T, check('c', 'git push origin HEAD:stolen')]) }, async (host, patches) => {
+    await runNow(envFor(fx, host), ['--run', 'f1', '--dry']);
+    assert.equal(stepsOf(patches).c.status, 'failed');
+    assert.equal(fx.git(['branch', '--list', 'stolen'], fx.origin).trim(), '');
   });
 });
 

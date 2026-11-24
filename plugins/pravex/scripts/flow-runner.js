@@ -26,7 +26,8 @@
  * committed to the run's local branch before its worktree goes.
  *
  * **Safe by default (plan 0013).** An agent never pushes: its tools say so and git, in its environment, has nowhere to
- * push to. A scheduled run waits while its flow's last pull request is open, and a schedule nobody on this machine
+ * push to. The same goes for the checks and the install, whose scripts an agent may have edited. It is a strong
+ * protection, not a sandbox: a process that rewrites its own environment or git options can undo it. A scheduled run waits while its flow's last pull request is open, and a schedule nobody on this machine
  * confirmed does not run. While a step works, Pravex hears what it does every 15 seconds, and a run stopped there stops
  * here at once. A failed run says why: one question to the smallest model, about the masked end of the output.
  *
@@ -81,8 +82,8 @@ const EXPLAIN = { output: 4000, answer: 280, timeoutMs: 60000 };
 const HANDOFF_MAX = { each: 4000, all: 12000 };
 /** What no agent may do, whatever its tools: pushing and merging are the runner's and the person's. */
 const NEVER_TOOLS = ['Bash(git push:*)', 'Bash(gh pr merge:*)', 'Bash(gh workflow run:*)'];
-/** Where an agent's git would push: a transport that does not exist, so it fails at once and says why. */
-const NO_PUSH_URL = 'pravex-agents-do-not-push://';
+/** Where a step's git would push: a transport that does not exist, so it fails at once and says why. */
+const NO_PUSH_URL = 'pravex-flow-steps-do-not-push://';
 /** A check command an agent may run itself: a plain command, nothing a shell would interpret (as the GitHub compiler). */
 const { PLAIN_COMMAND } = envLib;
 const SHELL_TOOLS_RE = /^[A-Za-z_][\w-]*(\(.*\))?$/s;
@@ -352,12 +353,12 @@ function agentArgs(flow, node, { mode, maxTurns, prompt }) {
 }
 
 /**
- * The environment an agent works in: the runner's own, with git told that every remote of the repository pushes to an
+ * The environment agents, checks and the install work in: the runner's own, with git told that every remote of the repository pushes to an
  * address that does not exist. The configured `pushurl`s are rewritten too (git pushes to all of them), and so is an
  * address given to `git push` directly. Fetching is untouched, unless the fetch address starts with a configured
  * `pushurl`. The runner's own git does not get this.
  */
-async function agentEnv(git, workdir, env = process.env) {
+async function noPushEnv(git, workdir, env = process.env) {
   const pairs = [[`url.${NO_PUSH_URL}.pushInsteadOf`, '']];
   const r = await run(git, ['config', '-z', '--get-regexp', '^remote\\..*\\.(url|pushurl)$'], { cwd: workdir, timeoutMs: 30000 });
   const remotes = new Set();
@@ -834,7 +835,8 @@ async function executeRun({ run: record, flow, mode, fromNodeId = null, branch: 
         if (added.code !== 0) return await finish('failed', 'worktree-failed', { output: tail(added.err, 300) });
         const install = installCommand(workdir);
         if (install) {
-          const r = await watched((signal) => run(install, [], { cwd: workdir, shell: true, signal }));
+          const env = await noPushEnv(git, workdir);
+          const r = await watched((signal) => run(install, [], { cwd: workdir, shell: true, env, signal }));
           if (cancelled) return await stop();
           if (r.code !== 0) return await finish('failed', 'install-failed', { command: install, output: tail(r.err || r.out, 300) });
         }
@@ -882,7 +884,7 @@ async function executeRun({ run: record, flow, mode, fromNodeId = null, branch: 
       if (node.type === 'agent') {
         const prompt = agentPrompt(flow, node, { mode, branch, index, total: order.length, handoff });
         const acc = { costUsd: 0, turns: 0, isError: false, result: '', usage: null, limited: false };
-        const env = await agentEnv(git, workdir);
+        const env = await noPushEnv(git, workdir);
         const r = await watched(
           (signal) =>
             run(claude, agentArgs(flow, node, { mode, maxTurns: mode === 'dry' ? Math.min(maxTurns, 15) : maxTurns, prompt }), {
@@ -942,7 +944,9 @@ async function executeRun({ run: record, flow, mode, fromNodeId = null, branch: 
           await step(node, 'skipped', { ms: 0, summary: { code: 'check-not-run', params: { command } } });
           continue;
         }
-        const r = await watched((signal) => run(command, [], { cwd: workdir, shell: true, signal }));
+        // An agent may have edited what the command runs.
+        const env = await noPushEnv(git, workdir);
+        const r = await watched((signal) => run(command, [], { cwd: workdir, shell: true, env, signal }));
         if (cancelled) return await stop();
         const ok = r.code === 0;
         if (mode === 'live') {
@@ -1661,7 +1665,6 @@ module.exports = {
   TICK_MINUTES,
   acquireLock,
   agentArgs,
-  agentEnv,
   agentPrompt,
   checkTools,
   cronMatches,
@@ -1689,5 +1692,6 @@ module.exports = {
   verdictOf,
   zoned,
   newerUsage,
+  noPushEnv,
   sweepWorktrees,
 };

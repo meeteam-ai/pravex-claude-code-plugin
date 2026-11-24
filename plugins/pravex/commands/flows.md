@@ -19,7 +19,8 @@ own git worktree on a new branch, so your working copy is never touched, and it
 uses your Claude Code, so it counts against your plan: each flow can be limited to
 run only while the plan is below a percentage, and stops when it passes another.
 
-Its agents cannot push, merge or start workflows: opening the pull request is the
+Its agents may not push, merge or start workflows, and git in its agents and checks has
+nowhere to push to (a strong protection, not a sandbox): opening the pull request is the
 runner's, after the checks pass. A scheduled run waits while the flow's last pull
 request is open, and does not start until you confirm the flow's schedule in Pravex.
 Stopping a run in Pravex ends it here within seconds and keeps its work on a local
