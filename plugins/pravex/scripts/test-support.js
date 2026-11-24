@@ -12,6 +12,12 @@ const { spawn } = require('node:child_process');
 
 const REPORT = path.join(__dirname, 'report-session.js');
 
+// A session start asks Claude Code whether it is signed in. No test may reach the real one: this answers instead, in
+// this process and every child that inherits its PATH.
+const FAKE_BIN = fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-bin-'));
+fs.writeFileSync(path.join(FAKE_BIN, 'claude'), '#!/bin/sh\necho \'{"loggedIn": true}\'\n', { mode: 0o755 });
+process.env.PATH = `${FAKE_BIN}${path.delimiter}${process.env.PATH}`;
+
 /** A HOME nothing real lives in, so `~/.pravex`, `~/.claude` and `~/.codex` are the test's own. */
 const tempHome = () => fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-home-'));
 

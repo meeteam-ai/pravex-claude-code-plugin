@@ -53,8 +53,8 @@ const REPORT_FIELDS = new Set([
 
 /** Every field a setup snapshot may carry, and every field of its user and project scopes. */
 const SETUP_FIELDS = new Set(['v', 'machineId', 'hostname', 'platform', 'arch', 'pluginVersion', 'claudeVersion', 'user', 'project', 'environment']);
-/** The machine status every start sends (plan 0011): plan usage and the flow runner, nothing from the session. */
-const STATUS_FIELDS = new Set(['machineId', 'planUsage', 'runner']);
+/** The machine status every start sends (plans 0011 and 0013): plan usage, the flow runner and the sign-in, nothing from the session. */
+const STATUS_FIELDS = new Set(['machineId', 'planUsage', 'runner', 'claude']);
 const SCOPE_FIELDS = new Set(['claudeMd', 'settings', 'mcpServers', 'plugins', 'agents', 'skills', 'commands', 'hooks']);
 const PROJECT_FIELDS = new Set([...SCOPE_FIELDS, 'repo', 'workflows']);
 
@@ -196,6 +196,7 @@ test('at session start the setup snapshot is the only other request, with pinned
     const statuses = requests.filter((r) => r.url === '/api/claude-setup/machine-status');
     assert.strictEqual(statuses.length, 1, 'one machine status per start');
     for (const key of Object.keys(statuses[0].body)) assert.ok(STATUS_FIELDS.has(key), `unexpected status field ${key}`);
+    assert.deepStrictEqual(Object.keys(statuses[0].body.claude).sort(), ['expiresAt', 'signedIn'], 'the sign-in says two things');
     assert.ok(!JSON.stringify(statuses[0].body).includes('coding-session'), 'the status carried the session');
     const body = setups[0].body;
     for (const key of Object.keys(body)) assert.ok(SETUP_FIELDS.has(key), `unexpected setup field ${key}`);

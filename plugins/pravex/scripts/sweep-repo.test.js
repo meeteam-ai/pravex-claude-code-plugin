@@ -13,6 +13,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawn, execFileSync } = require('node:child_process');
 
+require('./test-support.js'); // no test reaches the real Claude Code
 const REPORT = path.join(__dirname, 'report-session.js');
 const TS = '2026-01-01T00:00:00.000Z';
 

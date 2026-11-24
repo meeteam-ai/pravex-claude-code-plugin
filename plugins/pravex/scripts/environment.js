@@ -10,11 +10,15 @@
  * the result. The permission rules stay here too: only whether a fixed capability is allowed,
  * asked or denied leaves the machine.
  *
+ * One thing is asked instead of read: `claude auth status --json`, for whether Claude Code is signed in and until when
+ * (plan 0013). Its account, e-mail and organisation are never looked at.
+ *
  * Standard library only, like everything else in this plugin. Every read is its own try.
  */
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { execFile } = require('child_process');
 
 const MAX_DIRS = 100;
 const MAX_PATH = 300;
@@ -144,17 +148,26 @@ function claudeDesktopDir(home, platform = process.platform, env = process.env) 
  * - `project`: every folder Claude Code was opened in (`~/.claude.json`), with its repository;
  * - `additional`: `permissions.additionalDirectories` in user and project settings;
  * - `desktop`: Claude Desktop's own folder and the folders its filesystem server may read.
+ *
+ * With `commands`, each also says which check commands it has (`commandsOf`).
  */
-function directoriesOf({ home = os.homedir(), claudeJson, settingsFiles = [], platform = process.platform, env = process.env } = {}) {
+function directoriesOf({ home = os.homedir(), claudeJson, settingsFiles = [], platform = process.platform, env = process.env, commands = false } = {}) {
   const out = [];
   const seen = new Set();
+  const budget = { packages: COMMANDS_MAX.packagesTotal };
+  const read = new Map();
+  const commandsIn = (dir, present) => {
+    if (!read.has(dir)) read.set(dir, present ? commandsOf(dir, budget) : null);
+    return read.get(dir);
+  };
   const add = (raw, kind, extra = {}) => {
     const rel = homeRel(raw, home);
     if (!rel || seen.has(`${kind}|${rel}`)) return;
     seen.add(`${kind}|${rel}`);
     const abs = expandHome(rel, home);
     const present = isDir(abs);
-    out.push({ path: rel, kind, exists: present, repo: present ? repoOf(abs) : null, ...extra });
+    if (out.length >= MAX_DIRS) return;
+    out.push({ path: rel, kind, exists: present, repo: present ? repoOf(abs) : null, ...(commands ? { commands: commandsIn(abs, present) } : {}), ...extra });
   };
 
   const projects = isObject(claudeJson) && isObject(claudeJson.projects) ? claudeJson.projects : {};
@@ -182,10 +195,280 @@ function directoriesOf({ home = os.homedir(), claudeJson, settingsFiles = [], pl
 }
 
 // ---------------------------------------------------------------------------
+// A repository's own check commands (plan 0013)
+// ---------------------------------------------------------------------------
+
+/** A plain command, nothing a shell would interpret (as the GitHub compiler). */
+const PLAIN_COMMAND = /^[A-Za-z0-9 _./@=-]+$/;
+const SCRIPT_RE = /^[A-Za-z0-9_@][\w:./@+-]{0,63}$/;
+const COMMANDS_MAX = { scripts: 60, packages: 100, packagesTotal: 400, entries: 2000, bytes: 256 * 1024, patterns: 30, depth: 4 };
+/** What each kind of check is called, most common name first. */
+const COMMAND_KINDS = [
+  ['lint', ['lint']],
+  ['types', ['check-types', 'typecheck', 'type-check']],
+  ['test', ['test']],
+  ['build', ['build']],
+];
+const LOCK_FILES = [
+  ['pnpm', ['pnpm-lock.yaml']],
+  ['npm', ['package-lock.json']],
+  ['yarn', ['yarn.lock']],
+  ['bun', ['bun.lockb', 'bun.lock']],
+];
+const own = (o, k) => isObject(o) && Object.prototype.hasOwnProperty.call(o, k);
+
+/** A regular file's text, or null when it is missing, too big or not a file. */
+function smallText(file, max = COMMANDS_MAX.bytes) {
+  try {
+    const st = fs.statSync(file);
+    return st.isFile() && st.size <= max ? readText(file, max) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** JSON with comments and trailing commas (turbo.json); null for anything that is not. */
+function parseJsonc(text) {
+  if (typeof text !== 'string') return null;
+  const out = [];
+  let comma = -1;
+  for (let i = text.charCodeAt(0) === 0xfeff ? 1 : 0; i < text.length; i += 1) {
+    const c = text[i];
+    if (c === '"') {
+      const from = i;
+      for (i += 1; i < text.length && text[i] !== '"'; i += 1) if (text[i] === '\\') i += 1;
+      out.push(text.slice(from, i + 1));
+      comma = -1;
+    } else if (c === '/' && text[i + 1] === '/') {
+      const end = text.indexOf('\n', i);
+      i = end < 0 ? text.length : end;
+    } else if (c === '/' && text[i + 1] === '*') {
+      const end = text.indexOf('*/', i + 2);
+      i = end < 0 ? text.length : end + 1;
+    } else {
+      if ((c === '}' || c === ']') && comma >= 0) out[comma] = '';
+      if (c === ',') comma = out.length;
+      else if (!/\s/.test(c)) comma = -1;
+      out.push(c);
+    }
+  }
+  try {
+    const json = JSON.parse(out.join(''));
+    return isObject(json) ? json : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The names and shapes of one `package.json`; script bodies stay in this file's memory. Null when there is none. */
+function readPackage(dir) {
+  const json = parseJsonc(smallText(path.join(dir, 'package.json')));
+  if (!json) return null;
+  const scripts = {};
+  for (const [name, body] of Object.entries(isObject(json.scripts) ? json.scripts : {})) if (typeof body === 'string') scripts[name] = body;
+  return { json, name: typeof json.name === 'string' ? json.name : '', scripts };
+}
+
+/** The package manager, by lock file (in the order the runner installs with), then `packageManager`. */
+function managerOf(dir, pkg) {
+  for (const [manager, files] of LOCK_FILES) if (files.some((f) => exists(path.join(dir, f)))) return manager;
+  const named = /^(pnpm|npm|yarn|bun)@/.exec(typeof pkg.json.packageManager === 'string' ? pkg.json.packageManager : '');
+  if (named) return named[1];
+  return exists(path.join(dir, 'pnpm-workspace.yaml')) ? 'pnpm' : null;
+}
+
+/** The `packages:` list of a pnpm-workspace.yaml. */
+function pnpmPackages(text) {
+  const out = [];
+  let inside = false;
+  const item = (s) => {
+    const m = /^\s*(?:"([^"]*)"|'([^']*)'|([^\s#,'"]+))/.exec(s);
+    const v = m && (m[1] ?? m[2] ?? m[3]);
+    if (v) out.push(v);
+  };
+  for (const line of String(text || '').split(/\r?\n/)) {
+    if (/^\s*(#|$)/.test(line)) continue;
+    const top = /^packages\s*:\s*(.*)$/.exec(line);
+    if (top) {
+      inside = true;
+      const inline = /^\[([^\]]*)\]/.exec(top[1]);
+      if (inline) for (const v of inline[1].split(',')) item(v);
+    } else if (inside) {
+      const dash = /^\s*-\s+(.*)$/.exec(line);
+      if (dash) item(dash[1]);
+      else if (/^\S/.test(line)) inside = false;
+    }
+  }
+  return out;
+}
+
+/** One path segment of a workspace pattern as a test, or null for one not worth reading. */
+function segmentTest(seg) {
+  if ((seg.match(/\*/g) || []).length > 2) return null;
+  const re = new RegExp(`^${seg.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*+/g, '[^/]*')}$`);
+  return (name) => re.test(name);
+}
+
+/** The folders a workspace's patterns name, inside the repository only: no symlinks, no dependencies, bounded. */
+function workspaceDirs(root, patterns) {
+  const clean = patterns
+    .filter((p) => typeof p === 'string' && p.length <= 120)
+    .slice(0, COMMANDS_MAX.patterns)
+    .map((p) => ({ not: p.startsWith('!'), segs: p.replace(/^!/, '').split('/').filter((s) => s && s !== '.') }))
+    .filter((p) => p.segs.length && !p.segs.includes('..'));
+  let entries = 0;
+  const find = (segs) => {
+    const found = [];
+    const walk = (rel, i, depth) => {
+      if (found.length >= COMMANDS_MAX.packages) return;
+      if (i === segs.length) {
+        found.push(rel.join('/'));
+        return;
+      }
+      const deep = segs[i] === '**';
+      if (deep) walk(rel, i + 1, depth);
+      const test = deep ? () => depth < COMMANDS_MAX.depth : segmentTest(segs[i]);
+      if (!test || entries >= COMMANDS_MAX.entries) return;
+      let names = [];
+      try {
+        names = fs.readdirSync(path.join(root, ...rel), { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const d of names) {
+        if ((entries += 1) > COMMANDS_MAX.entries) return;
+        if (!d.isDirectory() || d.name === 'node_modules' || d.name.startsWith('.') || !test(d.name)) continue;
+        walk([...rel, d.name], deep ? i : i + 1, depth + 1);
+      }
+    };
+    walk([], 0, 0);
+    return found;
+  };
+  const excluded = new Set(clean.filter((p) => p.not).flatMap((p) => find(p.segs)));
+  return [...new Set(clean.filter((p) => !p.not).flatMap((p) => find(p.segs)))].filter((d) => d && !excluded.has(d)).slice(0, COMMANDS_MAX.packages);
+}
+
+const turboTasks = (json) => (json && isObject(json.tasks) ? json.tasks : json && isObject(json.pipeline) ? json.pipeline : {});
+const turboOf = (dir) => turboTasks(parseJsonc(smallText(path.join(dir, 'turbo.json')) ?? smallText(path.join(dir, 'turbo.jsonc'))));
+
+/** Whether a Turbo task builds the packages it depends on, itself or through another task. */
+function dependsOnBuild(tasks, task, seen = new Set()) {
+  if (seen.has(task) || !own(tasks, task) || !isObject(tasks[task])) return false;
+  seen.add(task);
+  const deps = Array.isArray(tasks[task].dependsOn) ? tasks[task].dependsOn.filter((d) => typeof d === 'string') : [];
+  return deps.some((d) => d === '^build' || dependsOnBuild(tasks, d.replace(/^\^/, ''), seen));
+}
+
+/** Whether a Turbo `outputs` entry keeps `dist` in the cache. */
+function coversDist(outputs) {
+  return (Array.isArray(outputs) ? outputs : []).some((o) => {
+    if (typeof o !== 'string' || o.startsWith('!') || o.length > 200) return false;
+    const segs = o.replace(/^\.\//, '').split('/').filter((s) => s && s !== '**');
+    if (!segs.length) return true;
+    const braces = /^\{([^{}]*)\}$/.exec(segs[0]);
+    if (braces) return braces[1].split(',').some((s) => s.trim() === 'dist');
+    const test = segmentTest(segs[0]);
+    return Boolean(test && test('dist'));
+  });
+}
+
+/** Whether a package's entry is built by `tsc` into `dist/`. */
+function buildsWithTsc(pkg) {
+  if (!/(^|[\s;&|/])tsc(\s|$|;|&)/.test(own(pkg.scripts, 'build') ? pkg.scripts.build : '')) return false;
+  return [pkg.json.main, pkg.json.types, pkg.json.typings].some((v) => typeof v === 'string' && /^(\.\/)?dist\//.test(v));
+}
+
+/** A root script that only runs the whole Turbo task, so the task itself can be proposed in its place. */
+const runsTurboTask = (body, task) => {
+  const words = String(body).trim().split(/\s+/);
+  if (words.shift() !== 'turbo') return false;
+  if (words[0] === 'run') words.shift();
+  return words.shift() === task && words.every((w) => /^--?[a-z]/i.test(w) && !/^(-F|--filter|--affected|--only)/.test(w));
+};
+
+/** `<manager> <script>`, in the form that runs the script and not a command of the manager with the same name. */
+const scriptCommand = (manager, script) => {
+  if (manager === 'npm') return script === 'test' ? 'npm test' : `npm run ${script}`;
+  return manager === 'bun' ? `bun run ${script}` : `${manager} ${script}`;
+};
+
+/**
+ * The check commands a repository already has, or null when it has no readable `package.json`:
+ * `{ manager, scripts, suggested: [{ kind, command }] }`. Script *names* only, never bodies.
+ *
+ * Read from `package.json` files, lock file names, `turbo.json` and the workspace list; nothing is run. A Turbo task
+ * that depends on `^build` gets `--force` when a package is built with `tsc` into a `dist` Turbo does not keep: in a
+ * fresh worktree Turbo would otherwise replay the build from its cache without the files.
+ */
+function commandsOf(dir, budget = { packages: COMMANDS_MAX.packagesTotal }) {
+  try {
+    const pkg = readPackage(dir);
+    if (!pkg) return null;
+    const manager = managerOf(dir, pkg);
+    // The names a check is most likely to use first, so the cap never drops one of them.
+    const likely = (n) => (/^(lint|check|type|test|build|format|ci|verify)/i.test(n) ? 0 : 1);
+    const scripts = Object.keys(pkg.scripts)
+      .filter((n) => SCRIPT_RE.test(n))
+      .sort((a, b) => likely(a) - likely(b))
+      .slice(0, COMMANDS_MAX.scripts);
+    if (!manager) return { manager, scripts, suggested: [] };
+
+    const tasks = turboOf(dir);
+    let packages = [];
+    if (Object.keys(tasks).length) {
+      const ws = pkg.json.workspaces;
+      const patterns = manager === 'pnpm' ? pnpmPackages(smallText(path.join(dir, 'pnpm-workspace.yaml'))) : Array.isArray(ws) ? ws : isObject(ws) && Array.isArray(ws.packages) ? ws.packages : [];
+      const dirs = workspaceDirs(dir, patterns).slice(0, Math.max(0, budget.packages));
+      budget.packages -= dirs.length;
+      packages = dirs.map((d) => ({ dir: path.join(dir, ...d.split('/')), pkg: readPackage(path.join(dir, ...d.split('/'))) })).filter((p) => p.pkg);
+    }
+    const inPackages = (task) => own(tasks, task) && packages.some((p) => own(p.pkg.scripts, task));
+    const staleDist = packages
+      .filter((p) => buildsWithTsc(p.pkg))
+      .some((p) => {
+        const keys = [turboOf(p.dir).build, p.pkg.name && own(tasks, `${p.pkg.name}#build`) ? tasks[`${p.pkg.name}#build`] : null, own(tasks, 'build') ? tasks.build : null];
+        const build = keys.find((t) => isObject(t) && Array.isArray(t.outputs));
+        return !coversDist(build && build.outputs);
+      });
+
+    const suggested = [];
+    let building = false;
+    for (const [kind, names] of COMMAND_KINDS) {
+      const root = names.find((n) => own(pkg.scripts, n) && !/no test specified/.test(pkg.scripts[n]));
+      const task = root || names.find(inPackages);
+      if (!task) continue;
+      const turbo = inPackages(task);
+      const builds = turbo && dependsOnBuild(tasks, task);
+      // The other checks build the packages already; a task nobody asked for at the root would add the applications.
+      if (kind === 'build' && !root && building) continue;
+      if (builds) building = true;
+      const force = builds && staleDist;
+      const useTurbo = root ? force && runsTurboTask(pkg.scripts[root], root) : true;
+      const command = useTurbo
+        ? [manager === 'npm' ? 'npx' : manager, 'turbo', 'run', task, ...(kind === 'test' ? ['--concurrency=1'] : []), ...(force ? ['--force'] : [])].join(' ')
+        : scriptCommand(manager, task);
+      if (PLAIN_COMMAND.test(command)) suggested.push({ kind, command });
+    }
+    return { manager, scripts, suggested };
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Connections
 // ---------------------------------------------------------------------------
 
 const CLIS = ['git', 'gh', 'glab', 'aws', 'gcloud', 'az', 'kubectl', 'docker', 'vercel', 'supabase', 'npm', 'pnpm', 'claude'];
+
+/** The full path of a CLI on the `PATH`, or null. */
+function cliPath(cli, env = process.env, platform = process.platform) {
+  const exts = platform === 'win32' ? ['.exe', '.cmd', '.bat', ''] : [''];
+  for (const dir of String(env.PATH || '').split(path.delimiter).filter(Boolean)) {
+    for (const e of exts) if (exists(path.join(dir, cli + e))) return path.join(dir, cli + e);
+  }
+  return null;
+}
 
 /** The CLIs on the `PATH`, by looking for the files (nothing is run). */
 function installedClis(env = process.env, platform = process.platform) {
@@ -409,8 +692,104 @@ function readRunnerState(home = os.homedir()) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Claude Code's sign-in (plan 0013)
+// ---------------------------------------------------------------------------
+
+const AUTH_UNKNOWN = { signedIn: null, expiresAt: null };
+/** A reading older than this says nothing about the sign-in any more. */
+const AUTH_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const authFile = (home) => path.join(pravexDir(home), 'claude-auth.json');
+
+const isoOf = (v) => {
+  const ms = typeof v === 'string' ? Date.parse(v) : typeof v === 'number' ? (v < 1e12 ? v * 1000 : v) : NaN;
+  return Number.isFinite(ms) && ms > 0 && ms < 8.64e15 ? new Date(ms).toISOString() : null;
+};
+
+/** `{ signedIn, expiresAt }` from `claude auth status --json`, and not one field more; null when it is not an answer. */
+function claudeAuthFrom(text) {
+  const s = String(text || '');
+  let json;
+  try {
+    json = JSON.parse(s.slice(s.indexOf('{'), s.lastIndexOf('}') + 1));
+  } catch {
+    return null;
+  }
+  if (!isObject(json) || typeof json.loggedIn !== 'boolean') return null;
+  return { signedIn: json.loggedIn, expiresAt: json.loggedIn ? isoOf(json.loginExpiresAt ?? json.expiresAt) : null };
+}
+
+/**
+ * The environment of the question, without what only this session has: a token or key Claude Code or the shell handed
+ * to it says nothing about the sign-in the scheduled runner will find.
+ */
+function withoutSessionAuth(env) {
+  return Object.fromEntries(Object.entries(env).filter(([k]) => !/^(CLAUDECODE$|CLAUDE_CODE_|ANTHROPIC_(API_KEY|AUTH_TOKEN)$)/.test(k)));
+}
+
+/** Asks Claude Code whether it is signed in; null when there is no Claude Code or no answer in time. Never rejects. */
+function askClaudeAuth({ claude, env = process.env, cwd = os.homedir(), timeoutMs = 15000 }) {
+  return new Promise((resolve) => {
+    if (!claude) return resolve(null);
+    try {
+      const child = execFile(claude, ['auth', 'status', '--json'], { env, cwd, timeout: timeoutMs, killSignal: 'SIGKILL', windowsHide: true, maxBuffer: 1024 * 1024 }, (_err, stdout) => resolve(claudeAuthFrom(stdout)));
+      child.stdin.on('error', () => {});
+      child.stdin.end();
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+/** Asks and keeps the answer (`~/.pravex/claude-auth.json`). Without one, the last answer stays, marked as tried now. */
+async function refreshClaudeAuth({ home = os.homedir(), now = Date.now(), ...ask }) {
+  const answer = await askClaudeAuth({ cwd: home, ...ask });
+  const kept = answer || claudeStatus(home, now);
+  try {
+    const last = readClaudeAuth(home);
+    const file = authFile(home);
+    const tmp = `${file}.${process.pid}.tmp`;
+    fs.mkdirSync(pravexDir(home), { recursive: true, mode: 0o700 });
+    fs.writeFileSync(tmp, JSON.stringify({ ...kept, at: answer || !last ? now : last.at, triedAt: now }), { mode: 0o600 });
+    fs.renameSync(tmp, file);
+  } catch {
+    /* asked again next time */
+  }
+  return kept;
+}
+
+/** The last answer, with when it was given and when Claude was last asked; null when it never was. */
+function readClaudeAuth(home = os.homedir()) {
+  const json = readJson(authFile(home));
+  if (!isObject(json) || typeof json.at !== 'number') return null;
+  return {
+    signedIn: typeof json.signedIn === 'boolean' ? json.signedIn : null,
+    expiresAt: isoOf(json.expiresAt),
+    at: json.at,
+    triedAt: typeof json.triedAt === 'number' ? json.triedAt : json.at,
+  };
+}
+
+/** What Pravex is told: `{ signedIn, expiresAt }`, both null when nobody has answered in a day. */
+function claudeStatus(home = os.homedir(), now = Date.now()) {
+  const last = readClaudeAuth(home);
+  return last && Math.abs(now - last.at) < AUTH_MAX_AGE_MS ? { signedIn: last.signedIn, expiresAt: last.expiresAt } : { ...AUTH_UNKNOWN };
+}
+
 module.exports = {
   CAPABILITIES,
+  COMMANDS_MAX,
+  PLAIN_COMMAND,
+  askClaudeAuth,
+  claudeAuthFrom,
+  claudeStatus,
+  cliPath,
+  commandsOf,
+  coversDist,
+  parseJsonc,
+  readClaudeAuth,
+  refreshClaudeAuth,
+  withoutSessionAuth,
   MAX_PROMPT,
   MAX_PROMPTS_TOTAL,
   agentPrompt,
