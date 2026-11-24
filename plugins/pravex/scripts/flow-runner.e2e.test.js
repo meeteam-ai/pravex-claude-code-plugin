@@ -504,7 +504,8 @@ const argvOf = (fx, n) => {
   const words = fs.readFileSync(path.join(fx.home, `call-${n}`), 'utf8').split('\n').slice(0, -1);
   return words.slice(words.indexOf('--output-format'));
 };
-const DENIED = ['--disallowedTools', ...require('./flow-runner.js').NEVER_TOOLS];
+const KEPT = ['.git', '.git/**', '**/.git/**', '.claude/**', '.mcp.json', '.husky/**'];
+const DENIED = ['--disallowedTools', 'Bash(git push:*)', 'Bash(gh pr merge:*)', 'Bash(gh workflow run:*)', ...KEPT.map((p) => `Edit(./${p})`), ...KEPT.map((p) => `Write(./${p})`)];
 
 test('every agent of a run is started with its own limits and nothing wider', posix, async () => {
   const fx = setUp();
