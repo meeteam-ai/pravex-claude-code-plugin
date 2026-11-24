@@ -1429,7 +1429,7 @@ let setupPending = null;
 /** Start the setup snapshot in the background. Never throws, never delays the start line. */
 function startSetupSnapshot({ apiHost, accessToken, cwd, repo, incognito, seat, claudeVersion }) {
   try {
-    setupPending = setupLib
+    const snapshot = setupLib
       .maybeSendSetup({
         cwd,
         repo,
@@ -1442,9 +1442,9 @@ function startSetupSnapshot({ apiHost, accessToken, cwd, repo, incognito, seat, 
       .then((r) => log(`setup: ${r.reason}`))
       .catch(() => {});
     const status = setupLib
-      .maybeSendStatus({ incognito, seat, send: (route, body) => post(apiHost, accessToken, body, { method: 'PUT', route }) })
+      .maybeSendStatus({ incognito, seat, after: snapshot, send: (route, body) => post(apiHost, accessToken, body, { method: 'PUT', route }) })
       .catch(() => {});
-    setupPending = Promise.all([setupPending, status]);
+    setupPending = Promise.all([snapshot, status]);
   } catch {
     setupPending = null;
   }

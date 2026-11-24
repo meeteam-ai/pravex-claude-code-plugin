@@ -636,3 +636,49 @@ test('the machine status says the sign-in and not the account, and a slow or mis
   for (const off of [{ incognito: true }, { seat: false }, { env: { ...env, PRAVEX_SETUP: '0' } }]) assert.strictEqual((await status(off)).body, null);
   assert.ok(!fs.existsSync(path.join(home, 'asked')), 'not even asked');
 });
+
+/** A start against a server that takes `delay` ms to answer the snapshot (never, when null), and what it saw when. */
+async function startAgainst({ delay = 0, code = 200 }) {
+  const http = require('node:http');
+  const { envFor, runHook, tempHome } = require('./test-support.js');
+  const seen = [];
+  const server = http.createServer((req, res) => {
+    req.resume();
+    req.on('end', () => {
+      const answer = (status, result) => {
+        seen.push(`answered ${req.url}`);
+        res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify({ status, result }));
+      };
+      seen.push(`asked ${req.url}`);
+      if (req.url === '/api/me/seat') return answer(200, { status: 'active', workspace: { id: 'o', name: 'N' }, message: null });
+      if (req.url !== '/api/claude-setup/snapshot') return answer(200, { tracked: true });
+      if (delay !== null) setTimeout(() => answer(code, { tracked: true }), delay);
+    });
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const home = tempHome();
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'pravex-cwd-'));
+  try {
+    const run = await runHook({ session_id: 's-1', transcript_path: path.join(cwd, 'x.jsonl'), cwd, source: 'startup' }, envFor(home, server.address().port), ['--start']);
+    return { ...run, seen: seen.filter((s) => s.includes('claude-setup')).map((s) => s.replace('/api/claude-setup/', '')) };
+  } finally {
+    server.close();
+    server.closeAllConnections();
+  }
+}
+
+test("a machine's first status arrives after the snapshot that makes it known, and after one that failed", async () => {
+  for (const answer of [{ delay: 600 }, { delay: 300, code: 500 }]) {
+    const { code, seen, stdout } = await startAgainst(answer);
+    assert.strictEqual(code, 0);
+    assert.deepStrictEqual(seen.slice(0, 4), ['asked snapshot', 'answered snapshot', 'asked machine-status', 'answered machine-status']);
+    assert.match(stdout, /recording this session/);
+  }
+});
+
+test('a snapshot that is never answered does not take the status with it, nor more of the start than before', async () => {
+  const { code, ms, seen } = await startAgainst({ delay: null });
+  assert.strictEqual(code, 0);
+  assert.deepStrictEqual(seen, ['asked snapshot', 'asked machine-status', 'answered machine-status']);
+  assert.ok(ms < 4000, `${ms} ms`);
+});

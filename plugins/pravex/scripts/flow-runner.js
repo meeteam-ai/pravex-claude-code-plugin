@@ -78,6 +78,8 @@ const AUTH_EVERY_MS = 10 * 60 * 1000;
 const SAME_ERROR_EVERY_MS = 60 * 60 * 1000;
 /** A schedule that could not be moved is tried again at a session start after this long. */
 const MOVE_RETRY_MS = 60 * 60 * 1000;
+/** How many minutes ahead a run looks for a branch name nobody has. */
+const BRANCH_TRIES = 60;
 const OUTPUT_TAIL = 1500;
 /** The question about a failed run: what it reads, what each answer may be, and how long it may take. */
 const EXPLAIN = { output: 4000, answer: 280, timeoutMs: 60000 };
@@ -864,7 +866,6 @@ async function executeRun({ run: record, flow, mode, fromNodeId = null, branch: 
     workdir = repoDir;
     let branch = knownBranch;
     if (mode === 'live') {
-      branch = branch || `${branchPrefix(flow)}${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '')}`;
       workdir = path.join(RUNS_DIR, runId);
       if (!fs.existsSync(workdir)) {
         fs.mkdirSync(RUNS_DIR, { recursive: true, mode: 0o700 });
@@ -875,7 +876,10 @@ async function executeRun({ run: record, flow, mode, fromNodeId = null, branch: 
         } else {
           await run(git, ['fetch', 'origin', '--quiet'], { cwd: repoDir, timeoutMs: 120000 });
           base = (await run(git, ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'], { cwd: repoDir })).out.trim() || 'origin/main';
-          added = await run(git, ['worktree', 'add', '-b', branch, workdir, base], { cwd: repoDir, timeoutMs: 120000 });
+          const made = await createBranch(git, repoDir, flow, base);
+          if (!made.branch) return await finish('failed', 'worktree-failed', { output: tail(made.err, 300) });
+          branch = made.branch;
+          added = await run(git, ['worktree', 'add', workdir, branch], { cwd: repoDir, timeoutMs: 120000 });
         }
         if (added.code !== 0) return await finish('failed', 'worktree-failed', { output: tail(added.err, 300) });
         const install = installCommand(workdir);
@@ -1101,6 +1105,28 @@ async function claudeSignedOut(claude) {
 
 /** What a run's branch is called, up to its twelve-digit stamp. */
 const branchPrefix = (flow) => `pravex/${String(flow.slug || 'flow').slice(0, 40)}-`;
+
+/**
+ * A new branch of this flow from `base`: this minute's, or the next free one when a run of the same minute (or of a flow
+ * with the same slug) has it, here or on the remote. Git makes it in one step and refuses a name that exists, so no
+ * branch is ever reused or moved. `{ branch }`, or `{ err }` when git cannot or an hour of names is taken.
+ */
+async function createBranch(git, repoDir, flow, base, now = Date.now()) {
+  const opts = { cwd: repoDir, timeoutMs: 60000 };
+  const prefix = branchPrefix(flow);
+  const listed = await run(git, ['ls-remote', '--heads', 'origin', `refs/heads/${prefix}*`], opts);
+  const remote = new Set(listed.code === 0 ? listed.out.split('\n').map((l) => l.split('\t')[1]) : []);
+  const has = async (ref) => (await run(git, ['show-ref', '--verify', '--quiet', ref], opts)).code === 0;
+  for (let i = 0; i < BRANCH_TRIES; i += 1) {
+    const branch = `${prefix}${new Date(now + i * 60000).toISOString().slice(0, 16).replace(/[-:T]/g, '')}`;
+    if (remote.has(`refs/heads/${branch}`) || (await has(`refs/heads/${branch}`)) || (await has(`refs/remotes/origin/${branch}`))) continue;
+    const made = await run(git, ['branch', branch, base], opts);
+    if (made.code === 0) return { branch };
+    // Taken since it was looked for; anything else will not change with another name.
+    if (!(await has(`refs/heads/${branch}`))) return { err: made.err };
+  }
+  return { err: `no free branch name under ${prefix}` };
+}
 
 /** How many open pull requests a schedule works up to: 1 to 10, 3 when the flow does not say. */
 function maxOpenPrsOf(budget) {
@@ -1786,6 +1812,7 @@ module.exports = {
   agentArgs,
   agentPrompt,
   checkTools,
+  createBranch,
   cronMatches,
   dueMinutes,
   executeRun,

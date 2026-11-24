@@ -810,6 +810,71 @@ test('a schedule Pravex refuses as not confirmed is skipped quietly, and a run a
   });
 });
 
+// A branch of its own -------------------------------------------------------
+
+const minute = (i) => new Date(Date.now() + i * 60000).toISOString().slice(0, 16).replace(/[-:T]/g, '');
+/** Makes these branches of the flow here, at a commit of their own. */
+function takeBranches(fx, stamps) {
+  const sha = fx.git(['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit-tree', '-m', 'somebody else', 'HEAD^{tree}'], fx.repo).trim();
+  execFileSync('git', ['update-ref', '--stdin'], { cwd: fx.repo, input: stamps.map((s) => `create refs/heads/pravex/write-a-file-${s} ${sha}\n`).join('') });
+  return sha;
+}
+
+test('two live runs of one flow in the same minute have a branch each', posix, async () => {
+  const fx = setUp();
+  fakeClaude(fx, `echo x > x.txt; ${say('done')}`);
+  const seen = [];
+  for (let i = 0; i < 2; i += 1) {
+    await withServer({ definition: chain([T, agent('a'), PR]) }, async (host, patches) => {
+      const { code, out } = await runNow(envFor(fx, host), ['--run', 'f1']);
+      assert.equal(code, 0, out);
+      assert.equal(patches.at(-1).status, 'passed');
+      seen.push(patches.find((p) => p.branch).branch);
+    });
+    // Whatever minute it is by now, the next run finds it taken.
+    if (i === 0) takeBranches(fx, [minute(0), minute(1)].filter((s) => !seen[0].endsWith(s)));
+  }
+  assert.notEqual(seen[0], seen[1]);
+  for (const b of seen) assert.match(b, /^pravex\/write-a-file-\d{12}$/);
+});
+
+test('a run takes the next minute that is free here and on the remote, and leaves every other branch as it is', posix, async () => {
+  const fx = setUp();
+  fakeClaude(fx, `echo x > x.txt; ${say('done')}`);
+  const sha = takeBranches(fx, [minute(-1), minute(0), minute(1), minute(2), minute(3)]);
+  // Only on the remote, where this copy does not even fetch it from.
+  const far = `pravex/write-a-file-${minute(4)}`;
+  fx.git(['config', 'remote.origin.fetch', '+refs/heads/main:refs/remotes/origin/main'], fx.repo);
+  fx.git(['push', '-q', 'origin', `${sha}:refs/heads/${far}`], fx.repo);
+  const expected = `pravex/write-a-file-${minute(5)}`;
+  await withServer({ definition: chain([T, agent('a'), PR]) }, async (host, patches) => {
+    const { code, out } = await runNow(envFor(fx, host), ['--run', 'f1']);
+    assert.equal(code, 0, out);
+    assert.equal(patches.find((p) => p.branch).branch, expected);
+    assert.equal(stepsOf(patches).p.summary.code, 'pr-opened');
+    const others = fx.git(['for-each-ref', '--format=%(refname:short) %(objectname)', 'refs/heads/pravex'], fx.repo).trim().split('\n').filter((l) => !l.startsWith(expected));
+    assert.equal(others.length, 5);
+    for (const l of others) assert.ok(l.endsWith(sha), 'nobody else\'s branch moved');
+    assert.equal(fx.git(['rev-parse', far], fx.origin).trim(), sha);
+  });
+});
+
+test('runs that start together never share a branch, and an hour of taken names is where it stops looking', posix, async () => {
+  const fx = setUp();
+  const { createBranch } = require('./flow-runner.js');
+  const flow = { slug: 'write-a-file' };
+  const now = Date.parse('2026-11-23T23:58:10Z');
+  const made = await Promise.all(Array.from({ length: 5 }, () => createBranch('git', fx.repo, flow, 'origin/main', now)));
+  assert.deepEqual(made.map((m) => m.branch).sort(), ['202611232358', '202611232359', '202611240000', '202611240001', '202611240002'].map((s) => `pravex/write-a-file-${s}`));
+  for (let i = 5; i < 60; i += 1) fx.git(['branch', `pravex/write-a-file-${new Date(now + i * 60000).toISOString().slice(0, 16).replace(/[-:T]/g, '')}`], fx.repo);
+  const before = fx.git(['for-each-ref'], fx.repo);
+  const full = await createBranch('git', fx.repo, flow, 'origin/main', now);
+  assert.ok(!full.branch && /no free branch/.test(full.err));
+  const broken = await createBranch('git', fx.repo, { slug: 'other' }, 'origin/none', now);
+  assert.ok(!broken.branch && broken.err, 'git says why, and no other name is tried');
+  assert.equal(fx.git(['for-each-ref'], fx.repo), before);
+});
+
 // Starts within a minute ----------------------------------------------------
 
 test('a tick that finds a run in progress says and asks nothing', posix, async () => {
