@@ -246,8 +246,13 @@ Since 0.16.0 flows are safer, sooner and visible:
   protection, not a sandbox: a command that rewrites its own environment or git options
   can undo it, so give an agent no more tools than its task needs. A check whose own
   tests push to a temporary repository fails under it.
-- **No repeated work.** A scheduled run of a flow that opens pull requests is skipped
-  while its last one is still open. A run you ask for goes on.
+- **It goes on with what is next, and does not repeat.** A live run of a flow that opens
+  pull requests reads the flow's own open ones with `gh` (title and changed files) and
+  tells its agents what already waits for review. When everything it changed is already
+  changed by those, it opens no other: the work stays on the run's local branch and the
+  run passes. A schedule stops at the flow's limit of open pull requests (three unless
+  you set it; one means "wait for my review"); a run you ask for goes on. When `gh`
+  cannot answer, the run goes on without the list.
 - **You confirm the first scheduled run** of a flow on your machine, in Pravex.
 - **It starts within a minute.** A tick with nothing to do is one small request, and a
   tick during a run is silent. A schedule installed before 0.16.0 moves from every 15

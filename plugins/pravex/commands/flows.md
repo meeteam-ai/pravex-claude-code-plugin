@@ -21,8 +21,10 @@ run only while the plan is below a percentage, and stops when it passes another.
 
 Its agents may not push, merge or start workflows, and git in its agents and checks has
 nowhere to push to (a strong protection, not a sandbox): opening the pull request is the
-runner's, after the checks pass. A scheduled run waits while the flow's last pull
-request is open, and does not start until you confirm the flow's schedule in Pravex.
+runner's, after the checks pass. A run is told which of the flow's pull
+requests already wait for review and does not open another that changes only the same
+files; a schedule waits when too many are open (three unless the flow says otherwise).
+A schedule does not start until you confirm it in Pravex.
 Stopping a run in Pravex ends it here within seconds and keeps its work on a local
 branch. A schedule installed by an older version (every 15 minutes) moves to every
 minute by itself when a Claude Code session starts.
