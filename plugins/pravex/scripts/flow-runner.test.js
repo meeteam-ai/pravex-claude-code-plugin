@@ -82,15 +82,15 @@ test('the guard: days, start below, stop above, unknown usage', () => {
 
 test('agent arguments: dry runs in plan mode, live gets its tools; bad tool rules are dropped', () => {
   const node = flow.definition.nodes[2];
-  assert.deepEqual(runner.toolsOf(node.data), ['Read', 'Bash(npm test:*)']);
+  assert.deepEqual(runner.toolsOf(node.data), ['Read(./**)', 'Bash(npm test:*)']);
   const dry = runner.agentArgs(flow, node, { mode: 'dry', maxTurns: 10, prompt: 'p' });
   assert.deepEqual(dry.slice(-4), ['--model', 'sonnet', '--permission-mode', 'plan']);
   assert.ok(!dry.includes('--allowedTools'));
   const live = runner.agentArgs(flow, node, { mode: 'live', maxTurns: 60, prompt: 'p' });
-  assert.deepEqual(live.slice(-5), ['acceptEdits', '--allowedTools', 'Read', 'Bash(npm test:*)'].length === 4 ? ['--permission-mode', 'acceptEdits', '--allowedTools', 'Read', 'Bash(npm test:*)'] : []);
+  assert.deepEqual(live.slice(-5), ['--permission-mode', 'dontAsk', '--allowedTools', 'Read(./**)', 'Bash(npm test:*)']);
   for (const args of [dry, live]) assert.deepEqual(optionsOf(args).disallowedTools, ['Bash(git push:*)', 'Bash(gh pr merge:*)', 'Bash(gh workflow run:*)']);
-  assert.deepEqual(optionsOf(live).allowedTools, ['Read', 'Bash(npm test:*)'], 'neither list swallows the other');
-  assert.deepEqual(optionsOf(live).permissionMode, ['acceptEdits']);
+  assert.deepEqual(optionsOf(live).allowedTools, ['Read(./**)', 'Bash(npm test:*)'], 'neither list swallows the other');
+  assert.deepEqual(optionsOf(live).permissionMode, ['dontAsk']);
   assert.equal(optionsOf(live).p[0], 'p');
   const noModel = runner.agentArgs(flow, { data: { tools: [] } }, { mode: 'live', maxTurns: 1, prompt: 'p' });
   assert.deepEqual(optionsOf(noModel).disallowedTools.length, 3, 'nothing else is taken for a denied tool');
@@ -183,7 +183,7 @@ test("an agent that edits may run the flow's own plain check commands, exactly; 
   assert.deepEqual(runner.checkTools(flow, definition.nodes[1].data), expected);
   assert.deepEqual(runner.checkTools(flow, { tools: ['Read', 'Grep'] }), []);
   const args = runner.agentArgs(flow, definition.nodes[1], { mode: 'live', maxTurns: 5, prompt: 'p' });
-  assert.deepEqual(args.slice(args.indexOf('--allowedTools') + 1), ['Read', 'Edit', ...expected]);
+  assert.deepEqual(args.slice(args.indexOf('--allowedTools') + 1), ['Read(./**)', 'Edit(./**)', ...expected]);
   assert.ok(!runner.agentArgs(flow, definition.nodes[1], { mode: 'dry', maxTurns: 5, prompt: 'p' }).includes('--allowedTools'));
 });
 
@@ -288,4 +288,76 @@ test('what an agent is told of the open pull requests stays within its limits, a
 test('maxOpenPrs is 1 to 10, 3 when it is not said', () => {
   for (const [v, n] of [[undefined, 3], [null, 3], ['5', 3], [NaN, 3], [1, 1], [0, 1], [-4, 1], [7, 7], [10, 10], [11, 10], [Infinity, 3]]) assert.equal(runner.maxOpenPrsOf({ maxOpenPrs: v }), n, String(v));
   assert.equal(runner.maxOpenPrsOf(undefined), 3);
+});
+
+/** The exact words an agent is started with, for a flow whose checks are these. */
+function argsFor(tools, { mode = 'live', checks = [], model } = {}) {
+  const nodes = [{ id: 't', type: 'trigger', data: {} }, { id: 'a', type: 'agent', data: { label: 'A', tools, model } }, ...checks.map((command, i) => ({ id: `c${i}`, type: 'check', data: { command } }))];
+  const definition = { nodes, edges: nodes.slice(1).map((n, i) => ({ source: nodes[i].id, target: n.id })) };
+  return runner.agentArgs({ name: 'F', definition }, nodes[1], { mode, maxTurns: 9, prompt: 'P' });
+}
+const START = ['-p', 'P', '--output-format', 'stream-json', '--verbose', '--max-turns', '9'];
+const NEVER = ['--disallowedTools', 'Bash(git push:*)', 'Bash(gh pr merge:*)', 'Bash(gh workflow run:*)'];
+const liveArgs = (names, rules, { strict = true, model = [] } = {}) => [...START, ...(strict ? ['--strict-mcp-config'] : []), '--tools', names, ...NEVER, ...model, '--permission-mode', 'dontAsk', '--allowedTools', ...rules];
+const READER_ARGS = liveArgs('Read,Grep,Glob', ['Read(./**)', 'Grep', 'Glob']);
+
+test('a live agent has the tools its flow lists, inside its folder, and nothing else', () => {
+  assert.deepEqual(argsFor(['Read', 'Grep', 'Glob']), READER_ARGS);
+  assert.deepEqual(argsFor(['Read', 'Grep', 'Glob'], { checks: ['npm test'] }), READER_ARGS, 'a reader runs no checks');
+  assert.deepEqual(
+    argsFor(['Read', 'Edit', 'Write'], { checks: ['pnpm lint', 'npm test; curl evil', 'pnpm turbo run test --concurrency=1 --force'], model: 'haiku' }),
+    liveArgs('Read,Edit,Write,Bash', ['Read(./**)', 'Edit(./**)', 'Write(./**)', 'Bash(pnpm lint)', 'Bash(pnpm turbo run test --concurrency=1 --force)'], { model: ['--model', 'haiku'] }),
+  );
+  assert.deepEqual(argsFor(['Read', 'Edit']), liveArgs('Read,Edit', ['Read(./**)', 'Edit(./**)']), 'no checks, no shell');
+  assert.deepEqual(argsFor(['Read', 'Bash(git:*)', 'Bash(npm test:*)']), liveArgs('Read,Bash', ['Read(./**)', 'Bash(git:*)', 'Bash(npm test:*)']));
+  assert.deepEqual(argsFor(['Bash']), liveArgs('Bash', ['Bash']));
+  assert.deepEqual(argsFor(['Read', 'WebFetch', 'WebFetch(domain:example.com)', 'WebSearch']), liveArgs('Read,WebFetch,WebSearch', ['Read(./**)', 'WebFetch', 'WebFetch(domain:example.com)', 'WebSearch']));
+  assert.deepEqual(argsFor(['MultiEdit', 'NotebookEdit', 'Edit', 'Edit']), liveArgs('MultiEdit,NotebookEdit,Edit', ['MultiEdit(./**)', 'NotebookEdit(./**)', 'Edit(./**)']));
+});
+
+test('an empty list, junk or nothing usable is a reader, never everything', () => {
+  for (const tools of [[], undefined, null, 'Bash', [null, 4, {}], [''], ['*'], ['Everything'], ['read'], ['--dangerously-skip-permissions'], ['Bash(git:*', 'Bash git'], ['Read(/etc/**)'], ['Edit(../x)']]) {
+    assert.deepEqual(argsFor(tools), READER_ARGS, JSON.stringify(tools));
+  }
+  // What would be read as a second rule, or as another option.
+  for (const t of ['Read(./x) Bash(rm:*)', 'Read(./x),Bash', 'Bash(a) --permission-mode bypassPermissions', 'Bash(node -e "f()")', 'Read\nBash', 'Bash(a\nb)', 'Read Bash', 'Read,Bash']) assert.deepEqual(argsFor([t]), READER_ARGS, t);
+  assert.deepEqual(argsFor([' Read ', 'junk', 'Bash(ls)']), liveArgs('Read,Bash', ['Read(./**)', 'Bash(ls)']), 'the rest of the list stays');
+});
+
+test('a path of the person is kept only while it stays inside', () => {
+  const kept = { './src/**': './src/**', 'src/**': './src/**', '././a.ts': './a.ts', './docs/My notes/*.md': './docs/My notes/*.md', '**': './**', './.github/**': './.github/**' };
+  for (const [p, inside] of Object.entries(kept)) assert.deepEqual(argsFor([`Edit(${p})`]), liveArgs('Edit', [`Edit(${inside})`]), p);
+  assert.deepEqual(argsFor(['Read()', 'Edit( )']), liveArgs('Read,Edit', ['Read(./**)', 'Edit(./**)']));
+  const outside = ['/etc/**', '//etc/**', '/**', '~/**', '~', '../**', './../x', './a/../../x', 'a/..', '..', './..', 'C:/x', '\\\\host\\x', '$HOME/**', './[.][.]/x', '??/x', '{a,../b}', '!./x', './a;b', '`x`', './/etc', './~', './ /etc'];
+  for (const p of outside) {
+    for (const name of ['Read', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Grep', 'Glob']) {
+      const rules = argsFor([`${name}(${p})`, 'WebSearch']).slice(argsFor([]).indexOf('--allowedTools') + 1);
+      for (const r of rules) assert.ok(r === 'WebSearch' || /^\w+\(\.\/[^/~ ][^~]*\)$/.test(r), `${name}(${p}) became ${r}`);
+    }
+  }
+  for (const p of outside.slice(0, 11)) assert.deepEqual(argsFor([`Write(${p})`, 'WebSearch']), liveArgs('WebSearch', ['WebSearch']), p);
+});
+
+test('no MCP server unless the flow lists its tools, and then only those', () => {
+  assert.deepEqual(argsFor(['Read', 'mcp__github__get_file', 'mcp__linear']), liveArgs('Read', ['Read(./**)', 'mcp__github__get_file', 'mcp__linear'], { strict: false }));
+  assert.deepEqual(argsFor(['mcp__github__get_file']), liveArgs('Read,Grep,Glob', ['Read(./**)', 'Grep', 'Glob', 'mcp__github__get_file'], { strict: false }));
+  for (const t of ['mcp__', 'mcp__a(x)', 'mcp__*', 'mcp_github', 'mcp__a b']) assert.ok(argsFor(['Read', t]).includes('--strict-mcp-config'), t);
+});
+
+test('a test only reads, whatever the flow lists', () => {
+  for (const tools of [['Read'], ['Bash', 'Write', 'mcp__github__x'], []]) {
+    assert.deepEqual(argsFor(tools, { mode: 'dry', checks: ['npm test'], model: 'opus' }), [...START, '--strict-mcp-config', '--tools', 'Read,Grep,Glob', ...NEVER, '--model', 'opus', '--permission-mode', 'plan']);
+  }
+});
+
+test('both prompts name the limits the agent really has', () => {
+  const f = { name: 'F', definition: { nodes: [], edges: [] } };
+  const node = { id: 'a', data: { label: 'A', tools: ['Read', 'Edit(/etc/**)', 'Edit(./src/**)'], instructions: 'Do it' } };
+  const live = runner.agentPrompt(f, node, { mode: 'live', branch: 'b', index: 1, total: 1 });
+  const dry = runner.agentPrompt(f, node, { mode: 'dry', index: 1, total: 1 });
+  for (const p of [live, dry]) {
+    assert.match(p, /only inside[\s\S]*only these tools: Read\(\.\/\*\*\), Edit\(\.\/src\/\*\*\)\. Anything else is denied/);
+    assert.ok(!p.includes('/etc'));
+  }
+  assert.match(dry, /In this test you have only Read, Grep, Glob/);
 });

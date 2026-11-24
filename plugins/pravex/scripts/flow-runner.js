@@ -29,6 +29,9 @@
  * push to. The same goes for the checks and the install, whose scripts an agent may have edited. It is a strong
  * protection, not a sandbox: a process that rewrites its own environment or git options can undo it.
  *
+ * **What an agent may do is what its flow lists.** Only those tools exist for it, everything else is denied without
+ * asking, and its files are those of its own copy of the repository.
+ *
  * **It goes on with what is next.** A run reads its flow's open pull requests: its agents are told what already waits for
  * review, a run that only changed files one of them changes opens no other, and a scheduled one does not start with
  * `maxOpenPrs` of them waiting. A schedule nobody on this machine confirmed does not run. While a step works, Pravex hears what it does every 15 seconds, and a run stopped there stops
@@ -93,7 +96,15 @@ const OPEN_PRS = { limit: 3, most: 10, read: 20, readMs: 60000, told: 10, files:
 const NO_PUSH_URL = 'pravex-flow-steps-do-not-push://';
 /** A check command an agent may run itself: a plain command, nothing a shell would interpret (as the GitHub compiler). */
 const { PLAIN_COMMAND } = envLib;
-const SHELL_TOOLS_RE = /^[A-Za-z_][\w-]*(\(.*\))?$/s;
+/** A tool rule: a name and what it is for. No second pair of brackets: the CLI would read the rest as another rule. */
+const TOOL_RULE_RE = /^([A-Za-z_][\w-]*)(?:\(([^()\u0000-\u001f\u007f]*)\))?$/;
+/** Claude Code's own tools a flow may give an agent: those that take a path, and the rest. Any other name is dropped. */
+const PATH_TOOLS = new Set(['Read', 'Grep', 'Glob', 'LS', 'Edit', 'MultiEdit', 'Write', 'NotebookRead', 'NotebookEdit']);
+const OTHER_TOOLS = new Set(['Bash', 'BashOutput', 'KillShell', 'WebFetch', 'WebSearch', 'TodoWrite', 'Task', 'Agent']);
+/** Those a bare rule would let out of the copy of the repository. Searching stays as it is written. */
+const SCOPED_TOOLS = new Set(['Read', 'Edit', 'MultiEdit', 'Write', 'NotebookRead', 'NotebookEdit']);
+/** What an agent has when its list says nothing that can be used, and in a test: never everything. */
+const READERS = ['Read', 'Grep', 'Glob'];
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
@@ -278,11 +289,40 @@ function guardDecision(guard, usage, { phase = 'start', now = Date.now(), timeZo
 // Steps (pure parts)
 // ---------------------------------------------------------------------------
 
-/** Tool rules for `--allowedTools`; anything that is not a tool rule is dropped. */
-function toolsOf(data) {
-  const tools = Array.isArray(data && data.tools) ? data.tools : [];
-  return tools.filter((t) => typeof t === 'string' && SHELL_TOOLS_RE.test(t.trim())).map((t) => t.trim());
+/** A rule's own path, written from the agent's folder, or null when it may leave it: `..`, `/`, `~`, or a pattern that could. */
+function insidePath(p) {
+  const s = p.trim().replace(/^(\.\/)+/, '');
+  if (!s || !/^[\w@.+*=-][\w@.+*= /-]*$/.test(s) || s.includes('..')) return null;
+  return `./${s}`;
 }
+
+/**
+ * The tool rules of an agent, as `--allowedTools` gets them: what is listed and nothing else, with everything that reads
+ * or writes files kept inside the agent's folder (a bare `Edit` would edit anywhere on the machine). A rule that is not
+ * one, names a tool nobody knows or points outside is dropped; a list with none left is a reader's.
+ */
+function toolsOf(data) {
+  const rules = [];
+  for (const t of Array.isArray(data && data.tools) ? data.tools : []) {
+    const m = typeof t === 'string' ? TOOL_RULE_RE.exec(t.trim()) : null;
+    if (!m) continue;
+    const [, name, raw] = m;
+    const content = raw === undefined ? '' : raw.trim();
+    if (PATH_TOOLS.has(name)) {
+      const own = content && insidePath(content);
+      if (content && !own) continue;
+      rules.push(own ? `${name}(${own})` : SCOPED_TOOLS.has(name) ? `${name}(./**)` : name);
+    } else if (OTHER_TOOLS.has(name)) rules.push(content ? `${name}(${content})` : name);
+    else if (/^mcp__\w[\w-]*$/.test(name) && !content) rules.push(name);
+  }
+  const listed = [...new Set(rules)];
+  return listed.some((r) => !r.startsWith('mcp__')) ? listed : [...READERS.map((n) => (SCOPED_TOOLS.has(n) ? `${n}(./**)` : n)), ...listed];
+}
+
+const toolName = (rule) => rule.split('(')[0];
+const usesMcp = (rules) => rules.some((r) => r.startsWith('mcp__'));
+/** What `--tools` gets: the built-in tools the rules are about. Without it an agent has every tool there is. */
+const builtIns = (rules) => [...new Set(rules.map(toolName).filter((n) => !n.startsWith('mcp__')))];
 
 const checkCommandOf = (data) => String((data && data.command) || '').trim() || (data && data.type === 'lint_pass' ? 'npm run lint' : data && data.type === 'build_pass' ? 'npm run build' : 'npm test');
 
@@ -291,7 +331,7 @@ const checkCommandOf = (data) => String((data && data.command) || '').trim() || 
  * commands only, so a check never opens the door to other scripts of the same tool (a deploy, for example).
  */
 function checkTools(flow, data) {
-  if (!toolsOf(data).some((t) => t === 'Edit' || t === 'Write')) return [];
+  if (!toolsOf(data).some((t) => ['Edit', 'MultiEdit', 'Write'].includes(toolName(t)))) return [];
   const commands = runOrder(flow && flow.definition).filter((n) => n.type === 'check').map((n) => checkCommandOf(n.data));
   return [...new Set(commands)].filter((c) => PLAIN_COMMAND.test(c)).map((c) => `Bash(${c})`);
 }
@@ -357,9 +397,10 @@ function agentPrompt(flow, node, { mode, branch, index, total, handoff = [], ope
       '---',
       task,
       '---',
-      `It will be allowed these tools: ${tools.length ? tools.join(', ') : 'none listed'}.`,
+      `It will work only inside its copy of the repository and be allowed only these tools: ${tools.join(', ')}. Anything else is denied.`,
+      `In this test you have only ${READERS.join(', ')}, and you too look only inside this repository: do not count what you cannot do now as missing.`,
       ...(commands.length ? [`The flow checks its work with: ${commands.map((c) => `\`${c}\``).join(', ')}. When the flow runs for real it may run exactly these commands too. They are not run during this test: do not run them now, and do not count that as missing.`] : []),
-      `Check, in this repository and on this machine, whether that task can be done: the files and folders it needs exist and are readable, the commands it would run exist, nothing it needs is missing.`,
+      `Check, in this repository, whether that task can be done with those tools: the files and folders it needs exist and are readable, the scripts it would run are defined, nothing it needs is missing.`,
       `Finish with ONE line of JSON and nothing after it: {"canRun": true|false, "missing": ["short item", ...], "summary": "one sentence"}`,
     ].join('\n');
   }
@@ -368,6 +409,7 @@ function agentPrompt(flow, node, { mode, branch, index, total, handoff = [], ope
   return [
     `You are the agent "${data.label || node.id}", step ${index} of ${total} of the Pravex flow "${flow.name}".`,
     `You work in a fresh copy of the repository on the branch ${branch}. Do not push and do not open pull requests: Pravex does that after the last step.`,
+    `You work only inside this copy: nothing outside it (an absolute path, "..", "~") is yours to read or change. You are allowed only these tools: ${tools.join(', ')}. Anything else is denied: do not look for a way around it, say what you could not do.`,
     `Your task:`,
     task,
     ...(commands.length ? [`The flow will check your work with: ${commands.map((c) => `\`${c}\``).join(', ')}. You may run exactly these commands; leave them passing.`] : []),
@@ -377,18 +419,23 @@ function agentPrompt(flow, node, { mode, branch, index, total, handoff = [], ope
   ].join('\n');
 }
 
+/**
+ * How an agent is started. `--allowedTools` alone restricts nothing: it only says what is not asked about. So `--tools`
+ * says which tools exist, `dontAsk` denies every use of them no rule allows, and no MCP server is there unless the flow
+ * lists its tools. A test reads, in plan mode. A Claude Code too old for one of these refuses to start.
+ */
 function agentArgs(flow, node, { mode, maxTurns, prompt }) {
   const data = node.data || {};
+  const dry = mode === 'dry';
+  const rules = dry ? READERS : [...new Set([...toolsOf(data), ...checkTools(flow, data)])];
   const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose', '--max-turns', String(maxTurns)];
-  // Both tool lists take every word up to the next option, so each is followed by one or by the end.
+  if (dry || !usesMcp(rules)) args.push('--strict-mcp-config');
+  // The tool lists take every word up to the next option, so each is followed by one or by the end.
+  args.push('--tools', builtIns(rules).join(','));
   args.push('--disallowedTools', ...NEVER_TOOLS);
   if (MODELS.has(data.model)) args.push('--model', data.model);
-  if (mode === 'dry') args.push('--permission-mode', 'plan');
-  else {
-    args.push('--permission-mode', 'acceptEdits');
-    const tools = [...new Set([...toolsOf(data), ...checkTools(flow, data)])];
-    if (tools.length) args.push('--allowedTools', ...tools);
-  }
+  args.push('--permission-mode', dry ? 'plan' : 'dontAsk');
+  if (!dry) args.push('--allowedTools', ...rules);
   return args;
 }
 

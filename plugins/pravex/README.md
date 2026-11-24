@@ -336,6 +336,15 @@ the plan lately.
 
 Since 0.16.0 flows are safer, sooner and visible:
 
+- **An agent may do what its flow lists, in its own copy of the repository.** Only the
+  listed tools exist for it (an empty list is a reader's: Read, Grep, Glob), every use no
+  rule allows is denied without asking, reading and writing files is scoped to the run's
+  copy, and no MCP server is there unless the flow lists its tools. A test only reads.
+  Your own and the repository's Claude Code settings are still read, so that its hooks
+  report the session: **an allow rule of yours (`Bash(npm:*)`, for example) also counts
+  for the agents that have that tool.** Bash is as wide as its rules: a command it allows
+  can reach whatever you can, outside the copy too. Claude Code must be recent enough to
+  know these limits; an older one refuses to start the agent.
 - **Agents and checks do not push.** Every agent starts with `git push`, `gh pr merge`
   and `gh workflow run` denied, and agents, check commands and the dependency install
   run with a git that has nowhere to push to, so a script an agent edited cannot push

@@ -472,7 +472,7 @@ ${say('Pushed everything')}`,
     assert.equal(fx.git(['branch', '--list', 'pravex/*'], fx.origin).trim(), '');
     const call = fs.readFileSync(path.join(fx.home, 'call-0'), 'utf8').split('\n');
     assert.deepEqual(call.slice(call.indexOf('--disallowedTools') + 1, call.indexOf('--disallowedTools') + 4), ['Bash(git push:*)', 'Bash(gh pr merge:*)', 'Bash(gh workflow run:*)']);
-    assert.deepEqual(call.slice(call.indexOf('--allowedTools') + 1, call.indexOf('--allowedTools') + 3), ['Read', 'Write']);
+    assert.deepEqual(call.slice(call.indexOf('--allowedTools') + 1, call.indexOf('--allowedTools') + 3), ['Read(./**)', 'Write(./**)']);
     assert.ok(patches.length);
   });
   fs.rmSync(path.join(fx.home, '.pravex', 'runs'), { recursive: true, force: true });
@@ -496,6 +496,35 @@ test('the test of a flow runs its agents without a way to push either', posix, a
     const call = fs.readFileSync(path.join(fx.home, 'call-0'), 'utf8');
     assert.match(call, /--disallowedTools\nBash\(git push:\*\)/);
     assert.match(call, /`true`[^\n]*not run during this test/);
+  });
+});
+
+/** The words one call of claude got, without its prompt. */
+const argvOf = (fx, n) => {
+  const words = fs.readFileSync(path.join(fx.home, `call-${n}`), 'utf8').split('\n').slice(0, -1);
+  return words.slice(words.indexOf('--output-format'));
+};
+const DENIED = ['--disallowedTools', 'Bash(git push:*)', 'Bash(gh pr merge:*)', 'Bash(gh workflow run:*)'];
+
+test('every agent of a run is started with its own limits and nothing wider', posix, async () => {
+  const fx = setUp();
+  fakeClaude(fx, `echo x > x.txt; ${say('done')}`);
+  const nodes = [T, agent('a', ['Read', 'Grep', 'Glob']), agent('b', ['Read', 'Edit', 'Write(/etc/**)']), agent('m', ['mcp__github__get_file']), agent('z', []), check('c', 'test -f x.txt')];
+  const common = (turns) => ['--output-format', 'stream-json', '--verbose', '--max-turns', String(turns)];
+  const tail = (mode) => [...DENIED, '--model', 'sonnet', '--permission-mode', mode];
+  await withServer({ definition: chain(nodes) }, async (host) => {
+    const { code, out } = await runNow(envFor(fx, host), ['--run', 'f1']);
+    assert.equal(code, 0, out);
+    assert.deepEqual(argvOf(fx, 0), [...common(20), '--strict-mcp-config', '--tools', 'Read,Grep,Glob', ...tail('dontAsk'), '--allowedTools', 'Read(./**)', 'Grep', 'Glob']);
+    assert.deepEqual(argvOf(fx, 1), [...common(20), '--strict-mcp-config', '--tools', 'Read,Edit,Bash', ...tail('dontAsk'), '--allowedTools', 'Read(./**)', 'Edit(./**)', 'Bash(test -f x.txt)']);
+    assert.deepEqual(argvOf(fx, 2), [...common(20), '--tools', 'Read,Grep,Glob', ...tail('dontAsk'), '--allowedTools', 'Read(./**)', 'Grep', 'Glob', 'mcp__github__get_file']);
+    assert.deepEqual(argvOf(fx, 3), argvOf(fx, 0), 'an empty list is a reader');
+    assert.equal(calls(fx), 4);
+  });
+  for (const f of fs.readdirSync(fx.home).filter((n) => n.startsWith('call-'))) fs.unlinkSync(path.join(fx.home, f));
+  await withServer({ definition: chain(nodes) }, async (host) => {
+    await runNow(envFor(fx, host), ['--run', 'f1', '--dry']);
+    for (let n = 0; n < 4; n += 1) assert.deepEqual(argvOf(fx, n), [...common(15), '--strict-mcp-config', '--tools', 'Read,Grep,Glob', ...tail('plan')]);
   });
 });
 
