@@ -90,7 +90,7 @@ function resetTo(repo, sha) {
 // Creating a run
 // ---------------------------------------------------------------------------
 
-const slugOf = (text) => String(text).toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32).replace(/-+$/, '') || 'build';
+const slugOf = (text) => String(text).toLowerCase().normalize('NFKD').replace(/\p{M}+/gu, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32).replace(/-+$/, '') || 'build';
 
 /** The branch new work starts from: what the remote's default branch was when it was last fetched, or HEAD. */
 function baseOf(repoDir, wanted) {

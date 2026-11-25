@@ -382,3 +382,10 @@ test('a project that asks first gets the plan and the estimate, and builds only 
   assert.ok(e.usd[0] < e.usd[1] && e.minutes[0] <= e.minutes[1] && e.confidence === 'low');
   assert.equal((await go(dir, agents())).status, 'done');
 });
+
+test('a branch keeps accented words whole', () => {
+  // Seen end to end: "Agregar una línea" became `pravex/agregar-una-li-nea-…`.
+  const { dir } = engine.create({ repoDir: repository(), text: 'Agregar una línea de duración mínima', root: tmp() });
+  const created = journal.read(dir)[0];
+  assert.match(JSON.stringify(created), /pravex\/agregar-una-linea-de-duracion-mi-/);
+});
