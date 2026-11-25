@@ -315,3 +315,30 @@ test('every reason a run or a part can end with has words for a person', () => {
   for (const code of ['claude-signed-out', 'claude-missing', 'claude-old', 'sandbox-unavailable', 'install-failed', 'tool-missing', 'engine-error']) used.add(code);
   for (const code of used) for (const lang of ['es', 'en']) assert.equal((MESSAGES[code] || {})[lang]?.length, 3, `${code} (${lang})`);
 });
+
+test('a commit the journal never heard of is not part of the work', async () => {
+  const { dir } = start();
+  await assert.rejects(
+    go(dir, agents({ tester: (n, cwd) => (fs.writeFileSync(path.join(cwd, 'mul.test.js'), MUL_TEST), ok({ status: 'DONE', files: [], command: 'node --test mul.test.js', covers: [], note: '' })) }), {
+      onEvent: () => {},
+      // The process "dies" after the tests are committed and before the journal says so.
+      log: (what) => {
+        if (what === 'T1 tester') throw new Error('crash');
+      },
+    }).then((r) => {
+      if (r.status !== 'done') throw new Error(r.status);
+    })
+  );
+  const repo = path.join(dir, 'repo');
+  fs.writeFileSync(path.join(repo, 'mul.test.js'), MUL_TEST);
+  sh(repo, 'git', 'add', '-A');
+  sh(repo, 'git', '-c', 'user.name=t', '-c', 'user.email=t@t.t', 'commit', '-qm', 'unknown to the journal');
+  const { dir: fresh } = start();
+  const r2 = path.join(fresh, 'repo');
+  fs.writeFileSync(path.join(r2, 'mul.test.js'), MUL_TEST);
+  sh(r2, 'git', 'add', '-A');
+  sh(r2, 'git', '-c', 'user.name=t', '-c', 'user.email=t@t.t', 'commit', '-qm', 'unknown to the journal');
+  const r = await go(fresh, agents());
+  assert.equal(r.status, 'done');
+  assert.doesNotMatch(sh(r2, 'git', 'log', '--format=%s').stdout, /unknown/);
+});

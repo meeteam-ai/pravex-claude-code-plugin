@@ -212,6 +212,7 @@ async function drive(dir, opts = {}) {
   if (!release) throw Object.assign(new Error('this run is already going in another process'), { code: 'already-running' });
   const awake = opts.keepAwake === false ? () => {} : keepAwake();
   const stopFile = path.join(dir, 'STOP');
+  const inbox = path.join(dir, 'inbox');
   const ac = new AbortController();
   const watch = setInterval(() => fs.existsSync(stopFile) && ac.abort(), 1000);
   const onSignal = () => ac.abort();
@@ -271,6 +272,20 @@ async function drive(dir, opts = {}) {
         continue;
       }
       return null; // counted as a failed try: the state decides what comes next
+    }
+  }
+  /** What people decided while it worked, left as files by whoever heard it: taken once, in order, between steps. */
+  function takeInbox() {
+    if (!fs.existsSync(inbox)) return;
+    for (const f of fs.readdirSync(inbox).filter((x) => !x.startsWith('.')).sort()) {
+      const file = path.join(inbox, f);
+      try {
+        const m = JSON.parse(fs.readFileSync(file, 'utf8'));
+        if (m.type === 'objection' && Number.isInteger(m.n) && !s.objections.some((o) => o.n === m.n)) put({ type: 'decision.objected', n: m.n, title: m.title, reason: String(m.reason || '').slice(0, 1000) });
+      } catch {
+        /* not something a person wrote */
+      }
+      fs.rmSync(file, { force: true });
     }
   }
   const pause = (reason) => {
@@ -336,9 +351,33 @@ async function drive(dir, opts = {}) {
       else put({ type: 'plan.done', tasks: order.map((id) => v.tasks.find((t) => t.id === id)) });
     },
 
+    /** An objection changes the plan, not the work already proven: new parts are added on top of it. */
+    async replan(a) {
+      const o = s.objections.find((x) => x.n === a.n);
+      const v = await job('replanner', String(a.n), prompts.replanner(s, o), schemas.REPLAN);
+      if (!v) return;
+      const used = new Set(s.feasibility.criteria.map((c) => c.id));
+      const criteria = v.criteria.filter((c) => c.text.trim() && !used.has(c.id));
+      const drop = v.drop.filter((x) => used.has(x));
+      const all = [...s.feasibility.criteria.filter((c) => !drop.includes(c.id)), ...criteria].map((c) => c.id);
+      const { problems, order } = machine.checkPlan(v.tasks, { protectedGlobs: [...integrity.ALWAYS_PROTECTED, ...(s.cfg.protected || [])], maxTasks: s.cfg.maxTasks, existing: s.tasks.map((t) => t.id) });
+      for (const c of criteria) if (!v.tasks.some((t) => t.criteria.includes(c.id))) problems.push(`criterion ${c.id} is in no task`);
+      for (const t of v.tasks) for (const c of t.criteria) if (!all.includes(c)) problems.push(`criterion ${c} does not exist`);
+      if (problems.length) {
+        put({ type: 'replan.invalid', n: a.n, problems });
+        // Twice without a plan that holds: the objection is reported as not applied, and the work goes on.
+        if (journal.read(dir).filter((e) => e.type === 'replan.invalid' && e.n === a.n).length >= 2) put({ type: 'replan.done', n: a.n, ok: false });
+        return;
+      }
+      put({ type: 'replan.done', n: a.n, ok: true, criteria, drop, tasks: order.map((id) => v.tasks.find((t) => t.id === id)) });
+    },
+    async 'drop-objection'(a) {
+      put({ type: 'replan.done', n: a.n, ok: false });
+    },
+
     async test(a) {
       const t = taskOf(a.task);
-      const before = t.baseSha || head(repo);
+      const before = t.baseSha || s.tip;
       resetTo(repo, before);
       const v = await job('tester', t.id, prompts.tester(s, t), schemas.TESTS);
       if (!v) return;
@@ -448,7 +487,8 @@ async function drive(dir, opts = {}) {
 
     async integrate() {
       const failures = [];
-      for (const t of s.tasks.filter((x) => x.phase === 'done')) if (integrity.changedTests(repo, t.testHashes).length) failures.push({ kind: 'tests-changed', output: t.id });
+      const replaced = s.tasks.flatMap((t) => (t.phase === 'done' ? t.files : []));
+      for (const t of s.tasks.filter((x) => x.phase === 'done')) if (integrity.changedTests(repo, t.testHashes).some((f) => !matches(f, replaced))) failures.push({ kind: 'tests-changed', output: t.id });
       const list = [...new Set([...s.tasks.filter((t) => t.phase === 'done').map((t) => t.testCommand), ...s.prepared.checks.filter((c) => c.ok).map((c) => c.command)])];
       for (const c of list) {
         const r = await checkCmd(c);
@@ -474,11 +514,12 @@ async function drive(dir, opts = {}) {
     // A commit half made by a crash, or a lock it left: the working copy goes back to its last commit.
     fs.rmSync(path.join(repo, '.git', 'index.lock'), { force: true });
     guardGit(dir, repo);
-    resetTo(repo, head(repo));
+    resetTo(repo, s.tip);
     let last = '';
     let same = 0;
     for (let n = 0; n < maxSteps; n++) {
       if (ac.signal.aborted) pause('stopped');
+      takeInbox();
       const a = machine.next(s);
       if (a.do === 'none') break;
       if (a.do === 'wait') break;
@@ -539,4 +580,13 @@ async function drive(dir, opts = {}) {
 /** Asks a run to stop, with or without a connection. Its process sees it within a second. */
 const stop = (dir) => fs.writeFileSync(path.join(dir, 'STOP'), new Date().toISOString());
 
-module.exports = { BUILDS, create, drive, stop, takeLock, findChecks, installCommand, changedFiles, git, head };
+/** Leaves what a person decided for a run, whether it is working or not. */
+function tell(dir, message) {
+  const inbox = path.join(dir, 'inbox');
+  fs.mkdirSync(inbox, { recursive: true, mode: 0o700 });
+  const name = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}.json`;
+  fs.writeFileSync(path.join(inbox, `.${name}`), JSON.stringify(message), { mode: 0o600 });
+  fs.renameSync(path.join(inbox, `.${name}`), path.join(inbox, name));
+}
+
+module.exports = { BUILDS, create, tell, drive, stop, takeLock, findChecks, installCommand, changedFiles, git, head };

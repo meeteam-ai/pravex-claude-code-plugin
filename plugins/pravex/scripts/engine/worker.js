@@ -11,6 +11,7 @@ const WRITE = [...READ, 'Edit', 'Write', 'Bash'];
 const ROLES = {
   analyst: { tools: READ, model: 'opus', maxTurns: 60 },
   planner: { tools: READ, model: 'opus', maxTurns: 60 },
+  replanner: { tools: READ, model: 'opus', maxTurns: 60 },
   tester: { tools: WRITE, model: 'opus', maxTurns: 100 },
   builder: { tools: WRITE, model: 'sonnet', maxTurns: 160 },
   reviewer: { tools: READ, model: 'opus', maxTurns: 60 },

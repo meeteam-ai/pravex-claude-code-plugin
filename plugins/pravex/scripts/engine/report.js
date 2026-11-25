@@ -3,8 +3,8 @@
 const { say } = require('./messages');
 
 const L = {
-  es: { done: 'Listo', partial: 'Listo en parte', failed: 'No quedó listo', infeasible: 'No se puede', paused: 'En pausa', asked: 'Lo que se pidió', result: 'Resultado', criteria: 'Criterios', proof: 'Prueba', parts: 'Partes', rounds: 'rondas', decided: 'Decisiones que tomé', undo: 'se puede revertir', noundo: 'no se puede revertir', missing: 'Falta que alguien lo entregue', until: 'mientras tanto', alt: 'Lo que sí puedo hacer', trust: 'Qué lo demuestra', cost: 'Costo a precio de lista', pend: 'Construido, pendiente de verificar', notes: 'Notas para quien revise', saved: 'Nada se perdió', red: 'las pruebas fallaban antes de construir', nored: 'OJO: las pruebas ya pasaban antes de construir', flaky: 'comprobaciones inestables', base: 'ya fallaban antes de empezar', branch: 'Rama', time: 'Tiempo de trabajo', yes: 'cumplido', no: 'sin cumplir' },
-  en: { done: 'Done', partial: 'Partly done', failed: 'Not done', infeasible: 'It cannot be done', paused: 'Paused', asked: 'What was asked', result: 'Result', criteria: 'Criteria', proof: 'Proof', parts: 'Parts', rounds: 'rounds', decided: 'Decisions made', undo: 'can be undone', noundo: 'cannot be undone', missing: 'Needed from someone', until: 'meanwhile', alt: 'What can be done', trust: 'What proves it', cost: 'Cost at list price', pend: 'Built, not verified yet', notes: 'Notes for the reviewer', saved: 'Nothing was lost', red: 'the tests failed before the work', nored: 'NOTE: the tests already passed before the work', flaky: 'unstable checks', base: 'already failing before', branch: 'Branch', time: 'Working time', yes: 'met', no: 'not met' },
+  es: { done: 'Listo', partial: 'Listo en parte', failed: 'No quedó listo', infeasible: 'No se puede', paused: 'En pausa', asked: 'Lo que se pidió', result: 'Resultado', criteria: 'Criterios', proof: 'Prueba', parts: 'Partes', rounds: 'rondas', decided: 'Decisiones que tomé', undo: 'se puede revertir', noundo: 'no se puede revertir', objApplied: 'objetada y replanteada', objFailed: 'objetada, NO se pudo aplicar', missing: 'Falta que alguien lo entregue', until: 'mientras tanto', alt: 'Lo que sí puedo hacer', trust: 'Qué lo demuestra', cost: 'Costo a precio de lista', pend: 'Construido, pendiente de verificar', notes: 'Notas para quien revise', saved: 'Nada se perdió', red: 'las pruebas fallaban antes de construir', nored: 'OJO: las pruebas ya pasaban antes de construir', flaky: 'comprobaciones inestables', base: 'ya fallaban antes de empezar', branch: 'Rama', time: 'Tiempo de trabajo', yes: 'cumplido', no: 'sin cumplir' },
+  en: { done: 'Done', partial: 'Partly done', failed: 'Not done', infeasible: 'It cannot be done', paused: 'Paused', asked: 'What was asked', result: 'Result', criteria: 'Criteria', proof: 'Proof', parts: 'Parts', rounds: 'rounds', decided: 'Decisions made', undo: 'can be undone', noundo: 'cannot be undone', objApplied: 'objected and replanned', objFailed: 'objected, could NOT be applied', missing: 'Needed from someone', until: 'meanwhile', alt: 'What can be done', trust: 'What proves it', cost: 'Cost at list price', pend: 'Built, not verified yet', notes: 'Notes for the reviewer', saved: 'Nothing was lost', red: 'the tests failed before the work', nored: 'NOTE: the tests already passed before the work', flaky: 'unstable checks', base: 'already failing before', branch: 'Branch', time: 'Working time', yes: 'met', no: 'not met' },
 };
 
 /** The criteria, each with whether something proves it: a task that proves it is done, and its tests failed first. */
@@ -52,8 +52,16 @@ function report(s, { reason, status, events = [] }) {
     }
     md.push('');
   }
-  const gaps = [...new Set(s.tasks.flatMap((t) => t.gaps))];
-  if ((f.decisions && f.decisions.length) || gaps.length) md.push(`## ${l.decided}`, '', ...(f.decisions || []).map((d) => `- **${d.title}:** ${d.decision} ${d.why} (${d.reversible ? l.undo : l.noundo})`), ...gaps.map((g) => `- ${g}`), '');
+  if (s.decisions.length)
+    md.push(
+      `## ${l.decided}`,
+      '',
+      ...s.decisions.map((d) => {
+        const o = s.objections.find((x) => x.n === d.n);
+        return `- **${d.n}. ${d.title}**${d.decision && d.decision !== d.title ? `: ${d.decision} ${d.why}` : ''} (${d.reversible ? l.undo : l.noundo})${o ? ` · ${o.state === 'applied' ? l.objApplied : l.objFailed}: ${o.reason}` : ''}`;
+      }),
+      ''
+    );
   if (f.missing && f.missing.length) md.push(`## ${l.missing}`, '', ...f.missing.map((m) => `- ${m.what} (${m.owner}); ${l.until}: ${m.meanwhile}`), '');
   const notes = [...new Set(s.tasks.flatMap((t) => (t.review && t.review.notes) || []))];
   if (notes.length) md.push(`## ${l.notes}`, '', ...notes.map((n) => `- ${n}`), '');

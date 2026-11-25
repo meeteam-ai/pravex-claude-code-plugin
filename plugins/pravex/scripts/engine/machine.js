@@ -22,17 +22,20 @@ const DEFAULTS = {
 };
 
 const TASK_ID = /^T\d{1,3}$/;
-const FINAL = new Set(['done', 'partial', 'failed', 'infeasible']);
+const FINAL = new Set(['done', 'partial', 'failed', 'infeasible', 'cancelled']);
 
 const initial = () => ({
   status: 'new',
   req: null,
   cfg: { ...DEFAULTS },
   base: null,
+  tip: null, // the last commit the journal knows: after a crash the working copy goes back to it
   prepared: null,
   prepareFailures: 0,
   prepareError: null,
   feasibility: null,
+  decisions: [], // every gap decided, numbered in the order it came up; a person can object to any of them
+  objections: [], // { n, reason, state: 'pending' | 'applied' | 'failed' }
   tasks: [],
   planProblems: [],
   planAttempts: 0,
@@ -81,6 +84,13 @@ const newTask = (t) => ({
   evidence: null,
 });
 
+/** One decision, once: the same words from two agents are the same decision. */
+function addDecision(s, d) {
+  const title = String(d.title || '').trim();
+  if (!title || s.decisions.some((x) => x.title === title)) return;
+  s.decisions.push({ n: s.decisions.length + 1, title, decision: String(d.decision || ''), why: String(d.why || ''), reversible: d.reversible !== false, ...(d.task ? { task: d.task } : {}) });
+}
+
 const taskOf = (s, id) => s.tasks.find((t) => t.id === id);
 
 /** Applies one event. Unknown events are ignored, so an older engine can read a newer journal. */
@@ -88,7 +98,7 @@ function reduce(s, e) {
   const t = e.task ? taskOf(s, e.task) : null;
   switch (e.type) {
     case 'run.created':
-      Object.assign(s, { status: 'running', req: e.req, base: e.base || null, cfg: { ...DEFAULTS, ...(e.cfg || {}) } });
+      Object.assign(s, { status: 'running', req: e.req, base: e.base || null, tip: e.base ? e.base.sha : null, cfg: { ...DEFAULTS, ...(e.cfg || {}) } });
       break;
     case 'run.resumed':
       s.paused = null;
@@ -124,6 +134,7 @@ function reduce(s, e) {
       break;
     case 'analyze.done':
       s.feasibility = e.feasibility;
+      for (const d of e.feasibility.decisions || []) addDecision(s, d);
       break;
     case 'plan.invalid':
       s.planAttempts += 1;
@@ -141,6 +152,7 @@ function reduce(s, e) {
       break;
     case 'task.red':
       if (t) Object.assign(t, { phase: 'red', redBefore: !!e.redBefore, testHashes: e.testHashes || {}, covers: e.covers || [], testCommand: e.command || '', baseSha: e.baseSha || null, sha: e.sha || null });
+      if (e.sha) s.tip = e.sha;
       break;
     case 'task.widened':
       if (t) {
@@ -149,7 +161,9 @@ function reduce(s, e) {
       }
       break;
     case 'task.built':
+      for (const g of e.gaps || []) addDecision(s, { title: g, decision: g, why: '', reversible: true, task: e.task });
       if (t) Object.assign(t, { phase: 'built', round: e.round, sha: e.sha || t.sha, violations: [...t.violations, ...(e.violations || [])], gaps: [...t.gaps, ...(e.gaps || [])] });
+      if (e.sha) s.tip = e.sha;
       break;
     case 'task.checked':
       if (t) {
@@ -163,8 +177,10 @@ function reduce(s, e) {
     case 'task.restarted':
       // Its tests were wrong: the task starts over from the commit before it, once.
       if (t) Object.assign(t, { phase: 'new', round: 0, redAttempts: 0, redWhy: e.why || '', restarts: t.restarts + 1, fps: [], failures: [], diagnosis: null, diagnosedFp: null, review: null, testHashes: {}, sha: t.baseSha });
+      if (t && t.baseSha) s.tip = t.baseSha;
       break;
     case 'task.reviewed':
+      for (const g of e.gaps || []) addDecision(s, { title: g, decision: g, why: '', reversible: true, task: e.task });
       if (t) Object.assign(t, { phase: 'reviewed', review: { verdict: e.verdict, fixes: e.fixes || [], notes: e.notes || [], round: t.round }, gaps: [...t.gaps, ...(e.gaps || [])] });
       break;
     case 'task.done':
@@ -172,12 +188,33 @@ function reduce(s, e) {
       break;
     case 'task.blocked':
       if (t) Object.assign(t, { phase: 'blocked', blocked: { reason: e.reason, detail: e.detail || '' } });
+      // Its commits are not part of the result: the next part starts from before it.
+      if (t && t.baseSha && t.sha && t.sha !== t.baseSha) s.tip = t.baseSha;
       break;
+    case 'decision.objected':
+      if (!s.objections.some((o) => o.n === e.n)) s.objections.push({ n: e.n, reason: e.reason || '', title: e.title || (s.decisions[e.n - 1] || {}).title || '', state: 'pending' });
+      break;
+    case 'replan.done': {
+      const o = s.objections.find((x) => x.n === e.n);
+      if (o) o.state = e.ok ? 'applied' : 'failed';
+      if (e.ok) {
+        s.feasibility.criteria.push(...(e.criteria || []));
+        for (const x of e.drop || []) s.feasibility.criteria = s.feasibility.criteria.filter((c) => c.id !== x);
+        s.tasks.push(...(e.tasks || []).map(newTask));
+        s.integrate = null;
+        s.delivered = false;
+      }
+      break;
+    }
     case 'integrate.done':
       s.integrate = { ok: !!e.ok, failures: e.failures || [] };
       break;
     case 'run.delivered':
       s.delivered = true;
+      break;
+    case 'run.cancelled':
+      // A person's word is final, unless the run had already ended by itself.
+      if (!s.final) Object.assign(s, { status: 'cancelled', final: 'cancelled', reason: null });
       break;
     case 'run.finished':
       Object.assign(s, { status: e.status, final: e.status, reason: e.reason || null });
@@ -244,6 +281,9 @@ function next(s) {
     if (s.planAttempts >= s.cfg.planAttempts || failed('planner:-')) return end('plan-failed');
     return { do: 'plan', problems: s.planProblems };
   }
+  // What a person objected to is replanned before anything else is built on top of it.
+  const objection = s.objections.find((o) => o.state === 'pending');
+  if (objection && s.usd < s.cfg.maxUsd) return failed(`replanner:${objection.n}`) ? { do: 'drop-objection', n: objection.n } : { do: 'replan', n: objection.n };
   if (s.usd >= s.cfg.maxUsd) return { do: 'pause', reason: 'budget' };
   if (s.activeMs >= s.cfg.maxHours * 3600e3) return { do: 'pause', reason: 'time' };
 
@@ -270,7 +310,7 @@ function next(s) {
  * Problems of a plan an agent proposed, and the order to run it in. A plan is only data until this accepts it: ids,
  * dependencies that exist and do not loop, paths that stay inside the repository and off the protected ones.
  */
-function checkPlan(tasks, { criteria = [], protectedGlobs = [], maxTasks = DEFAULTS.maxTasks } = {}) {
+function checkPlan(tasks, { criteria = [], protectedGlobs = [], maxTasks = DEFAULTS.maxTasks, existing = [] } = {}) {
   const problems = [];
   if (!Array.isArray(tasks) || !tasks.length) return { problems: ['the plan has no tasks'], order: [] };
   if (tasks.length > maxTasks) problems.push(`the plan has ${tasks.length} tasks; at most ${maxTasks}`);
@@ -281,7 +321,7 @@ function checkPlan(tasks, { criteria = [], protectedGlobs = [], maxTasks = DEFAU
       problems.push(`task id ${JSON.stringify(t && t.id)} must look like T1`);
       continue;
     }
-    if (ids.has(t.id)) problems.push(`task id ${t.id} is repeated`);
+    if (ids.has(t.id) || existing.includes(t.id)) problems.push(`task id ${t.id} is repeated`);
     ids.add(t.id);
     for (const [name, list] of [['files', t.files], ['tests', t.tests]]) {
       if (!Array.isArray(list) || !list.length) problems.push(`${t.id} needs at least one path in ${name}`);
@@ -292,7 +332,7 @@ function checkPlan(tasks, { criteria = [], protectedGlobs = [], maxTasks = DEFAU
     }
     if (!Array.isArray(t.criteria) || !t.criteria.length) problems.push(`${t.id} proves no criterion`);
   }
-  for (const t of tasks) for (const d of t.dependsOn || []) if (!ids.has(d)) problems.push(`${t.id} depends on ${d}, which is not in the plan`);
+  for (const t of tasks) for (const d of t.dependsOn || []) if (!ids.has(d) && !existing.includes(d)) problems.push(`${t.id} depends on ${d}, which is not in the plan`);
   const known = new Set(criteria.map((c) => c.id));
   const covered = new Set(tasks.flatMap((t) => t.criteria || []));
   for (const c of known) if (!covered.has(c)) problems.push(`criterion ${c} is in no task`);

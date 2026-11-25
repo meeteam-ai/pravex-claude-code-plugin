@@ -1015,7 +1015,11 @@ echo '{"loggedIn": true, "email": "ada@acme.test", "orgId": "org-1", "orgName": 
   );
   await withServer({}, async (host, patches) => {
     for (let i = 0; i < 3; i += 1) await runNow(envFor(fx, host), ['--tick']);
-    assert.deepEqual(patches.requests.map((r) => r.url), Array(3).fill('/api/agent-flows/runner'));
+    // One request for the flows, and at most one, from a process of its own, for the requirements queued here.
+    const urls = patches.requests.map((r) => r.url);
+    assert.equal(urls.filter((u) => u === '/api/agent-flows/runner').length, 3);
+    assert.deepEqual(urls.filter((u) => u !== '/api/agent-flows/runner' && u !== '/api/work/runner'), []);
+    assert.ok(urls.filter((u) => u === '/api/work/runner').length <= 3);
     for (const p of patches.polls) {
       assert.deepEqual(p.claude, { signedIn: true, expiresAt: '2026-12-01T10:00:00.000Z' });
       assert.equal(p.runner.version, '2');

@@ -104,7 +104,8 @@ function play(seed) {
   const ev = [{ type: 'run.created', req: {}, cfg: { maxUsd: 1e9, maxHours: 1e9 } }];
   for (let n = 0; n < 3000; n++) {
     const s = fold(ev);
-    const a = next(s);
+    if (rnd() > 0.97 && s.objections.length < 3) ev.push({ type: 'decision.objected', n: s.objections.length + 1, reason: 'x' });
+    const a = next(fold(ev));
     const job = (role, task, ok) => ev.push({ type: 'job.started', role, task, job: `j${n}` }, { type: 'job.finished', role, task, ok, usd: 0.1, ms: 1 });
     const ok = rnd() > 0.15;
     switch (a.do) {
@@ -118,11 +119,18 @@ function play(seed) {
         break;
       case 'analyze':
         job('analyst', null, ok);
-        if (ok) ev.push({ type: 'analyze.done', feasibility: { build: { ok: rnd() > 0.1 } } });
+        if (ok) ev.push({ type: 'analyze.done', feasibility: { build: { ok: rnd() > 0.1 }, criteria: [] } });
         break;
       case 'plan':
         job('planner', null, ok);
         if (ok) ev.push(rnd() > 0.3 ? { type: 'plan.done', tasks: [T('T1'), T('T2', { dependsOn: rnd() > 0.5 ? ['T1'] : [] }), T('T3', { dependsOn: ['T2'] }), T('T4', { dependsOn: rnd() > 0.8 ? ['T9'] : [] })] } : { type: 'plan.invalid', problems: ['x'] });
+        break;
+      case 'replan':
+        job('replanner', String(a.n), ok);
+        if (ok) ev.push({ type: 'replan.done', n: a.n, ok: rnd() > 0.4, criteria: [], tasks: rnd() > 0.5 ? [T(`T${50 + a.n}`, { dependsOn: ['T1'] })] : [] });
+        break;
+      case 'drop-objection':
+        ev.push({ type: 'replan.done', n: a.n, ok: false });
         break;
       case 'test':
         job('tester', a.task, ok);

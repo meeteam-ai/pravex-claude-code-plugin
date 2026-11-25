@@ -26,16 +26,25 @@ const planner = (s, problems) => [RULES, lang(s.req.locale), requirement(s), 'Wh
   'Paths are relative to the repository root. Read the code first: a path that cannot hold the change makes the task impossible.',
   ...(problems && problems.length ? [`Your previous plan was refused for these reasons; fix them:\n- ${problems.join('\n- ')}`] : [])].join('\n\n');
 
+/** Decisions as they stand: what a person objected to carries their words, and those win. */
+const decisionsOf = (s) => s.decisions.map((d) => { const o = s.objections.find((x) => x.n === d.n); return o ? { ...d, objection: o.reason, note: 'the objection wins' } : d; });
+
+const replanner = (s, o) => [RULES, lang(s.req.locale), requirement(s),
+  'Part of this is already built. A person who can decide objected to one decision. Their words are the new rule for it:',
+  block('objection', json({ decision: s.decisions[o.n - 1] || o.title, reason: o.reason })),
+  block('done so far', json({ criteria: s.feasibility.criteria, tasks: s.tasks.map((t) => ({ id: t.id, title: t.title, phase: t.phase, files: t.files, criteria: t.criteria })) })),
+  `Plan only what has to change. \`criteria\`: new ones the objection makes true, with new ids (after ${s.feasibility.criteria.length ? s.feasibility.criteria[s.feasibility.criteria.length - 1].id : 'AC-0'}). \`drop\`: ids of criteria that are no longer true. \`tasks\`: new tasks, ids after ${s.tasks.length ? s.tasks[s.tasks.length - 1].id : 'T0'}, that change what was built; list in \`files\` the code to change and, when an earlier acceptance test says the old thing, that test file too; \`dependsOn\` what they stand on. As few as possible.`].join('\n\n');
+
 const criteriaOf = (s, t) => s.feasibility.criteria.filter((c) => t.criteria.includes(c.id));
 const taskText = (s, t) => block('task', json({ id: t.id, title: t.title, notes: t.notes, criteria: criteriaOf(s, t), files: t.files, tests: t.tests }));
 
-const tester = (s, t) => [RULES, lang(s.req.locale), requirement(s), taskText(s, t), block('decisions', json(s.feasibility.decisions)),
+const tester = (s, t) => [RULES, lang(s.req.locale), requirement(s), taskText(s, t), block('decisions', json(decisionsOf(s))),
   'Write the acceptance tests of this task BEFORE the code exists. Create only test files that match `tests`; change nothing else. Test public behaviour, one clear test per criterion (name the criterion id in the test name), with assertions a wrong implementation would fail. No network, no sleeps, no snapshots, no skipped tests. Reuse the test style, helpers and runner the repository already has.',
   'They must fail now for the right reason (the behaviour is missing), not because of a typo, a missing import or a wrong path. Run them if you can; if the sandbox does not let you, that is fine: finish anyway.',
   '`files`: the test files you wrote. `command`: one plain command, run from the repository root, that runs exactly these test files and nothing else (letters, digits, spaces and . / _ - @ = only). `covers`: which test proves which criterion.',
   ...(t.redWhy ? [`Your previous attempt was not accepted: ${cut(t.redWhy, MAX.output)}`] : [])].join('\n\n');
 
-const builder = (s, t, why) => [RULES, lang(s.req.locale), requirement(s), taskText(s, t), block('decisions', json(s.feasibility.decisions)),
+const builder = (s, t, why) => [RULES, lang(s.req.locale), requirement(s), taskText(s, t), block('decisions', json(decisionsOf(s))),
   `Make this task's acceptance tests pass (${Object.keys(t.testHashes).join(', ')}; command: \`${t.testCommand}\`) without breaking anything. You may change only files that match: ${t.files.join(', ')}. Anything else is put back, and so is any change to a test. Never skip a test, silence a type or lint error, or lower a threshold.`,
   `The work is accepted by these checks, run for you afterwards: \`${t.testCommand}\`${s.prepared.checks.filter((c) => c.ok).map((c) => `, \`${c.command}\``).join('')}. Run what the sandbox allows; what it does not allow is not your problem. Do not commit.`,
   'Follow the conventions you see in the code around yours. Keep the change as small as the criteria need.',
@@ -44,7 +53,7 @@ const builder = (s, t, why) => [RULES, lang(s.req.locale), requirement(s), taskT
   ...(why === 'review' ? [`This is round ${t.round + 1}. A reviewer sent it back. Fix exactly these points:\n${json(t.review.fixes)}`] : []),
   ...(t.diagnosis ? [`Someone who did not write the code looked at why it was stuck:\nCause: ${t.diagnosis.cause}\nDo this instead: ${t.diagnosis.strategy}`] : [])].join('\n\n');
 
-const reviewer = (s, t, { diff, final }) => [RULES, lang(s.req.locale), 'You did not write this code and you assume nothing about it.', requirement(s), taskText(s, t), block('decisions', json(s.feasibility.decisions)),
+const reviewer = (s, t, { diff, final }) => [RULES, lang(s.req.locale), 'You did not write this code and you assume nothing about it.', requirement(s), taskText(s, t), block('decisions', json(decisionsOf(s))),
   `The checks pass on this commit, run by the build itself: \`${t.testCommand}\`${s.prepared.checks.filter((c) => c.ok).map((c) => `, \`${c.command}\``).join('')}. Do not ask for them again.`,
   t.redBefore ? 'The acceptance tests failed before the code existed.' : 'WARNING: the acceptance tests already passed before the code existed. Judge whether they prove anything.',
   block('diff', cut(diff, MAX.diff)),
@@ -56,4 +65,4 @@ const diagnoser = (s, t, { diff }) => [RULES, lang(s.req.locale), 'A task is stu
   `What fails:\n${t.failures.map((f) => `$ ${f.command || f.kind}\n${cut(f.output, MAX.output)}`).join('\n\n')}`, block('diff', cut(diff, MAX.diff)),
   '`testsWrong`: true only if an acceptance test contradicts the requirement or its own criterion, or cannot pass in any correct implementation. Say which and why in `cause`.'].join('\n\n');
 
-module.exports = { analyst, planner, tester, builder, reviewer, diagnoser, cut };
+module.exports = { analyst, planner, replanner, tester, builder, reviewer, diagnoser, cut };

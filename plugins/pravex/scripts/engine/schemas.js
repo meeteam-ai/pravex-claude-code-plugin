@@ -15,6 +15,7 @@ const ANALYSIS = obj({
   alternative: str,
 });
 const PLAN = obj({ tasks: list(obj({ id: str, title: str, criteria: strs, dependsOn: strs, files: strs, tests: strs, risk: { enum: ['low', 'high'] }, notes: str })) });
+const REPLAN = obj({ criteria: list(obj({ id: str, text: str })), drop: strs, tasks: list(obj({ id: str, title: str, criteria: strs, dependsOn: strs, files: strs, tests: strs, risk: { enum: ['low', 'high'] }, notes: str })) });
 const TESTS = obj({ status: { enum: ['DONE', 'BLOCKED'] }, files: strs, command: str, covers: list(obj({ criterion: str, test: str })), note: str });
 const BUILD = obj({ status: { enum: ['DONE', 'BLOCKED'] }, summary: str, gaps: strs, needs: strs });
 const REVIEW = obj({ verdict: { enum: ['APPROVED', 'FIX'] }, fixes: list(obj({ file: str, problem: str, check: str })), gaps: strs, notes: strs });
@@ -41,4 +42,4 @@ function checkShape(schema, value, at = '$') {
   return null;
 }
 
-module.exports = { ANALYSIS, PLAN, TESTS, BUILD, REVIEW, DIAGNOSIS, checkShape };
+module.exports = { ANALYSIS, PLAN, REPLAN, TESTS, BUILD, REVIEW, DIAGNOSIS, checkShape };
