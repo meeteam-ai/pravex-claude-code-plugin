@@ -367,9 +367,10 @@ function checkPlan(tasks, { criteria = [], protectedGlobs = [], maxTasks = DEFAU
 
 /** What is left, at list price and in working time. Rough until there is history: the range says so. */
 function estimate(s) {
-  if (!s.tasks.length) return null;
-  const high = s.tasks.filter((t) => t.risk === 'high').length;
-  const n = s.tasks.length + high;
+  const left = s.tasks.filter((t) => t.phase !== 'done' && t.phase !== 'blocked');
+  if (!left.length) return null;
+  // Only what is left: a high-risk part counts double. Money already spent is added once.
+  const n = left.length + left.filter((t) => t.risk === 'high').length;
   const slow = ((s.prepared && s.prepared.checks) || []).filter((c) => c.ok).reduce((a, c) => a + (c.ms || 0), 0) / 60e3;
   const round = (x) => Math.round(x * 10) / 10;
   return { usd: [round(s.usd + n * 0.8), round(s.usd + n * 5)], minutes: [Math.ceil(n * (3 + slow)), Math.ceil(n * (18 + 4 * slow))], confidence: 'low' };

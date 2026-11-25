@@ -107,6 +107,8 @@ function openPr(dir, { gh = 'gh', run = spawnSync } = {}) {
   const s = machine.fold(events);
   const repo = path.join(dir, 'repo');
   const fail = (detail) => journal.append(dir, { type: 'pr.failed', detail: String(detail || '').trim().slice(-400) });
+  // For trying the whole chain on a real repository without touching it.
+  if (process.env.PRAVEX_WORK_NO_PUSH === '1') return fail('pushing is turned off on this machine (PRAVEX_WORK_NO_PUSH)');
   if (!s.base || !/github\.com/.test(s.base.origin || '')) return fail('this repository has no GitHub remote');
   if (events.some((e) => e.type === 'pr.opened')) return null;
   const opts = { cwd: repo, encoding: 'utf8', timeout: 180_000, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_CEILING_DIRECTORIES: dir } };
@@ -165,7 +167,8 @@ async function drive(dir, { api, engineOpts = {}, pr = openPr, now = Date.now, s
     if (cfg) saveWork(dir, { cfg: undefined });
     r = await engine.drive(dir, { ...(cfg ? { cfg } : {}), ...engineOpts, onEvent: soon });
     const work = workOf(dir) || {};
-    if (!work.cancelled && ['done', 'partial'].includes(r.status) && (work.autonomy ?? 1) >= 1) await pr(dir);
+    // Asking first (autonomy 0) only adds a step before building: once a person said go, it ends in a pull request too.
+    if (!work.cancelled && ['done', 'partial'].includes(r.status)) await pr(dir);
   } finally {
     clearInterval(beat);
     clearTimeout(timer);
