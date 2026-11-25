@@ -415,7 +415,7 @@ async function drive(dir, opts = {}) {
       const wants = [...new Set([...v.needs, ...violations.filter((x) => x.rule === 'out-of-scope').map((x) => x.file)].map(clean))].filter((f) => f && !f.startsWith('/') && !f.startsWith('~') && !f.split('/').includes('..') && !/[*?\s]/.test(f) && !matches(f, t.files) && !matches(f, t.tests) && !matches(f, integrity.ALWAYS_PROTECTED) && !matches(f, s.cfg.protected || []) && !/(^|\/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock)$/.test(f));
       const room = s.cfg.maxWiden - t.widened;
       if (wants.length && room > 0) put({ type: 'task.widened', task: t.id, files: wants.slice(0, room) });
-      put({ type: 'task.built', task: t.id, round: a.round, sha, files: kept, violations, dodges, gaps: v.gaps, summary: v.summary.slice(0, 600), says: v.status });
+      put({ type: 'task.built', task: t.id, round: a.round, sha, files: kept, violations, dodges, gaps: v.gaps.slice(0, 3), summary: v.summary.slice(0, 600), says: v.status });
     },
 
     async check(a) {
@@ -443,6 +443,21 @@ async function drive(dir, opts = {}) {
       log(`${t.id} check`, failures.length ? 'failed' : 'passed');
     },
 
+    /** Tests a review found missing. The ones that were there stay: a file that lost a test is not accepted. */
+    async extend(a) {
+      const t = taskOf(a.task);
+      resetTo(repo, t.sha);
+      const before = Object.fromEntries(Object.keys(t.testHashes).map((f) => [f, (fs.readFileSync(path.join(repo, f), 'utf8').match(/\b(?:it|test|t)\s*\(/g) || []).length]));
+      const v = await job('tester', t.id, prompts.extender(s, t), schemas.TESTS);
+      if (!v) return;
+      const { kept, dodges, sha } = settle({ allow: t.tests, message: `test: ${t.title} (${t.id}, more proof)` });
+      const files = [...new Set([...Object.keys(t.testHashes), ...kept])];
+      const lost = Object.keys(before).filter((f) => !fs.existsSync(path.join(repo, f)) || (fs.readFileSync(path.join(repo, f), 'utf8').match(/\b(?:it|test|t)\s*\(/g) || []).length < before[f]);
+      const fine = kept.length > 0 && !dodges.length && !lost.length && allowed(v.command);
+      if (!fine) resetTo(repo, t.sha);
+      put({ type: 'task.extended', task: t.id, ok: fine, ...(fine ? { testHashes: integrity.hashFiles(repo, files), command: v.command, covers: v.covers, sha } : { why: lost.length ? `lost tests in ${lost.join(', ')}` : 'no tests were added' }) });
+    },
+
     async diagnose(a) {
       const t = taskOf(a.task);
       const v = await job('diagnoser', t.id, prompts.diagnoser(s, t, { diff: diffOf(t) }), schemas.DIAGNOSIS);
@@ -461,7 +476,7 @@ async function drive(dir, opts = {}) {
       const v = await job('reviewer', t.id, prompts.reviewer(s, t, { diff: diffOf(t), final: a.final }), schemas.REVIEW);
       if (!v) return;
       const verdict = v.verdict === 'FIX' && v.fixes.length ? 'FIX' : 'APPROVED';
-      put({ type: 'task.reviewed', task: t.id, round: t.round, verdict, fixes: v.fixes, gaps: v.gaps, notes: v.notes });
+      put({ type: 'task.reviewed', task: t.id, round: t.round, verdict, fixes: v.fixes, gaps: v.gaps.slice(0, 3), notes: v.notes.slice(0, 5), needsTests: v.fixes.some((f) => prompts.isTest(t, f.file)) });
     },
 
     async merge(a) {

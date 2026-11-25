@@ -1,5 +1,8 @@
 'use strict';
 /** What each agent is asked. The requirement and everything read from files is data, never instructions to the agent. */
+const { matches } = require('./globs');
+
+const isTest = (t, file) => matches(file, t.tests) || Object.prototype.hasOwnProperty.call(t.testHashes, String(file));
 const MAX = { requirement: 20_000, diff: 60_000, output: 6_000 };
 const cut = (t, n) => (String(t || '').length > n ? `${String(t).slice(0, n)}\n… (cut)` : String(t || ''));
 const block = (name, text) => `<${name}>\n${String(text).replaceAll(`</${name}>`, `<\\/${name}>`)}\n</${name}>`;
@@ -44,20 +47,25 @@ const tester = (s, t) => [RULES, lang(s.req.locale), requirement(s), taskText(s,
   '`files`: the test files you wrote. `command`: one plain command, run from the repository root, that runs exactly these test files and nothing else (letters, digits, spaces and . / _ - @ = only). `covers`: which test proves which criterion.',
   ...(t.redWhy ? [`Your previous attempt was not accepted: ${cut(t.redWhy, MAX.output)}`] : [])].join('\n\n');
 
+const extender = (s, t) => [RULES, lang(s.req.locale), requirement(s), taskText(s, t),
+  'A reviewer found that these acceptance tests do not prove enough. Add the tests that are missing, in these files or new ones that match `tests`. Keep every existing test: add to them, never remove, weaken or skip one. The code already exists: a new test may pass or fail today, but it must be right.',
+  json(t.review.fixes.filter((f) => isTest(t, f.file))),
+  `Change only test files. \`command\`: the plain command that runs all the acceptance tests of this task (now \`${t.testCommand}\`). \`covers\`: all of them, old and new.`].join('\n\n');
+
 const builder = (s, t, why) => [RULES, lang(s.req.locale), requirement(s), taskText(s, t), block('decisions', json(decisionsOf(s))),
   `Make this task's acceptance tests pass (${Object.keys(t.testHashes).join(', ')}; command: \`${t.testCommand}\`) without breaking anything. You may change only files that match: ${t.files.join(', ')}. Anything else is put back, and so is any change to a test. Never skip a test, silence a type or lint error, or lower a threshold.`,
   `The work is accepted by these checks, run for you afterwards: \`${t.testCommand}\`${s.prepared.checks.filter((c) => c.ok).map((c) => `, \`${c.command}\``).join('')}. Run what the sandbox allows; what it does not allow is not your problem. Do not commit.`,
   'Follow the conventions you see in the code around yours. Keep the change as small as the criteria need.',
-  '`gaps`: behaviour of the product nothing defined and the safe choice you made; nothing about what you could not run. `needs`: exact paths outside your files that the task cannot be done without (otherwise empty).',
+  '`gaps`: at most three, only choices about the product that no decision above covers and a person would want to know; never repeat a decision, describe the code or say what you could not run. `needs`: exact paths outside your files that the task cannot be done without (otherwise empty).',
   ...(why === 'checks' ? [`This is round ${t.round + 1}. The last attempt failed these checks; fix the cause, not the symptom:\n${t.failures.map((f) => `$ ${f.command || f.kind}\n${cut(f.output, MAX.output)}`).join('\n\n')}`] : []),
-  ...(why === 'review' ? [`This is round ${t.round + 1}. A reviewer sent it back. Fix exactly these points:\n${json(t.review.fixes)}`] : []),
+  ...(why === 'review' ? [`This is round ${t.round + 1}. A reviewer sent it back. Fix exactly these points:\n${json(t.review.fixes.filter((f) => !isTest(t, f.file) || !t.extended))}${t.extended ? '\nThe tests the reviewer asked for were added for you; make all of them pass.' : ''}`] : []),
   ...(t.diagnosis ? [`Someone who did not write the code looked at why it was stuck:\nCause: ${t.diagnosis.cause}\nDo this instead: ${t.diagnosis.strategy}`] : [])].join('\n\n');
 
 const reviewer = (s, t, { diff, final }) => [RULES, lang(s.req.locale), 'You did not write this code and you assume nothing about it.', requirement(s), taskText(s, t), block('decisions', json(decisionsOf(s))),
   `The checks pass on this commit, run by the build itself: \`${t.testCommand}\`${s.prepared.checks.filter((c) => c.ok).map((c) => `, \`${c.command}\``).join('')}. Do not ask for them again.`,
   t.redBefore ? 'The acceptance tests failed before the code existed.' : 'WARNING: the acceptance tests already passed before the code existed. Judge whether they prove anything.',
   block('diff', cut(diff, MAX.diff)),
-  '`FIX` only for what is wrong now and can be checked: a criterion that is broken or has no test that would fail without the code, behaviour that contradicts the requirement or a decision, a security or money bug someone could trigger, or a regression. For each, the file, the failing case and how to check it. Hardening, style and ideas go in `notes`, at most five, one sentence each; behaviour nothing defines goes in `gaps`. Neither blocks.',
+  '`FIX` only for what is wrong now and can be checked: a criterion that is broken or has no test that would fail without the code, behaviour that contradicts the requirement or a decision, a security or money bug someone could trigger, or a regression. For each, the file, the failing case and how to check it. Hardening, style and ideas go in `notes`, at most five, one sentence each; a choice about the product that no decision above covers, and a person would want to know, goes in `gaps` (at most three). Neither blocks. When a criterion lacks a test that would fail without the code, name the test file in `file`.',
   ...(final ? ['This is the last round: FIX only for an exploitable security or money bug, or a broken criterion.'] : []),
   ...(t.review ? [`The previous round asked for this; check it was done, and look for new problems only in what changed:\n${json(t.review.fixes)}`] : [])].join('\n\n');
 
@@ -65,4 +73,4 @@ const diagnoser = (s, t, { diff }) => [RULES, lang(s.req.locale), 'A task is stu
   `What fails:\n${t.failures.map((f) => `$ ${f.command || f.kind}\n${cut(f.output, MAX.output)}`).join('\n\n')}`, block('diff', cut(diff, MAX.diff)),
   '`testsWrong`: true only if an acceptance test contradicts the requirement or its own criterion, or cannot pass in any correct implementation. Say which and why in `cause`.'].join('\n\n');
 
-module.exports = { analyst, planner, replanner, tester, builder, reviewer, diagnoser, cut };
+module.exports = { isTest, extender, analyst, planner, replanner, tester, builder, reviewer, diagnoser, cut };

@@ -342,3 +342,24 @@ test('a commit the journal never heard of is not part of the work', async () => 
   assert.equal(r.status, 'done');
   assert.doesNotMatch(sh(r2, 'git', 'log', '--format=%s').stdout, /unknown/);
 });
+
+test('tests a review finds missing are added by the tester, never by the builder, and none is lost', async () => {
+  const { dir } = start();
+  const more = `${MUL_TEST}t('AC-1 negatives', async () => { const { mul } = await import('./mul.js'); a.equal(mul(-2, 3), -6); });\n`;
+  const ask = agents({
+    reviewer: (n) => ok(n === 1 ? { verdict: 'FIX', fixes: [{ file: 'mul.test.js', problem: 'nothing proves negatives', check: 'mul(-2,3)' }], gaps: [], notes: [] } : { verdict: 'APPROVED', fixes: [], gaps: [], notes: [] }),
+    tester: (n, cwd) => (fs.writeFileSync(path.join(cwd, 'mul.test.js'), n === 1 ? MUL_TEST : more), ok({ status: 'DONE', files: [], command: 'node --test mul.test.js', covers: [], note: '' })),
+    builder: (n, cwd) => (fs.writeFileSync(path.join(cwd, 'mul.js'), n === 1 ? 'export const mul = (a, b) => Math.abs(a) * b;\n' : GOOD), ok(done)),
+  });
+  assert.equal((await go(dir, ask)).status, 'done');
+  assert.equal(ask.calls.tester, 2);
+  assert.equal(fs.readFileSync(path.join(dir, 'repo/mul.test.js'), 'utf8'), more);
+  const { dir: d2 } = start();
+  const cheat = agents({
+    reviewer: (n) => ok(n === 1 ? { verdict: 'FIX', fixes: [{ file: 'mul.test.js', problem: 'x', check: 'y' }], gaps: [], notes: [] } : { verdict: 'APPROVED', fixes: [], gaps: [], notes: [] }),
+    tester: (n, cwd) => (fs.writeFileSync(path.join(cwd, 'mul.test.js'), n === 1 ? MUL_TEST : "import t from 'node:test';\n"), ok({ status: 'DONE', files: [], command: 'node --test mul.test.js', covers: [], note: '' })),
+    builder: (n, cwd) => (fs.writeFileSync(path.join(cwd, 'mul.js'), `${GOOD}// ${n}\n`), ok(done)),
+  });
+  assert.equal((await go(d2, cheat)).status, 'done');
+  assert.equal(fs.readFileSync(path.join(d2, 'repo/mul.test.js'), 'utf8'), MUL_TEST);
+});

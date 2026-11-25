@@ -74,6 +74,7 @@ async function ask(job, { claude = 'claude', timeoutMs = 45 * 60e3, idleMs = 10 
   let limited = null;
   let text = '';
   const denied = [];
+  const used = new Map();
   const progress = { turns: 0, tool: '' };
   const onLine = (line) => {
     let e;
@@ -85,11 +86,14 @@ async function ask(job, { claude = 'claude', timeoutMs = 45 * 60e3, idleMs = 10 
     if (e.type === 'assistant' && e.message && Array.isArray(e.message.content)) {
       if (!e.parent_tool_use_id) progress.turns += 1;
       for (const c of e.message.content) {
-        if (c.type === 'tool_use') progress.tool = c.name;
+        if (c.type === 'tool_use') {
+          progress.tool = c.name;
+          if (c.name === 'Bash' && c.input) used.set(c.id, String(c.input.command || ''));
+        }
         if (c.type === 'text') text = c.text;
       }
       if (onProgress) onProgress({ ...progress });
-    } else if (e.type === 'system' && e.subtype === 'permission_denied') denied.push(`${e.tool_name}: ${String(e.message || '').slice(0, 120)}`);
+    } else if (e.type === 'system' && e.subtype === 'permission_denied') denied.push(`${e.tool_name}: ${(used.get(e.tool_use_id) || String(e.message || '')).slice(0, 160)}`);
     else if (e.type === 'rate_limit_event' && e.rate_limit_info && e.rate_limit_info.status === 'rejected') limited = e.rate_limit_info;
     else if (e.type === 'result') result = e;
   };

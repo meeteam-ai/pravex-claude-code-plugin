@@ -69,6 +69,7 @@ const newTask = (t) => ({
   testCommand: '',
   widened: 0,
   restarts: 0,
+  extended: 0, // the review round whose missing tests were already added
   covers: [],
   baseSha: null,
   sha: null,
@@ -165,6 +166,10 @@ function reduce(s, e) {
       if (t) Object.assign(t, { phase: 'built', round: e.round, sha: e.sha || t.sha, violations: [...t.violations, ...(e.violations || [])], gaps: [...t.gaps, ...(e.gaps || [])] });
       if (e.sha) s.tip = e.sha;
       break;
+    case 'task.extended':
+      if (t) Object.assign(t, { extended: t.round, ...(e.ok ? { testHashes: e.testHashes, testCommand: e.command || t.testCommand, covers: e.covers || t.covers, sha: e.sha } : {}) });
+      if (e.ok && e.sha) s.tip = e.sha;
+      break;
     case 'task.checked':
       if (t) {
         Object.assign(t, { phase: 'checked', ok: !!e.ok, failures: e.failures || [], checks: e.checks || [] });
@@ -181,7 +186,7 @@ function reduce(s, e) {
       break;
     case 'task.reviewed':
       for (const g of e.gaps || []) addDecision(s, { title: g, decision: g, why: '', reversible: true, task: e.task });
-      if (t) Object.assign(t, { phase: 'reviewed', review: { verdict: e.verdict, fixes: e.fixes || [], notes: e.notes || [], round: t.round }, gaps: [...t.gaps, ...(e.gaps || [])] });
+      if (t) Object.assign(t, { phase: 'reviewed', review: { verdict: e.verdict, fixes: e.fixes || [], notes: e.notes || [], needsTests: !!e.needsTests, round: t.round }, gaps: [...t.gaps, ...(e.gaps || [])] });
       break;
     case 'task.done':
       if (t) Object.assign(t, { phase: 'done', sha: e.sha || t.sha, evidence: e.evidence || null });
@@ -251,6 +256,8 @@ function taskAction(s, t) {
   }
   if (t.phase === 'reviewed') {
     if (t.review.verdict === 'APPROVED') return { do: 'merge', task: t.id };
+    // Tests the review found missing are written by whoever writes tests, before the code is sent back.
+    if (t.round < limit && t.review.needsTests && t.extended !== t.round && !(s.failures[`tester:${t.id}`] > 0)) return { do: 'extend', task: t.id };
     if (t.round < limit) return { do: 'build', task: t.id, round: t.round + 1, why: 'review' };
     return { do: 'block', task: t.id, reason: 'review' };
   }

@@ -153,9 +153,13 @@ function play(seed) {
       case 'restart':
         ev.push({ type: 'task.restarted', task: a.task });
         break;
+      case 'extend':
+        job('tester', a.task, ok);
+        if (ok) ev.push({ type: 'task.extended', task: a.task, ok: rnd() > 0.3, testHashes: {} });
+        break;
       case 'review':
         job('reviewer', a.task, ok);
-        if (ok) ev.push({ type: 'task.reviewed', task: a.task, verdict: rnd() > 0.5 ? 'APPROVED' : 'FIX' });
+        if (ok) ev.push({ type: 'task.reviewed', task: a.task, verdict: rnd() > 0.5 ? 'APPROVED' : 'FIX', needsTests: rnd() > 0.5 });
         break;
       case 'merge':
         ev.push({ type: 'task.done', task: a.task });
