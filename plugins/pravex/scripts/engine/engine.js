@@ -247,11 +247,14 @@ async function drive(dir, opts = {}) {
       guardGit(dir, repo);
       const wrong = r.ok ? schemas.checkShape(schema, r.value) : null;
       if (wrong) r = { ...r, ok: false, error: 'wrong-shape', detail: wrong };
-      const counts = r.ok || !['claude-limit', 'claude-unavailable', 'stopped', ...Object.keys(PAUSES)].includes(r.error);
+      // It ran out because the run did, not because the job was badly asked: that is the limit, not a failed try.
+      const spent = r.error === 'job-budget' && !(s.cfg.jobUsd && s.cfg.jobUsd < left);
+      const counts = r.ok || (!spent && !['claude-limit', 'claude-unavailable', 'stopped', ...Object.keys(PAUSES)].includes(r.error));
       put({ type: 'job.finished', job: n, role, task: task || undefined, ok: r.ok || !counts, done: r.ok, usd: r.usd, ms: r.ms, turns: r.turns, model: model || worker.ROLES[role].model, ...(r.ok ? {} : { error: r.error, detail: String(r.detail || '').slice(0, 400) }), ...(r.denied && r.denied.length ? { denied: r.denied.slice(0, 5) } : {}) });
       log(`${task || ''} ${role}`.trim(), r.ok ? 'done' : r.error, { usd: r.usd, ms: r.ms });
       if (r.ok) return r.value;
       if (r.error === 'stopped' || ac.signal.aborted) return pause('stopped');
+      if (spent) return pause('budget');
       if (PAUSES[r.error]) return pause(PAUSES[r.error]);
       if (r.error === 'claude-limit') {
         if (!waitForLimit) return pause('claude-limit');

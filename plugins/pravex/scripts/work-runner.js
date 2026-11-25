@@ -205,7 +205,7 @@ async function take(q, { api, machineId, findRepo, root, start }) {
       fs.writeFileSync(to, Buffer.from(got.base64, 'base64'));
       files.push(to);
     }
-    const { dir } = engine.create({ repoDir, text: q.text, files, locale: q.locale || 'es', id, root, cfg: { ...(q.maxUsd ? { maxUsd: Number(q.maxUsd) } : {}), ...(q.maxHours ? { maxHours: Number(q.maxHours) } : {}) } });
+    const { dir } = engine.create({ repoDir, text: q.text, files, locale: q.locale || 'es', id, root, cfg: { autonomy: q.autonomy ?? 1, ...(q.maxUsd ? { maxUsd: Number(q.maxUsd) } : {}), ...(q.maxHours ? { maxHours: Number(q.maxHours) } : {}) } });
     saveWork(dir, { runId: q.id, engineId: id, autonomy: q.autonomy ?? 1 });
     start(dir);
     return dir;

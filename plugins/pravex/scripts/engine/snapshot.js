@@ -1,7 +1,7 @@
 'use strict';
 /** The state of a run as the screens show it, built from its journal alone, so the screens can never disagree with it. */
 const os = require('os');
-const { fold } = require('./machine');
+const { fold, estimate } = require('./machine');
 const { proven } = require('./report');
 
 const ENGINE_VERSION = '1';
@@ -87,6 +87,7 @@ function project(events) {
         history: history(events, t.id),
         trust: { testsIntact: t.evidence ? t.evidence.testsIntact : null, violations: t.violations.length, redBefore: t.redBefore },
       })),
+      estimate: estimate(s),
       integrate: s.integrate ? { ok: s.integrate.ok } : null,
       cost: s.cost,
       notes: [...new Set(s.tasks.flatMap((t) => (t.review && t.review.notes) || []))].slice(0, 30).map((n) => cut(n, 400)),

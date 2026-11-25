@@ -1,6 +1,7 @@
 'use strict';
 /** What a person reads when something did not go as planned: what happened, what was done, what to do, and that nothing was lost. */
 const M = {
+  'plan-ready': { es: ['El plan está listo.', 'No he construido nada todavía.', 'Míralo y dale «Empezar a construir».'], en: ['The plan is ready.', 'Nothing has been built yet.', 'Look at it and start building.'] },
   budget: { es: ['Llegó al tope de costo.', 'Paré limpio; todo lo hecho está guardado.', 'Sube el tope y sigue desde donde iba.'], en: ['It reached the cost limit.', 'It stopped cleanly; everything done is saved.', 'Raise the limit to go on from there.'] },
   time: { es: ['Llegó al tope de tiempo.', 'Paré limpio; todo lo hecho está guardado.', 'Sube el tope y sigue desde donde iba.'], en: ['It reached the time limit.', 'It stopped cleanly; everything done is saved.', 'Raise the limit to go on from there.'] },
   stopped: { es: ['La detuviste.', 'Guardé el último paso terminado.', 'Reanúdala cuando quieras.'], en: ['You stopped it.', 'The last finished step is saved.', 'Resume it whenever you want.'] },

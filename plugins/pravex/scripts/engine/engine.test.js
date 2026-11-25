@@ -209,6 +209,13 @@ test('the cost limit pauses; raising it goes on', async () => {
   assert.equal((await go(dir, agents(), { cfg: { maxUsd: 9 } })).status, 'done');
 });
 
+test('a job cut off by the limit is the limit, not a failed try', async () => {
+  const { dir } = start({ cfg: { checks: ['npm test'], maxUsd: 0.5 } });
+  const r = await go(dir, agents({ analyst: () => fail('job-budget', { usd: 0.5 }) }));
+  assert.equal(r.explain.code, 'budget');
+  assert.equal((await go(dir, agents(), { cfg: { maxUsd: 9 } })).status, 'done');
+});
+
 test('a wrong answer is asked again, and then given up without looping', async () => {
   const { dir } = start();
   const ask = agents({ analyst: () => ok({ nonsense: true }) });
@@ -362,4 +369,16 @@ test('tests a review finds missing are added by the tester, never by the builder
   });
   assert.equal((await go(d2, cheat)).status, 'done');
   assert.equal(fs.readFileSync(path.join(d2, 'repo/mul.test.js'), 'utf8'), MUL_TEST);
+});
+
+test('a project that asks first gets the plan and the estimate, and builds only after a person says so', async () => {
+  const { dir } = start({ cfg: { checks: ['npm test'], autonomy: 0 } });
+  const ask = agents();
+  const r = await go(dir, ask);
+  assert.equal(r.explain.code, 'plan-ready');
+  assert.deepEqual(Object.keys(ask.calls), ['analyst', 'planner']);
+  const { project } = require('./snapshot');
+  const e = project(journal.read(dir)).snapshot.estimate;
+  assert.ok(e.usd[0] < e.usd[1] && e.minutes[0] <= e.minutes[1] && e.confidence === 'low');
+  assert.equal((await go(dir, agents())).status, 'done');
 });

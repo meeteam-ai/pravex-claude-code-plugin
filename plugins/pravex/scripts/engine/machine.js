@@ -48,6 +48,7 @@ const initial = () => ({
   integrate: null,
   delivered: false,
   paused: null,
+  approved: false, // the plan, when the project asks a person first
   final: null,
   reason: null,
 });
@@ -102,6 +103,7 @@ function reduce(s, e) {
       Object.assign(s, { status: 'running', req: e.req, base: e.base || null, tip: e.base ? e.base.sha : null, cfg: { ...DEFAULTS, ...(e.cfg || {}) } });
       break;
     case 'run.resumed':
+      if (s.paused === 'plan-ready') s.approved = true;
       s.paused = null;
       s.cfg = { ...s.cfg, ...(e.cfg || {}) };
       // A job cut off by a crash left no result: its counters stay, the work is redone from the last commit.
@@ -288,6 +290,7 @@ function next(s) {
     if (s.planAttempts >= s.cfg.planAttempts || failed('planner:-')) return end('plan-failed');
     return { do: 'plan', problems: s.planProblems };
   }
+  if (s.cfg.autonomy === 0 && !s.approved) return { do: 'pause', reason: 'plan-ready' };
   // What a person objected to is replanned before anything else is built on top of it.
   const objection = s.objections.find((o) => o.state === 'pending');
   if (objection && s.usd < s.cfg.maxUsd) return failed(`replanner:${objection.n}`) ? { do: 'drop-objection', n: objection.n } : { do: 'replan', n: objection.n };
@@ -362,4 +365,14 @@ function checkPlan(tasks, { criteria = [], protectedGlobs = [], maxTasks = DEFAU
   return { problems, order };
 }
 
-module.exports = { DEFAULTS, FINAL, initial, reduce, fold, next, checkPlan, finalStatus, roundLimit, taskOf };
+/** What is left, at list price and in working time. Rough until there is history: the range says so. */
+function estimate(s) {
+  if (!s.tasks.length) return null;
+  const high = s.tasks.filter((t) => t.risk === 'high').length;
+  const n = s.tasks.length + high;
+  const slow = ((s.prepared && s.prepared.checks) || []).filter((c) => c.ok).reduce((a, c) => a + (c.ms || 0), 0) / 60e3;
+  const round = (x) => Math.round(x * 10) / 10;
+  return { usd: [round(s.usd + n * 0.8), round(s.usd + n * 5)], minutes: [Math.ceil(n * (3 + slow)), Math.ceil(n * (18 + 4 * slow))], confidence: 'low' };
+}
+
+module.exports = { estimate, DEFAULTS, FINAL, initial, reduce, fold, next, checkPlan, finalStatus, roundLimit, taskOf };
