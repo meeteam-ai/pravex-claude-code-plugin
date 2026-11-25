@@ -97,4 +97,24 @@ function project(events) {
   };
 }
 
-module.exports = { ENGINE_VERSION, project };
+/**
+ * A report that fits what Pravex accepts. Long runs are cut from their oldest detail first; what a person must see
+ * (status, parts, criteria, decisions) is never dropped. A report that never fits would never be sent: that is a block.
+ */
+function fit(body, max = 280_000) {
+  const size = () => Buffer.byteLength(JSON.stringify(body));
+  const snap = body.snapshot;
+  if (!snap || size() <= max) return body;
+  for (const keep of [12, 6, 3, 1, 0]) {
+    for (const t of snap.tasks) t.history = t.history.slice(-keep).map((h) => ({ ...h, output: h.output ? h.output.slice(-400) : undefined }));
+    if (size() <= max) return body;
+  }
+  snap.notes = snap.notes.slice(0, 5);
+  if (body.report) body.report = body.report.slice(0, 40_000);
+  for (const c of snap.criteria) c.tests = c.tests.slice(0, 2);
+  if (size() <= max) return body;
+  body.jobs = body.jobs.slice(0, 50);
+  return body;
+}
+
+module.exports = { ENGINE_VERSION, project, fit };

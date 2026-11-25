@@ -17,7 +17,7 @@ const { spawn, spawnSync } = require('child_process');
 const engine = require('./engine/engine');
 const journal = require('./engine/journal');
 const machine = require('./engine/machine');
-const { project, ENGINE_VERSION } = require('./engine/snapshot');
+const { project, fit, ENGINE_VERSION } = require('./engine/snapshot');
 const { report } = require('./engine/report');
 
 const WORK = 'work.json';
@@ -88,6 +88,7 @@ async function sync(dir, api) {
     ...(fs.existsSync(reportFile) ? { report: fs.readFileSync(reportFile, 'utf8').slice(0, 100_000) } : {}),
   };
   body.snapshot.process.pr = pr ? { state: pr.type === 'pr.opened' ? 'opened' : 'failed', ...(pr.url ? { url: pr.url } : {}), ...(pr.detail ? { detail: pr.detail } : {}) } : null;
+  fit(body);
   const answer = await api('PATCH', `/api/work/${work.runId}/progress`, body);
   const lastJob = body.jobs.length ? body.jobs[body.jobs.length - 1].n : work.jobsSent || 0;
   saveWork(dir, { seqSent: body.seq, jobsSent: lastJob, sentAt: Date.now(), statusSent: body.status, unsent: p.jobs.length > lastJob });

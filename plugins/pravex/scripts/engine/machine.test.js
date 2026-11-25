@@ -203,3 +203,14 @@ test('no run can get stuck: 5,000 random runs all end, each with an explanation'
 test('an event this engine does not know changes nothing', () => {
   assert.deepEqual(reduce(initial(), { type: 'from.the.future' }), initial());
 });
+
+test('a report of a long run always fits what Pravex accepts, keeping what people must see', () => {
+  const { fit } = require('./snapshot');
+  const history = Array.from({ length: 40 }, (_, i) => ({ at: 'x', round: i, kind: 'check', ok: false, text: 't', output: 'e'.repeat(1500) }));
+  const body = { status: 'running', report: 'r'.repeat(100_000), jobs: Array.from({ length: 200 }, (_, n) => ({ n })), snapshot: { tasks: Array.from({ length: 12 }, (_, i) => ({ id: `T${i}`, history: [...history] })), criteria: [{ id: 'AC-1', tests: ['a', 'b', 'c'] }], notes: Array(30).fill('n'.repeat(400)) } };
+  fit(body);
+  assert.ok(Buffer.byteLength(JSON.stringify(body)) <= 280_000);
+  assert.equal(body.snapshot.tasks.length, 12);
+  assert.equal(body.snapshot.criteria.length, 1);
+  assert.equal(body.status, 'running');
+});
