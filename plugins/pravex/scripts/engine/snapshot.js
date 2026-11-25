@@ -38,7 +38,8 @@ function history(events, id) {
     else if (e.type === 'task.built') {
       round = e.round;
       add('build', true, e.summary || (e.files || []).join(', '));
-    } else if (e.type === 'task.checked') add('check', e.ok, e.ok ? '' : (e.failures || []).map((f) => f.command || f.kind).join(', '), e.ok ? '' : ((e.failures || [])[0] || {}).output);
+    } else if (e.type === 'task.extended') add('test', !!e.ok, e.ok ? (e.covers || []).map((c) => c.test).join('; ') : e.why);
+    else if (e.type === 'task.checked') add('check', e.ok, e.ok ? '' : (e.failures || []).map((f) => f.command || f.kind).join(', '), e.ok ? '' : ((e.failures || [])[0] || {}).output);
     else if (e.type === 'task.diagnosed') add('diagnose', true, `${e.cause} ${e.strategy}`);
     else if (e.type === 'task.reviewed') add('review', e.verdict === 'APPROVED', (e.fixes || []).map((f) => f.problem).join('; '));
     else if (e.type === 'task.restarted') add('restart', true, e.why);
