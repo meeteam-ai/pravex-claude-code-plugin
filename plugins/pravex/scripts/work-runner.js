@@ -95,10 +95,16 @@ async function sync(dir, api) {
   return answer;
 }
 
-/** Writes the cancellation in the journal, once the process that worked on it is gone: it is then like any other end. */
+/**
+ * Writes the cancellation in the journal, once the process that worked on it is gone: it is then like any other end. Its
+ * report is written again, so it never still says "paused, go on when you want".
+ */
 function cancelRun(dir) {
   const events = journal.read(dir);
-  if (!machine.fold(events).final) journal.append(dir, { type: 'run.cancelled' });
+  if (machine.fold(events).final) return;
+  journal.append(dir, { type: 'run.cancelled' });
+  const after = journal.read(dir);
+  fs.writeFileSync(path.join(dir, 'report.md'), report(machine.fold(after), { status: 'cancelled', events: after }).markdown);
 }
 
 /** Puts the branch on the remote and opens the pull request. A failure is written down; the work is still there. */

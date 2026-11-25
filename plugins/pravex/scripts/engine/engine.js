@@ -372,7 +372,7 @@ async function drive(dir, opts = {}) {
         if (journal.read(dir).filter((e) => e.type === 'replan.invalid' && e.n === a.n).length >= 2) put({ type: 'replan.done', n: a.n, ok: false });
         return;
       }
-      put({ type: 'replan.done', n: a.n, ok: true, criteria, drop, tasks: order.map((id) => v.tasks.find((t) => t.id === id)) });
+      put({ type: 'replan.done', n: a.n, ok: true, summary: String(v.summary || '').trim() || undefined, criteria, drop, tasks: order.map((id) => v.tasks.find((t) => t.id === id)) });
     },
     async 'drop-objection'(a) {
       put({ type: 'replan.done', n: a.n, ok: false });

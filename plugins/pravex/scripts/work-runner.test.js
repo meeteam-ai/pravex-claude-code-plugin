@@ -167,6 +167,10 @@ test('what people decide reaches the run: cancel, resume with a higher limit', a
   p.commands = [{ runId: 'r-6', action: 'cancel' }];
   await work.poll(polling(p, root));
   assert.equal(p.runs['r-6'].status, 'cancelled');
+  // Seen end to end: a run paused and then cancelled was stored with reason "stopped" and a report saying "go on".
+  assert.equal(p.runs['r-6'].reason, null);
+  assert.match(p.runs['r-6'].report, /^# Cancelada/);
+  assert.doesNotMatch(p.runs['r-6'].report, /En pausa/);
   p.commands = [{ runId: 'r-6', action: 'resume' }];
   await work.poll(polling(p, root, { start: (d) => started.push(d) }));
   assert.equal(started.length, 1, 'a cancelled run never comes back');
@@ -195,7 +199,7 @@ test('an objection adds a part on top of what is proven', async () => {
   assert.deepEqual(p.taken, [1]);
   const seen = [];
   await work.drive(dir, opts(p, {
-    replanner: (j) => (seen.push(j.prompt), ok({ criteria: [{ id: 'AC-2', text: 'zero fails' }], drop: [], tasks: [{ ...TASK, id: 'T2', title: 'Zero', criteria: ['AC-2'], dependsOn: ['T1'], files: ['zero.js'], tests: ['zero.test.js'] }] })),
+    replanner: (j) => (seen.push(j.prompt), ok({ summary: 'It multiplies, and zero fails.', criteria: [{ id: 'AC-2', text: 'zero fails' }], drop: [], tasks: [{ ...TASK, id: 'T2', title: 'Zero', criteria: ['AC-2'], dependsOn: ['T1'], files: ['zero.js'], tests: ['zero.test.js'] }] })),
     tester: (j) => {
       const f = j.prompt.includes('"id": "T2"') ? 'zero' : 'mul';
       fs.writeFileSync(path.join(j.cwd, `${f}.test.js`), testOf(f, 6));
@@ -208,6 +212,9 @@ test('an objection adds a part on top of what is proven', async () => {
   assert.match(seen[0], /zero must fail/);
   assert.deepEqual(r.snapshot.tasks.map((t) => [t.id, t.phase]), [['T1', 'done'], ['T2', 'done']]);
   assert.match(r.report, /objetada y replanteada: zero must fail/);
+  // The result says what was built after the objection, not what was planned before it.
+  assert.match(r.report, /## Resultado\n\nIt multiplies, and zero fails\./);
+  assert.match(seen[0], /it replaces "s"/);
 });
 
 test('the pull request is opened by the runner, once, and a failure is written down', () => {

@@ -205,6 +205,8 @@ function reduce(s, e) {
       const o = s.objections.find((x) => x.n === e.n);
       if (o) o.state = e.ok ? 'applied' : 'failed';
       if (e.ok) {
+        // What the result is changed with the objection: the report must not say the old thing.
+        if (e.summary) s.feasibility.summary = e.summary;
         s.feasibility.criteria.push(...(e.criteria || []));
         for (const x of e.drop || []) s.feasibility.criteria = s.feasibility.criteria.filter((c) => c.id !== x);
         s.tasks.push(...(e.tasks || []).map(newTask));
@@ -221,7 +223,8 @@ function reduce(s, e) {
       break;
     case 'run.cancelled':
       // A person's word is final, unless the run had already ended by itself.
-      if (!s.final) Object.assign(s, { status: 'cancelled', final: 'cancelled', reason: null });
+      // Not paused any more either: a cancelled run is never shown or reported as one that can go on.
+      if (!s.final) Object.assign(s, { status: 'cancelled', final: 'cancelled', reason: null, paused: null });
       break;
     case 'run.finished':
       Object.assign(s, { status: e.status, final: e.status, reason: e.reason || null });
