@@ -77,7 +77,7 @@ async function sync(dir, api) {
   const events = journal.read(dir);
   if (!work || !events.length) return null;
   const p = project(events);
-  const pr = [...events].reverse().find((e) => e.type === 'pr.opened' || e.type === 'pr.failed');
+  const pr = [...events].reverse().find((e) => e.type === 'pr.opened' || e.type === 'pr.failed' || e.type === 'pr.off');
   const reportFile = path.join(dir, 'report.md');
   const body = {
     seq: events.length,
@@ -87,7 +87,7 @@ async function sync(dir, api) {
     ...(pr && pr.url ? { prUrl: pr.url } : {}),
     ...(fs.existsSync(reportFile) ? { report: fs.readFileSync(reportFile, 'utf8').slice(0, 100_000) } : {}),
   };
-  body.snapshot.process.pr = pr ? { state: pr.type === 'pr.opened' ? 'opened' : 'failed', ...(pr.url ? { url: pr.url } : {}), ...(pr.detail ? { detail: pr.detail } : {}) } : null;
+  body.snapshot.process.pr = pr ? { state: { 'pr.opened': 'opened', 'pr.off': 'off' }[pr.type] || 'failed', ...(pr.url ? { url: pr.url } : {}), ...(pr.detail ? { detail: pr.detail } : {}) } : null;
   fit(body);
   const answer = await api('PATCH', `/api/work/${work.runId}/progress`, body);
   const lastJob = body.jobs.length ? body.jobs[body.jobs.length - 1].n : work.jobsSent || 0;
@@ -114,7 +114,10 @@ function openPr(dir, { gh = 'gh', run = spawnSync } = {}) {
   const repo = path.join(dir, 'repo');
   const fail = (detail) => journal.append(dir, { type: 'pr.failed', detail: String(detail || '').trim().slice(-400) });
   // For trying the whole chain on a real repository without touching it.
-  if (process.env.PRAVEX_WORK_NO_PUSH === '1') return fail('pushing is turned off on this machine (PRAVEX_WORK_NO_PUSH)');
+  if (process.env.PRAVEX_WORK_NO_PUSH === '1') {
+    if (events.some((e) => e.type === 'pr.off')) return null;
+    return journal.append(dir, { type: 'pr.off', detail: 'PRAVEX_WORK_NO_PUSH=1' });
+  }
   if (!s.base || !/github\.com/.test(s.base.origin || '')) return fail('this repository has no GitHub remote');
   if (events.some((e) => e.type === 'pr.opened')) return null;
   const opts = { cwd: repo, encoding: 'utf8', timeout: 180_000, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_CEILING_DIRECTORIES: dir } };

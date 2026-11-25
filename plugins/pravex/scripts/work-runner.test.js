@@ -231,6 +231,25 @@ test('the pull request is opened by the runner, once, and a failure is written d
   assert.equal(ran.length, 2);
 });
 
+test('with pushing turned off nothing runs, and it reads as off, not as a failure', () => {
+  const repoDir = repository();
+  sh(repoDir, 'git', 'remote', 'add', 'origin', 'https://github.com/acme/x.git');
+  const { dir } = engine.create({ repoDir, text: 'multiply', root: tmp() });
+  const ran = [];
+  const run = (cmd, args) => (ran.push([cmd, ...args]), { status: 0, stdout: '', stderr: '' });
+  const before = process.env.PRAVEX_WORK_NO_PUSH;
+  process.env.PRAVEX_WORK_NO_PUSH = '1';
+  try {
+    assert.equal(work.openPr(dir, { run }).type, 'pr.off');
+    assert.equal(work.openPr(dir, { run }), null, 'written once');
+  } finally {
+    if (before === undefined) delete process.env.PRAVEX_WORK_NO_PUSH;
+    else process.env.PRAVEX_WORK_NO_PUSH = before;
+  }
+  assert.deepStrictEqual(ran, []);
+  assert.equal(journal.read(dir).filter((e) => e.type === 'pr.failed').length, 0);
+});
+
 test('with credentials from the environment the minute check never writes in the person\'s ~/.pravex', () => {
   const said = [];
   const stored = [];
