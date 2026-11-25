@@ -197,6 +197,21 @@ function readConfig() {
 
 const hasTokens = (config) => Boolean(config.apiHost && config.refreshToken && config.accessToken);
 
+/**
+ * A Mac that sleeps in the middle of a refresh loses its answer, and the token it spent. Keep it awake (idle sleep only)
+ * for as long as a refresh can take; nothing else is held up, and nowhere else does anything.
+ */
+function stayAwakeWhileRefreshing(seconds = 60) {
+  if (process.platform !== 'darwin') return;
+  try {
+    const c = require('child_process').spawn('caffeinate', ['-i', '-t', String(seconds)], { stdio: 'ignore', detached: true });
+    c.on('error', () => {});
+    c.unref();
+  } catch {
+    /* not on this machine */
+  }
+}
+
 // ── the lock ────────────────────────────────────────────────────────────────
 
 /**
@@ -322,6 +337,7 @@ async function ensureFresh({ now = Date.now(), rejected, timeoutMs = REQUEST_TIM
       if (!config.refreshToken) return fail(config.signedOut || 'signed-out');
       if (usable(config)) return ok(config);
       try {
+        stayAwakeWhileRefreshing();
         const tokens = await exchangeRefreshToken(config, { now: Date.now(), timeoutMs });
         const next = { apiHost: config.apiHost, clientId: config.clientId || DEFAULT_CLIENT_ID, ...tokens };
         // The new refresh token is on disk before anyone uses the new access token.
@@ -347,16 +363,36 @@ async function ensureFresh({ now = Date.now(), rejected, timeoutMs = REQUEST_TIM
 }
 
 /**
+ * Credentials the environment gives, or null when it gives none: `PRAVEX_API_HOST` with `PRAVEX_ACCESS_TOKEN`, or with
+ * `PRAVEX_ACCESS_TOKEN_FILE`, a file holding the token that is read again on every call, so a test longer than a
+ * token's 15 minutes can renew it there. They exist so the tests can point the real scripts at a local server; with
+ * them the stored sign-in in `~/.pravex` is never read or renewed, even when the file cannot be read.
+ */
+function envCredentials(env = process.env) {
+  if (!env.PRAVEX_API_HOST || !(env.PRAVEX_ACCESS_TOKEN || env.PRAVEX_ACCESS_TOKEN_FILE)) return null;
+  let accessToken = env.PRAVEX_ACCESS_TOKEN || '';
+  if (!accessToken) {
+    try {
+      accessToken = fs.readFileSync(env.PRAVEX_ACCESS_TOKEN_FILE, 'utf8').trim();
+    } catch {
+      accessToken = '';
+    }
+  }
+  return { static: true, apiHost: env.PRAVEX_API_HOST.replace(/\/+$/, ''), accessToken };
+}
+
+/**
  * What a hook or command authenticates with.
  *
- * `PRAVEX_ACCESS_TOKEN` + `PRAVEX_API_HOST` in the environment win, and are not
- * refreshed: they exist so the tests can point the real scripts at a local server.
+ * The environment's credentials win (`envCredentials`), and are not refreshed.
  * Otherwise the stored pair, renewed when it is within a minute of lapsing.
  */
 async function getCredentials(options = {}) {
   const env = options.env || process.env;
-  if (env.PRAVEX_ACCESS_TOKEN && env.PRAVEX_API_HOST) {
-    return { ok: true, static: true, apiHost: env.PRAVEX_API_HOST.replace(/\/+$/, ''), accessToken: env.PRAVEX_ACCESS_TOKEN };
+  const fromEnv = envCredentials(env);
+  if (fromEnv) {
+    if (!fromEnv.accessToken) return { ok: false, reason: 'static', message: `No access token in ${env.PRAVEX_ACCESS_TOKEN_FILE}.` };
+    return { ok: true, ...fromEnv };
   }
   const result = await ensureFresh(options);
   if (result.ok) result.apiHost = result.apiHost.replace(/\/+$/, '');
@@ -369,8 +405,11 @@ async function getCredentials(options = {}) {
  */
 function refreshAfterRejection(rejected, options = {}) {
   const env = options.env || process.env;
-  if (env.PRAVEX_ACCESS_TOKEN && env.PRAVEX_API_HOST) {
-    return Promise.resolve({ ok: false, reason: 'static', message: 'The access token in PRAVEX_ACCESS_TOKEN was refused.' });
+  const fromEnv = envCredentials(env);
+  if (fromEnv) {
+    // A token file renewed since the request went out is the one newer token there can be.
+    if (fromEnv.accessToken && fromEnv.accessToken !== rejected && !env.PRAVEX_ACCESS_TOKEN) return Promise.resolve({ ok: true, ...fromEnv });
+    return Promise.resolve({ ok: false, reason: 'static', message: 'The access token in the environment was refused.' });
   }
   return ensureFresh({ ...options, rejected });
 }
@@ -503,6 +542,7 @@ module.exports = {
   REFRESH_SKEW_MS,
   authorized,
   ensureFresh,
+  envCredentials,
   exchangeRefreshToken,
   getCredentials,
   logout,

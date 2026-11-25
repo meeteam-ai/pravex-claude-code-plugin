@@ -223,3 +223,15 @@ test('the pull request is opened by the runner, once, and a failure is written d
   assert.equal(work.openPr(made.dir, { run }), null);
   assert.equal(ran.length, 2);
 });
+
+test('with credentials from the environment the minute check never writes in the person\'s ~/.pravex', () => {
+  const said = [];
+  const stored = [];
+  const toStderr = work.logOf({ PRAVEX_API_HOST: 'http://127.0.0.1:1', PRAVEX_ACCESS_TOKEN: 't' }, (l) => stored.push(l), (l) => said.push(l));
+  toStderr('request x: refused');
+  assert.deepStrictEqual(stored, []);
+  assert.match(said[0], /request x: refused$/);
+  const toFile = work.logOf({}, (l) => stored.push(l), (l) => said.push(l));
+  toFile('kept');
+  assert.deepStrictEqual(stored, ['kept']);
+});

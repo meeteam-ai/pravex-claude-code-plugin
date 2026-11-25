@@ -300,6 +300,14 @@ function startDetached(dir) {
   fs.closeSync(out);
 }
 
+/**
+ * Where the minute's check writes what it did: `~/.pravex/runner.log`, unless the credentials come from the environment
+ * (a test pointed at another Pravex), which never writes in the person's own `~/.pravex`.
+ */
+function logOf(env = process.env, runnerLog = (line) => require('./flow-runner').log(line), err = console.error) {
+  return require('./auth').envCredentials(env) ? (line) => err(`${new Date().toISOString()} ${line}`) : runnerLog;
+}
+
 async function main(argv) {
   const runner = require('./flow-runner');
   const environment = require('./environment');
@@ -311,7 +319,7 @@ async function main(argv) {
   if (argv[0] === '--poll') {
     const machineId = runner.machineIdOf();
     if (!machineId) return 0;
-    await poll({ api, machineId, findRepo: (r) => runner.findRepoDir(r), start: startDetached, signedIn: () => (environment.claudeStatus(os.homedir(), Date.now()) || {}).signedIn, log: runner.log });
+    await poll({ api, machineId, findRepo: (r) => runner.findRepoDir(r), start: startDetached, signedIn: () => (environment.claudeStatus(os.homedir(), Date.now()) || {}).signedIn, log: logOf() });
     return 0;
   }
   console.error('work-runner.js --poll | --drive <dir>');
@@ -329,4 +337,4 @@ if (require.main === module) {
   );
 }
 
-module.exports = { drive, poll, take, sync, openPr, localRuns, alive, saveWork, workOf, startDetached };
+module.exports = { drive, poll, take, sync, openPr, localRuns, alive, saveWork, workOf, startDetached, logOf };
