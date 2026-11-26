@@ -258,6 +258,23 @@ test('the environment token wins and is never renewed', async () => {
   assert.deepStrictEqual([creds.ok, creds.accessToken, creds.apiHost], [true, 'static', 'http://127.0.0.1:1']);
 });
 
+test('a token file in the environment is read on every call, and the stored sign-in is never used', async () => {
+  reset();
+  const file = path.join(HOME, 'token-file');
+  fs.writeFileSync(file, 'first\n');
+  const env = { PRAVEX_ACCESS_TOKEN_FILE: file, PRAVEX_API_HOST: 'http://127.0.0.1:1/' };
+  const creds = await auth.getCredentials({ env });
+  assert.deepStrictEqual([creds.ok, creds.static, creds.accessToken, creds.apiHost], [true, true, 'first', 'http://127.0.0.1:1']);
+  fs.writeFileSync(file, 'second\n');
+  assert.strictEqual((await auth.getCredentials({ env })).accessToken, 'second');
+  // Renewed since a request was refused: that newer token is tried; the same one again is not.
+  assert.deepStrictEqual([(await auth.refreshAfterRejection('first', { env })).accessToken], ['second']);
+  assert.deepStrictEqual((await auth.refreshAfterRejection('second', { env })).reason, 'static');
+  fs.rmSync(file);
+  const gone = await auth.getCredentials({ env });
+  assert.deepStrictEqual([gone.ok, gone.reason], [false, 'static']);
+});
+
 // ── refreshing ──────────────────────────────────────────────────────────────
 
 test('a token with time left is used as it is: no request to the server', async () => {

@@ -310,7 +310,7 @@ jobs:
       # locally with the same command. It used to be a pile of heredocs in this file,
       # which could not be run before pushing and reported failures as bash noise.
       - name: Test
-        run: node --test plugins/pravex/scripts/*.test.js
+        run: node --test plugins/pravex/scripts/*.test.js plugins/pravex/scripts/engine/*.test.js
 
       # The npm package ships the same scripts, copied at pack time. Its own test
       # runs the packed layout end to end, so a broken sync fails here, not on a

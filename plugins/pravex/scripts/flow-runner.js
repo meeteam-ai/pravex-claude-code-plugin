@@ -1693,7 +1693,11 @@ async function runNow(flowId, { dry = true } = {}) {
 function refreshCopy(from = __dirname) {
   fs.mkdirSync(RUNNER_DIR, { recursive: true, mode: 0o700 });
   // Whole files only, the runner last: a tick may start at any moment.
-  for (const f of ['auth.js', 'environment.js', 'flow-runner.js']) {
+  // The build engine goes first, for the same reason: whoever starts it finds all of it.
+  const engine = fs.existsSync(path.join(from, 'engine')) ? fs.readdirSync(path.join(from, 'engine')).filter((f) => f.endsWith('.js') && !f.endsWith('.test.js')).map((f) => path.join('engine', f)) : [];
+  if (engine.length) fs.mkdirSync(path.join(RUNNER_DIR, 'engine'), { recursive: true, mode: 0o700 });
+  const also = ['work-runner.js', 'build.js'].filter((f) => fs.existsSync(path.join(from, f)));
+  for (const f of ['auth.js', 'environment.js', ...engine, ...also, 'flow-runner.js']) {
     const tmp = path.join(RUNNER_DIR, `${f}.${process.pid}.tmp`);
     fs.copyFileSync(path.join(from, f), tmp);
     fs.renameSync(tmp, path.join(RUNNER_DIR, f));
@@ -1915,6 +1919,22 @@ function flagValue(argv, flag) {
   return i >= 0 ? argv[i + 1] : undefined;
 }
 
+/**
+ * The requirements queued for this machine have a check of their own, in a process of its own: a flow that runs for an
+ * hour does not make them wait, and the other way around.
+ */
+function pollWork() {
+  const script = path.join(__dirname, 'work-runner.js');
+  if (!fs.existsSync(script)) return;
+  try {
+    const c = spawn(process.execPath, [script, '--poll'], { detached: true, stdio: 'ignore', windowsHide: true });
+    c.on('error', () => {});
+    c.unref();
+  } catch {
+    /* the next minute tries again */
+  }
+}
+
 async function main(argv = process.argv.slice(2)) {
   if (argv.includes('--install')) return install();
   if (argv.includes('--uninstall')) return uninstall();
@@ -1924,6 +1944,7 @@ async function main(argv = process.argv.slice(2)) {
     return 0;
   }
   if (argv.includes('--tick')) {
+    pollWork();
     await tick();
     return 0;
   }
@@ -1945,6 +1966,9 @@ if (require.main === module) {
 
 module.exports = {
   DEFAULT_GUARD,
+  api,
+  log,
+  machineIdOf,
   NEVER_TOOLS,
   RUNNER_VERSION,
   TICK_MINUTES,

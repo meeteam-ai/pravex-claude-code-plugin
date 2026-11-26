@@ -375,6 +375,34 @@ Since 0.16.0 flows are safer, sooner and visible:
   key-shaped strings masked, and its answer is shown with the run. Not asked when Claude
   Code is signed out or the plan limits say stop; its cost counts in the run's.
 
+Since 0.17.0 a requirement can be built end to end:
+
+- **Say what should be done; Pravex builds it here.** A requirement written in Pravex for
+  this machine is picked up by the minute check (or run by hand: `/pravex:build "..."`).
+  It first answers whether it can be built and verified here, and stops with an
+  alternative when it cannot. Then it writes the acceptance criteria, splits the work into
+  parts and, for each part, writes tests that fail first, builds until they pass, runs the
+  repository's own checks and has a fresh agent review the change, fixing and diagnosing
+  in rounds until the part is done or set aside. The parts are joined and checked together.
+- **The code decides, not an agent.** What happens next is chosen by a state machine from
+  a journal in `~/.pravex-builds/<id>`; agents are short `claude -p` jobs with a schema for
+  their answer. The tests an agent wrote are frozen by hash, a part may only change the
+  files its plan lists, and skipped tests or silenced checks are caught.
+- **Agents that write run in Claude Code's sandbox**: no network, no reading `~/.pravex`,
+  `~/.ssh` or other private folders, no writing outside the build's own clone. Claude Code
+  must be able to start its sandbox; otherwise the run pauses and says so.
+- **Nothing is pushed until the work is done.** The runner pushes the build's branch and
+  opens one pull request when the run is done or partly done; agents and checks cannot
+  push. `PRAVEX_WORK_NO_PUSH=1` turns pushing off on a machine.
+- **You decide what matters.** Decisions taken where the requirement said nothing are
+  listed in Pravex; objecting to one makes the run replan. A run can be paused, resumed
+  with more budget, or cancelled from Pravex, and pauses by itself at its budget or time
+  limit. With autonomy 0 it stops after the plan and waits for "Start building".
+- **What Pravex receives** is the run's progress: its parts, criteria, the names of their
+  tests, check commands and the end of a failing output, decisions, costs and the final
+  report. Pravex masks key-shaped strings before storing any of it. Your code stays on
+  this machine and in the pull request.
+
 ## The setup snapshot
 
 Since 0.13.0, a session start that holds a seat also sends a snapshot of how this
