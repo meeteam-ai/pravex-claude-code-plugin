@@ -28,6 +28,10 @@ const { PLAIN } = require('./checks');
  * is deliberately not here.
  */
 const SIGNS = [
+  // A validated configuration (zod and the like) that refuses to start: "Variables de entorno inválidas: SESSION_SECRET: …".
+  /\b[A-Z][A-Z0-9_]{2,}: (?:Invalid input: )?expected \w+, received undefined/,
+  /\b[A-Z][A-Z0-9_]{2,}: Required\b/,
+  /Variables de entorno inv[aá]lidas|Invalid environment variables|Environment variable validation failed/i,
   /(?:Falta|Missing|missing required|Required) (?:la variable |the variable |env(?:ironment)? (?:var(?:iable)?|key) )?`?[A-Z][A-Z0-9_]{2,}`?/,
   /`?[A-Z][A-Z0-9_]{2,}`? (?:is not set|is not defined in (?:the )?env|is required|must be set|no est[aá] definid[ao])/,
   /ECONNREFUSED\s+(?:127\.0\.0\.1|::1|localhost|\[::1\]):\d+/,
@@ -39,6 +43,8 @@ const SIGNS = [
   /Can't reach database server/i,
   /getaddrinfo (?:ENOTFOUND|EAI_AGAIN)/,
   /Cannot connect to the Docker daemon/i,
+  // The app a browser test needs never started (its own variables or services are missing here).
+  /config\.webServer was not able to start/,
   /\bglobal[ -]?setup\b.*(?:error|fail|threw|lanz)/i,
   /errors? during collection/i,
   /No test files found/i,
@@ -47,6 +53,7 @@ const SIGNS = [
 
 /** The name of the variable the output says is missing, when it names one. */
 const MISSING = [
+  /\b([A-Z][A-Z0-9_]{2,}): (?:Invalid input: )?(?:expected \w+, received undefined|Required)\b/,
   /(?:Falta|Missing|missing required|Required) (?:la variable |the variable |env(?:ironment)? (?:var(?:iable)?|key) )?`?([A-Z][A-Z0-9_]{2,})`?/,
   /`?([A-Z][A-Z0-9_]{2,})`? (?:is not set|is not defined in (?:the )?env|is required|must be set|no est[aá] definid[ao])/,
 ];
@@ -61,15 +68,12 @@ function envProblem(output) {
   for (const sign of SIGNS) {
     const line = lines.find((l) => sign.test(l));
     if (!line) continue;
-    let missing = null;
-    for (const m of MISSING) {
-      const x = m.exec(text);
-      if (x) {
-        missing = x[1];
-        break;
-      }
-    }
-    return { line: line.trim().slice(0, 300), missing };
+    // Every variable it names, in order, so a person fixes them all at once instead of one per stop.
+    const names = [];
+    for (const m of MISSING) for (const x of text.matchAll(new RegExp(m.source, 'g'))) if (!names.includes(x[1])) names.push(x[1]);
+    // A name cut short in a code frame ("Falta TEST_DATA…") is the longer one said elsewhere, not another variable.
+    const whole = names.filter((n) => !names.some((o) => o !== n && o.startsWith(n)));
+    return { line: line.trim().slice(0, 300), missing: whole.length ? whole.slice(0, 12).join(', ') : null };
   }
   return null;
 }

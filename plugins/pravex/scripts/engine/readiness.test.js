@@ -71,6 +71,11 @@ test('output that never got to test anything is told apart from a real failure',
   assert.equal(readiness.envProblem('connect ECONNREFUSED 127.0.0.1:5432').line, 'connect ECONNREFUSED 127.0.0.1:5432');
   assert.equal(readiness.envProblem('STRIPE_KEY is not set').missing, 'STRIPE_KEY');
   assert.match(readiness.envProblem('No test files found, exiting with code 1').line, /No test files/);
+  // A validated configuration that refuses to start (napa's API under Playwright, 2026-11-27): every variable, at once.
+  const zod = ['Error: Process from config.webServer was not able to start. Exit code: 1', '[WebServer] Error: Variables de entorno inválidas:', '[WebServer]   SESSION_SECRET: Invalid input: expected string, received undefined', '[WebServer]   S3_BUCKET: Invalid input: expected string, received undefined', '[WebServer]   SESSION_SECRET: Invalid input: expected string, received undefined'].join('\n');
+  assert.equal(readiness.envProblem(zod).missing, 'SESSION_SECRET, S3_BUCKET');
+  assert.equal(readiness.envProblem('ZodError\n  API_KEY: Required').missing, 'API_KEY');
+  assert.match(readiness.envProblem('Error: Process from config.webServer was not able to start. Exit code: 1').line, /webServer/);
   // A real failure, and a test that imports what the work has not written yet, are work for an agent.
   assert.equal(readiness.envProblem('FAIL a.test.ts > adds\nAssertionError: expected 2 to be 3'), null);
   assert.equal(readiness.envProblem("Error: Cannot find module './plan-summary'"), null);
