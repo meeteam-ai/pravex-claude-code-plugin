@@ -733,7 +733,9 @@ function run(cmd, args, { cwd, timeoutMs = COMMAND_TIMEOUT_MS, shell = false, on
 
 async function api(method, route, json, { timeoutMs = 20000 } = {}) {
   const creds = await auth.getCredentials();
-  if (!creds.ok) throw new Error('not signed in to Pravex: run /pravex:login');
+  // Offline or the server not answering is not a sign-out: saying "run /pravex:login" then sends a person to fix nothing.
+  if (!creds.ok && creds.reason === 'unavailable') throw new Error('could not reach Pravex to renew this machine\u2019s access: it tries again next minute');
+  if (!creds.ok) throw new Error(`not signed in to Pravex (${creds.reason || 'signed-out'}): run /pravex:login`);
   const res = await auth.authorized(creds, route, { method, json, timeoutMs });
   let body = null;
   try {
