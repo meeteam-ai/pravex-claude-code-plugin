@@ -20,7 +20,7 @@ const REPLAN = obj({ summary: str, criteria: list(obj({ id: str, text: str })), 
 const TESTS = obj({ status: { enum: ['DONE', 'BLOCKED'] }, files: strs, command: str, covers: list(obj({ criterion: str, test: str })), note: str });
 const BUILD = obj({ status: { enum: ['DONE', 'BLOCKED'] }, summary: str, gaps: strs, needs: strs });
 const REVIEW = obj({ verdict: { enum: ['APPROVED', 'FIX'] }, fixes: list(obj({ file: str, problem: str, check: str })), gaps: strs, notes: strs });
-const DIAGNOSIS = obj({ cause: str, strategy: str, testsWrong: { type: 'boolean' } });
+const DIAGNOSIS = obj({ cause: str, strategy: str, testsWrong: { type: 'boolean' }, kind: { enum: ['code', 'tests', 'environment'] } }, ['kind']);
 
 function checkShape(schema, value, at = '$') {
   if (schema.enum) return schema.enum.includes(value) ? null : `${at} is not one of ${schema.enum.join(', ')}`;

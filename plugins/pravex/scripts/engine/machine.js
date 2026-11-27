@@ -51,6 +51,8 @@ const initial = () => ({
   approved: false, // the plan, when the project asks a person first
   final: null,
   reason: null,
+  // Checks that could not run at all (a variable, a database): each stop, and whether a person resumed after it.
+  envBlocks: [], // { at: 'prepare' | task id, command, line, missing, fp, resumed }
 });
 
 const newTask = (t) => ({
@@ -114,6 +116,8 @@ function reduce(s, e) {
       break;
     case 'run.resumed':
       if (s.paused === 'plan-ready') s.approved = true;
+      // Resumed after "the checks cannot run": whether or not it was fixed, the same problem again is the person's call.
+      if (s.paused === 'checks-cannot-run' && s.envBlocks.length) s.envBlocks[s.envBlocks.length - 1].resumed = true;
       s.paused = null;
       s.cfg = { ...s.cfg, ...(e.cfg || {}) };
       // A job cut off by a crash left no result: its counters stay, the work is redone from the last commit.
@@ -189,7 +193,26 @@ function reduce(s, e) {
       }
       break;
     case 'task.diagnosed':
-      if (t) Object.assign(t, { diagnosis: { cause: e.cause || '', strategy: e.strategy || '', testsWrong: !!e.testsWrong }, diagnosedFp: e.fp || null });
+      if (t) Object.assign(t, { diagnosis: { cause: e.cause || '', strategy: e.strategy || '', testsWrong: !!e.testsWrong, kind: e.kind || (e.testsWrong ? 'tests' : 'code') }, diagnosedFp: e.fp || null });
+      break;
+    case 'env.blocked':
+      // The checks cannot run here. Nothing an agent does changes that, so it stops and says what is missing. The part it
+      // was on starts over once someone resumes, from wherever the run is then (its work is kept on a branch).
+      s.envBlocks.push({ at: e.task || 'prepare', command: e.command || '', line: e.line || '', missing: e.missing || null, fp: e.fp || null, resumed: false });
+      s.paused = 'checks-cannot-run';
+      if (t) {
+        if (t.baseSha && t.sha && t.sha !== t.baseSha) s.tip = t.baseSha;
+        Object.assign(t, { phase: 'new', round: 0, redWhy: '', fps: [], failures: [], diagnosis: null, diagnosedFp: null, review: null, testHashes: {}, testCommand: '', covers: [], extended: 0, baseSha: null, sha: null });
+      }
+      break;
+    case 'prepare.reset':
+      // Checked again from the start: what the repository and the machine have may have changed while it waited.
+      Object.assign(s, { prepared: null, prepareFailures: 0, prepareError: null });
+      break;
+    case 'run.rebased':
+      // What was fixed meanwhile on the main branch is taken in, so the run does not wait on its own old copy.
+      if (e.sha) s.tip = e.sha;
+      if (e.how === 'reset' && s.base) s.base = { ...s.base, sha: e.sha };
       break;
     case 'task.restarted':
       // Its tests were wrong: the task starts over from the commit before it, once.
@@ -389,4 +412,7 @@ function estimate(s) {
   return { usd: [round(s.usd + n * 0.8), round(s.usd + n * 5)], minutes: [Math.ceil(n * (3 + slow)), Math.ceil(n * (18 + 4 * slow))], confidence: 'low' };
 }
 
-module.exports = { estimate, DEFAULTS, FINAL, initial, reduce, fold, next, checkPlan, finalStatus, roundLimit, taskOf };
+/** A person resumed after this same problem stopped the run here: it is not stopped for it again. */
+const envAccepted = (s, at, fp) => s.envBlocks.some((b) => b.at === at && b.fp === fp && b.resumed);
+
+module.exports = { envAccepted, estimate, DEFAULTS, FINAL, initial, reduce, fold, next, checkPlan, finalStatus, roundLimit, taskOf };

@@ -71,6 +71,7 @@ const reviewer = (s, t, { diff, final }) => [RULES, lang(s.req.locale), 'You did
 
 const diagnoser = (s, t, { diff }) => [RULES, lang(s.req.locale), 'A task is stuck: the same check keeps failing. You did not write it. Find the real cause by reading the code and the tests, and give a different strategy, concrete enough for someone else to follow.', requirement(s), taskText(s, t),
   `What fails:\n${t.failures.map((f) => `$ ${f.command || f.kind}\n${cut(f.output, MAX.output)}`).join('\n\n')}`, block('diff', cut(diff, MAX.diff)),
-  '`testsWrong`: true only if an acceptance test contradicts the requirement or its own criterion, or cannot pass in any correct implementation. Say which and why in `cause`.'].join('\n\n');
+  '`testsWrong`: true only if an acceptance test contradicts the requirement or its own criterion, or cannot pass in any correct implementation. Say which and why in `cause`.',
+  '`kind`: `code` when the code is what is wrong; `tests` when the tests are (same as `testsWrong`); `environment` when the check never gets to test anything in this copy and no change to the code or the tests would fix it: a variable or a file that is not here, a database or service it cannot reach, no test files found because setup failed. For `environment`, name exactly what is missing in `cause` (the variable, the service, the file), never a value.'].join('\n\n');
 
 module.exports = { isTest, extender, analyst, planner, replanner, tester, builder, reviewer, diagnoser, cut };
