@@ -394,7 +394,8 @@ async function drive(dir, opts = {}) {
         // It could not test anything here: stop and say so, unless a person already resumed past this same problem.
         const b = blockFor(r);
         if (b && envBlock(b)) return;
-        results.push({ command: c, ok: r.ok, ms: r.ms, ...(r.why ? { why: r.why } : {}), ...(r.flaky ? { flaky: true } : {}), ...(b ? { why: 'environment', problem: r.problem.line } : {}) });
+        // What a check that already failed said is kept: the report and a person can see why, not only that it did.
+        results.push({ command: c, ok: r.ok, ms: r.ms, ...(r.why ? { why: r.why } : {}), ...(r.flaky ? { flaky: true } : {}), ...(b ? { why: 'environment', problem: r.problem.line } : {}), ...(r.ok ? {} : { said: tail(r.output || '', 600) }) });
       }
       resetTo(repo, head(repo));
       return put({ type: 'run.prepared', install: install ? install.join(' ') : null, checks: results, ms: results.reduce((a, r) => a + r.ms, 0) });
