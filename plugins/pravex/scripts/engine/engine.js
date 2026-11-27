@@ -611,7 +611,7 @@ async function drive(dir, opts = {}) {
    * merged on top of them; a merge that does not go clean is left out and the run goes on as it was.
    */
   function refreshBase() {
-    const ok = (args) => spawnSync('git', [...GIT, ...args], { cwd: repo, encoding: 'utf8', timeout: 300_000, env: { ...process.env, GIT_CEILING_DIRECTORIES: path.dirname(path.resolve(repo)) } });
+    const ok = (args) => spawnSync('git', [...GIT, ...args], { cwd: repo, encoding: 'utf8', timeout: 300_000, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_CEILING_DIRECTORIES: path.dirname(path.resolve(repo)) } });
     const fetchHead = (from, ref) => (ok(['fetch', '-q', '--no-tags', from, ref]).status === 0 ? ok(['rev-parse', '-q', '--verify', 'FETCH_HEAD^{commit}']).stdout.trim() : '');
     const name = String(s.base.ref || '').replace(/^refs\/(remotes\/origin|heads)\//, '');
     const latest = (name && name !== 'HEAD' && s.base.origin ? fetchHead('origin', name) : '') || (s.base.repo && fs.existsSync(s.base.repo) ? fetchHead(s.base.repo, s.base.ref || 'HEAD') : '');
