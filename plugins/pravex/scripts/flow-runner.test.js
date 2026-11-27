@@ -387,3 +387,16 @@ test('both prompts name the limits the agent really has', () => {
   }
   assert.match(dry, /In this test you have only Read, Grep, Glob/);
 });
+
+test('offline is not a sign-out: the tick says Pravex could not be reached, not "run /pravex:login"', async () => {
+  const auth = require('./auth');
+  const original = auth.getCredentials;
+  try {
+    auth.getCredentials = async () => ({ ok: false, reason: 'unavailable' });
+    await assert.rejects(runner.api('GET', '/api/x'), (e) => /could not reach Pravex/.test(e.message) && !/pravex:login/.test(e.message));
+    auth.getCredentials = async () => ({ ok: false, reason: 'revoked' });
+    await assert.rejects(runner.api('GET', '/api/x'), /not signed in to Pravex \(revoked\): run \/pravex:login/);
+  } finally {
+    auth.getCredentials = original;
+  }
+});
