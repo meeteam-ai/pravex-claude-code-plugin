@@ -6,6 +6,7 @@ const obj = (properties, optional = []) => ({ type: 'object', properties, requir
 const list = (items) => ({ type: 'array', items });
 
 const ANALYSIS = obj({
+  title: str,
   build: obj({ ok: { type: 'boolean' }, why: str }),
   verify: obj({ ok: { type: 'boolean' }, why: str }),
   summary: str,
@@ -13,7 +14,7 @@ const ANALYSIS = obj({
   decisions: list(obj({ title: str, decision: str, why: str, reversible: { type: 'boolean' } })),
   missing: list(obj({ what: str, owner: str, meanwhile: str })),
   alternative: str,
-});
+}, ['title']);
 const PLAN = obj({ tasks: list(obj({ id: str, title: str, criteria: strs, dependsOn: strs, files: strs, tests: strs, risk: { enum: ['low', 'high'] }, notes: str })) });
 const REPLAN = obj({ summary: str, criteria: list(obj({ id: str, text: str })), drop: strs, tasks: list(obj({ id: str, title: str, criteria: strs, dependsOn: strs, files: strs, tests: strs, risk: { enum: ['low', 'high'] }, notes: str })) });
 const TESTS = obj({ status: { enum: ['DONE', 'BLOCKED'] }, files: strs, command: str, covers: list(obj({ criterion: str, test: str })), note: str });

@@ -214,3 +214,16 @@ test('a report of a long run always fits what Pravex accepts, keeping what peopl
   assert.equal(body.snapshot.criteria.length, 1);
   assert.equal(body.status, 'running');
 });
+
+test('a gap that names a decision already listed is not listed again', () => {
+  const s = fold([
+    ...started([T('T1')]),
+    red('T1'),
+    { type: 'task.built', task: 'T1', round: 1, sha: 'b', gaps: ['Without the database only one test runs, silently.'] },
+    { type: 'task.reviewed', task: 'T1', verdict: 'APPROVED', gaps: ['The suite now skips the rest without a word; someone should decide (decisión 1, abierta).', 'Decision D-1 again.', 'A new question about the copy.'] },
+  ]);
+  assert.deepStrictEqual(s.decisions.map((d) => [d.n, d.title]), [
+    [1, 'Without the database only one test runs, silently.'],
+    [2, 'A new question about the copy.'],
+  ]);
+});

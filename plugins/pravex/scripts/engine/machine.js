@@ -93,6 +93,16 @@ function addDecision(s, d) {
   s.decisions.push({ n: s.decisions.length + 1, title, decision: String(d.decision || ''), why: String(d.why || ''), reversible: d.reversible !== false, ...(d.task ? { task: d.task } : {}) });
 }
 
+/**
+ * A gap an agent left open becomes a decision for a person, once. A gap that names a decision already listed ("decision 5",
+ * "decisión D-5") is that decision said again, so it is not listed twice.
+ */
+function addGap(s, g, task) {
+  const named = /\bdecisi(?:o|ó)n\s+(?:D-)?(\d+)\b/i.exec(String(g || ''));
+  if (named && s.decisions.some((x) => x.n === Number(named[1]))) return;
+  addDecision(s, { title: g, decision: g, why: '', reversible: true, task });
+}
+
 const taskOf = (s, id) => s.tasks.find((t) => t.id === id);
 
 /** Applies one event. Unknown events are ignored, so an older engine can read a newer journal. */
@@ -164,7 +174,7 @@ function reduce(s, e) {
       }
       break;
     case 'task.built':
-      for (const g of e.gaps || []) addDecision(s, { title: g, decision: g, why: '', reversible: true, task: e.task });
+      for (const g of e.gaps || []) addGap(s, g, e.task);
       if (t) Object.assign(t, { phase: 'built', round: e.round, sha: e.sha || t.sha, violations: [...t.violations, ...(e.violations || [])], gaps: [...t.gaps, ...(e.gaps || [])] });
       if (e.sha) s.tip = e.sha;
       break;
@@ -187,7 +197,7 @@ function reduce(s, e) {
       if (t && t.baseSha) s.tip = t.baseSha;
       break;
     case 'task.reviewed':
-      for (const g of e.gaps || []) addDecision(s, { title: g, decision: g, why: '', reversible: true, task: e.task });
+      for (const g of e.gaps || []) addGap(s, g, e.task);
       if (t) Object.assign(t, { phase: 'reviewed', review: { verdict: e.verdict, fixes: e.fixes || [], notes: e.notes || [], needsTests: !!e.needsTests, round: t.round }, gaps: [...t.gaps, ...(e.gaps || [])] });
       break;
     case 'task.done':
