@@ -4,8 +4,8 @@ const { say } = require('./messages');
 const readiness = require('./readiness');
 
 const L = {
-  es: { envWhat: 'Qué falta', envCmd: 'Comando', envSaid: 'Dijo', envVar: 'Variable', envHow: 'Cómo arreglarlo', envHow1: (v, f) => `Pon ${v ? `\`${v}\`` : 'lo que falta'} en \`${f}\` (una línea \`NOMBRE=valor\`; solo lo leen las comprobaciones, nunca un agente) y reanuda.`, envHow2: 'Si hace falta cambiar el repositorio, lanza este requisito como un flujo aparte y reanuda cuando se fusione:', done: 'Listo', partial: 'Listo en parte', cancelled: 'Cancelada', failed: 'No quedó listo', infeasible: 'No se puede', paused: 'En pausa', asked: 'Lo que se pidió', result: 'Resultado', criteria: 'Criterios', proof: 'Prueba', parts: 'Partes', rounds: 'rondas', decided: 'Decisiones que tomé', undo: 'se puede revertir', noundo: 'no se puede revertir', objApplied: 'objetada y replanteada', objFailed: 'objetada, NO se pudo aplicar', missing: 'Falta que alguien lo entregue', until: 'mientras tanto', alt: 'Lo que sí puedo hacer', trust: 'Qué lo demuestra', cost: 'Costo a precio de lista', pend: 'Construido, pendiente de verificar', notes: 'Notas para quien revise', saved: 'Nada se perdió', red: 'las pruebas fallaban antes de construir', nored: 'OJO: las pruebas ya pasaban antes de construir', flaky: 'comprobaciones inestables', base: 'ya fallaban antes de empezar', branch: 'Rama', time: 'Tiempo de trabajo', yes: 'cumplido', no: 'sin cumplir' },
-  en: { envWhat: 'What is missing', envCmd: 'Command', envSaid: 'It said', envVar: 'Variable', envHow: 'How to fix it', envHow1: (v, f) => `Put ${v ? `\`${v}\`` : 'what is missing'} in \`${f}\` (a \`NAME=value\` line; only the checks read it, never an agent) and resume.`, envHow2: 'If the repository has to change, start this requirement as a flow of its own and resume once it is merged:', done: 'Done', partial: 'Partly done', cancelled: 'Cancelled', failed: 'Not done', infeasible: 'It cannot be done', paused: 'Paused', asked: 'What was asked', result: 'Result', criteria: 'Criteria', proof: 'Proof', parts: 'Parts', rounds: 'rounds', decided: 'Decisions made', undo: 'can be undone', noundo: 'cannot be undone', objApplied: 'objected and replanned', objFailed: 'objected, could NOT be applied', missing: 'Needed from someone', until: 'meanwhile', alt: 'What can be done', trust: 'What proves it', cost: 'Cost at list price', pend: 'Built, not verified yet', notes: 'Notes for the reviewer', saved: 'Nothing was lost', red: 'the tests failed before the work', nored: 'NOTE: the tests already passed before the work', flaky: 'unstable checks', base: 'already failing before', branch: 'Branch', time: 'Working time', yes: 'met', no: 'not met' },
+  es: { prepWhat: 'Preparé solo para las pruebas', prepHow: { generated: 'generado', example: 'del ejemplo', placeholder: 'de relleno' }, prepServices: 'Levanté', prepNote: 'Valores de prueba en el archivo de esta máquina; nunca secretos reales y nunca se envían a Pravex.', envWhat: 'Qué falta', envCmd: 'Comando', envSaid: 'Dijo', envVar: 'Variable', envHow: 'Cómo arreglarlo', envHow1: (v, f) => `Pon ${v ? `\`${v}\`` : 'lo que falta'} en \`${f}\` (una línea \`NOMBRE=valor\`; solo lo leen las comprobaciones, nunca un agente) y reanuda.`, envHow2: 'Si hace falta cambiar el repositorio, lanza este requisito como un flujo aparte y reanuda cuando se fusione:', done: 'Listo', partial: 'Listo en parte', cancelled: 'Cancelada', failed: 'No quedó listo', infeasible: 'No se puede', paused: 'En pausa', asked: 'Lo que se pidió', result: 'Resultado', criteria: 'Criterios', proof: 'Prueba', parts: 'Partes', rounds: 'rondas', decided: 'Decisiones que tomé', undo: 'se puede revertir', noundo: 'no se puede revertir', objApplied: 'objetada y replanteada', objFailed: 'objetada, NO se pudo aplicar', missing: 'Falta que alguien lo entregue', until: 'mientras tanto', alt: 'Lo que sí puedo hacer', trust: 'Qué lo demuestra', cost: 'Costo a precio de lista', pend: 'Construido, pendiente de verificar', notes: 'Notas para quien revise', saved: 'Nada se perdió', red: 'las pruebas fallaban antes de construir', nored: 'OJO: las pruebas ya pasaban antes de construir', flaky: 'comprobaciones inestables', base: 'ya fallaban antes de empezar', branch: 'Rama', time: 'Tiempo de trabajo', yes: 'cumplido', no: 'sin cumplir' },
+  en: { prepWhat: 'Prepared by itself for the tests', prepHow: { generated: 'generated', example: 'from the example', placeholder: 'a stand-in' }, prepServices: 'Started', prepNote: "Test values in this machine's file; never real secrets, and never sent to Pravex.", envWhat: 'What is missing', envCmd: 'Command', envSaid: 'It said', envVar: 'Variable', envHow: 'How to fix it', envHow1: (v, f) => `Put ${v ? `\`${v}\`` : 'what is missing'} in \`${f}\` (a \`NAME=value\` line; only the checks read it, never an agent) and resume.`, envHow2: 'If the repository has to change, start this requirement as a flow of its own and resume once it is merged:', done: 'Done', partial: 'Partly done', cancelled: 'Cancelled', failed: 'Not done', infeasible: 'It cannot be done', paused: 'Paused', asked: 'What was asked', result: 'Result', criteria: 'Criteria', proof: 'Proof', parts: 'Parts', rounds: 'rounds', decided: 'Decisions made', undo: 'can be undone', noundo: 'cannot be undone', objApplied: 'objected and replanned', objFailed: 'objected, could NOT be applied', missing: 'Needed from someone', until: 'meanwhile', alt: 'What can be done', trust: 'What proves it', cost: 'Cost at list price', pend: 'Built, not verified yet', notes: 'Notes for the reviewer', saved: 'Nothing was lost', red: 'the tests failed before the work', nored: 'NOTE: the tests already passed before the work', flaky: 'unstable checks', base: 'already failing before', branch: 'Branch', time: 'Working time', yes: 'met', no: 'not met' },
 };
 
 /** The criteria, each with whether something proves it: a task that proves it is done, and its tests failed first. */
@@ -35,6 +35,24 @@ function envStop(s) {
   return { task: b.at === 'prepare' ? null : b.at, command: b.command, line: b.line, missing: b.missing, envFile: `~/.pravex/env/${key}.env`, fix: readiness.fixRequirement({ command: b.command, line: b.line, missing: b.missing, locale }) };
 }
 
+/** What Pravex prepared by itself, by name and how, never the values. */
+function prepared(events) {
+  const names = [];
+  const services = [];
+  for (const e of events) {
+    if (e.type !== 'env.prepared') continue;
+    for (const n of e.names || []) if (!names.some((x) => x.name === n.name)) names.push(n);
+    for (const x of e.services || []) if (!services.includes(x)) services.push(x);
+  }
+  return { names, services };
+}
+
+function preparedSection(events, l) {
+  const { names, services } = prepared(events);
+  if (!names.length && !services.length) return [];
+  return [`## ${l.prepWhat}`, '', ...names.map((n) => `- \`${n.name}\` (${l.prepHow[n.how] || n.how})`), ...(services.length ? [`- ${l.prepServices}: ${services.map((x) => `\`${x}\``).join(', ')}`] : []), '', l.prepNote, ''];
+}
+
 function envSection(s, l) {
   const e = envStop(s);
   if (!e) return [];
@@ -53,6 +71,7 @@ function report(s, { reason, status, events = [] }) {
   if (why) md.push(`**${why.what}** ${why.did} ${why.todo}`, '');
   if (reason === 'environment' && s.prepareError) md.push(`${say(s.prepareError.code, locale).what}`, '', '```', s.prepareError.detail || '', '```', '');
   if (reason === 'checks-cannot-run') md.push(...envSection(s, l, locale));
+  md.push(...preparedSection(events, l));
   md.push(`## ${l.asked}`, '', String((s.req && s.req.text) || '').slice(0, 2000), '');
   if (f.summary) md.push(`## ${l.result}`, '', f.summary, '');
   if (f.build && f.build.ok === false) md.push(f.build.why, '', ...(f.alternative ? [`## ${l.alt}`, '', f.alternative, ''] : []));
@@ -93,4 +112,4 @@ function report(s, { reason, status, events = [] }) {
   };
 }
 
-module.exports = { report, explain, proven, envStop };
+module.exports = { report, explain, proven, envStop, prepared };

@@ -402,6 +402,17 @@ Since 0.17.0 a requirement can be built end to end:
   says what is missing. Set it and resume: the run checks again from the start, takes in
   whatever was merged into the main branch meanwhile, and starts that part over. Resume
   without fixing it and the run goes on without those checks, and its report says so.
+- **It prepares by itself what is not a secret** (0.19.0). Before stopping for checks
+  that cannot run, the engine (code, not an agent) fills what it can without a secret:
+  random text for values only the application reads (`SESSION_SECRET`, salts, signing
+  keys), this machine's addresses from the committed `.env.example`, stand-ins that
+  let the application start (local storage, a bucket, a test email), and the local
+  services the repository's compose file names (a database, a cache, storage) under the
+  project name the developer uses. It writes them to the machine's file, runs the check
+  again and goes on. Somebody else's keys (Stripe, Apple, Google, AWS, mail…) are never
+  made up: those, and only those, stop the run. It never reads the real `.env`; the
+  values never go to an agent, the repository or Pravex — only their names and how they
+  were made. `cfg.autoPrepare: false` turns it off for a run.
 - **What the checks need from the machine** is said in `.pravex/project.json`, a file
   agents cannot change: `{"checks": ["pnpm test"], "setup": ["docker compose up -d db"],
   "env": ["TEST_DATABASE_URL"]}`. The values go in `~/.pravex/env/<owner>__<repo>.env`

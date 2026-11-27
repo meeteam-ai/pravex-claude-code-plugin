@@ -97,7 +97,8 @@ test('a swept session is filed under the repo it ran in, not the one starting', 
     assert.strictEqual(byId['no-cwd'].branch, '');
   } finally {
     server.close();
-    fs.rmSync(home, { recursive: true, force: true });
+    // The start hook leaves a detached update check that may still be writing here: retry instead of racing it.
+    fs.rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 });
 
@@ -113,6 +114,7 @@ test('transcriptCwd reads the first cwd and reports none as empty', async () => 
     assert.strictEqual(await transcriptCwd(file('without')), '');
     assert.strictEqual(await transcriptCwd(path.join(home, 'missing.jsonl')), '');
   } finally {
-    fs.rmSync(home, { recursive: true, force: true });
+    // The start hook leaves a detached update check that may still be writing here: retry instead of racing it.
+    fs.rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 });

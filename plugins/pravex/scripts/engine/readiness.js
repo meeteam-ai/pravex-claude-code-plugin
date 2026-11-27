@@ -124,8 +124,8 @@ function projectConfig(repo) {
 }
 
 /**
- * The variables the checks get, and the ones the project asks for that nobody set. With names in the project file only
- * those are taken; without them, everything a person put in the machine's file for this repository.
+ * The variables the checks get, and the ones the project asks for that nobody set: everything in the machine's file for
+ * this repository, and the project's names from the runner's own environment when the file does not have them.
  */
 function checkEnv({ key, names = [], base = process.env, file } = {}) {
   const where = file || envFileOf(key);
@@ -137,13 +137,13 @@ function checkEnv({ key, names = [], base = process.env, file } = {}) {
   }
   const env = {};
   const missing = [];
-  if (names.length) {
-    for (const k of names) {
-      if (own[k] !== undefined) env[k] = own[k];
-      else if (base[k] !== undefined) env[k] = base[k];
-      else missing.push(k);
-    }
-  } else Object.assign(env, own);
+  // Everything in the machine's file for this repository: a person or Pravex put it there for these checks.
+  Object.assign(env, own);
+  for (const k of names) {
+    if (env[k] !== undefined) continue;
+    if (base[k] !== undefined) env[k] = base[k];
+    else missing.push(k);
+  }
   return { env, missing, file: where, names: Object.keys(env) };
 }
 
@@ -179,4 +179,101 @@ function fixRequirement({ command, line, missing, locale = 'es' }) {
   ].join(' ');
 }
 
-module.exports = { SIGNS, envProblem, problemFp, repoKey, envFileOf, parseEnv, projectConfig, checkEnv, setupAllowed, fixRequirement };
+// ---------------------------------------------------------------------------
+// Preparing by itself: what is not a secret, Pravex fills without asking
+// ---------------------------------------------------------------------------
+
+/** Keys of somebody else's service: never invented, never copied. A person gives them, or the work uses a test mode. */
+const THIRD_PARTY = /(^|_)(STRIPE|APPLE|APNS|GOOGLE|GCP|FIREBASE|AWS|AZURE|TWILIO|TELNYX|SENDGRID|RESEND|MAILGUN|POSTMARK|SMTP|OPENAI|ANTHROPIC|DEEPSEEK|GITHUB|GITLAB|SLACK|DISCORD|PAYPAL|WOMPI|MERCADOPAGO|PAYU|SENTRY|DATADOG|SEGMENT|AUTH0|CLERK|SUPABASE|OKTA|WALLET|META|FACEBOOK|WHATSAPP|HUBSPOT|SHOPIFY|CLOUDINARY|MAPBOX|ALGOLIA|PUSHER)(_|$)/;
+/** Values only this application reads (it signs or hashes with them): any random text works for a test. */
+const INTERNAL_SECRET = /(^|_)(SECRET|SALT|PEPPER|SIGNING|HASH|SESSION|JWT|COOKIE|ENCRYPTION|CSRF|PASSWORD|PASSPHRASE|ACCESS_KEY|SECRET_KEY|PRIVATE_KEY|API_KEY|KEY)(_|$)/;
+/** A URL that only points at this machine: it carries nothing private, so an example's can be used as is. */
+function localUrl(v) {
+  try {
+    const u = new URL(String(v));
+    return ['localhost', '127.0.0.1', '::1', '[::1]', '0.0.0.0', 'host.docker.internal'].includes(u.hostname) || u.hostname.endsWith('.localhost') || u.hostname.endsWith('.test');
+  } catch {
+    return false;
+  }
+}
+
+/** `.env.example` and its kin, as committed: names and example values, never the real `.env`. */
+function readExample(repo) {
+  const out = {};
+  for (const f of ['.env.example', '.env.sample', '.env.test.example', '.env.template', '.env.dist']) {
+    try {
+      for (const [k, v] of Object.entries(parseEnv(fs.readFileSync(path.join(repo, f), 'utf8')))) if (!(k in out)) out[k] = v;
+    } catch {
+      /* not there */
+    }
+  }
+  return out;
+}
+
+/**
+ * A value for a test, when one can be made without a secret: `{ value, how }`, or null when it needs a person.
+ * - `example`: the committed example's value, when it only points at this machine;
+ * - `generated`: random text for a value only this application reads (it signs or hashes with it);
+ * - `placeholder`: a stand-in that lets the application start (a local storage address, a bucket, a test email).
+ * Somebody else's keys are never made up.
+ */
+function fillValue(name, example) {
+  if (example !== undefined && localUrl(example)) return { value: example, how: 'example' };
+  if (THIRD_PARTY.test(name)) return null;
+  if (INTERNAL_SECRET.test(name)) return { value: crypto.randomBytes(24).toString('hex'), how: 'generated' };
+  const storage = /(^|_)(S3|MINIO|STORAGE|BUCKET|R2|SPACES)(_|$)/.test(name);
+  if (storage && /(_ENDPOINT|_HOST)$/.test(name)) return { value: 'http://localhost:9000', how: 'placeholder' };
+  if (storage && /_URL$/.test(name)) return { value: 'http://localhost:9000/pravex-test', how: 'placeholder' };
+  if (/(^|_)BUCKET(_NAME)?$/.test(name)) return { value: 'pravex-test', how: 'placeholder' };
+  if (/_REGION$/.test(name)) return { value: 'us-east-1', how: 'placeholder' };
+  if (/(^|_)EMAIL(_FROM)?$|^EMAIL_FROM$/.test(name)) return { value: 'pruebas@pravex.invalid', how: 'placeholder' };
+  return null;
+}
+
+/** Adds lines to the machine's file for this repository, never over a value that is already there. Private to the person. */
+function writeMachineEnv(file, entries, now = new Date()) {
+  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+  let have = {};
+  try {
+    have = parseEnv(fs.readFileSync(file, 'utf8'));
+  } catch {
+    /* new file */
+  }
+  const add = entries.filter((e) => have[e.name] === undefined && /^[A-Za-z_][A-Za-z0-9_]*$/.test(e.name) && !/[\r\n]/.test(e.value));
+  if (!add.length) return [];
+  const head = `\n# Puesto por Pravex el ${now.toISOString().slice(0, 10)} para las pruebas: valores de prueba (generados, locales o de relleno), nunca secretos reales.\n`;
+  fs.appendFileSync(file, head + add.map((e) => `${e.name}=${e.value}`).join('\n') + '\n', { mode: 0o600 });
+  fs.chmodSync(file, 0o600);
+  return add.map((e) => e.name);
+}
+
+/** Images of services a test needs locally (a database, a cache, storage, a mail catcher), as the repository's compose file names them. */
+const SERVICE_IMAGE = /(postgres|postgis|mysql|mariadb|mongo|redis|valkey|keydb|memcached|minio|seaweedfs|localstack|azurite|mailpit|mailhog|elasticsearch|opensearch|rabbitmq|nats)/i;
+
+/** The compose file at the root and its local services: `{ file, services }`, or null. A line-based read, enough for `services:`. */
+function composeServices(repo) {
+  const file = ['docker-compose.yml', 'docker-compose.yaml', 'compose.yml', 'compose.yaml'].find((f) => fs.existsSync(path.join(repo, f)));
+  if (!file) return null;
+  const lines = fs.readFileSync(path.join(repo, file), 'utf8').split('\n');
+  const services = [];
+  let inServices = false;
+  let current = null;
+  for (const line of lines) {
+    if (/^services:\s*$/.test(line)) {
+      inServices = true;
+      continue;
+    }
+    if (inServices && /^\S/.test(line)) inServices = false;
+    if (!inServices) continue;
+    const name = /^ {2}([A-Za-z0-9][\w.-]*):\s*$/.exec(line);
+    if (name) current = name[1];
+    const image = /^ {4}image:\s*["']?([^"'\s]+)/.exec(line);
+    if (current && image && SERVICE_IMAGE.test(image[1]) && !services.includes(current)) services.push(current);
+  }
+  return services.length ? { file, services } : null;
+}
+
+/** Output that says a service is not answering here, as opposed to a value being missing. */
+const NOT_RUNNING = /ECONNREFUSED|could not connect|connection (?:to server at .* )?refused|Can't reach database server|getaddrinfo|Connection refused/i;
+
+module.exports = { THIRD_PARTY, fillValue, readExample, localUrl, writeMachineEnv, composeServices, NOT_RUNNING, SIGNS, envProblem, problemFp, repoKey, envFileOf, parseEnv, projectConfig, checkEnv, setupAllowed, fixRequirement };

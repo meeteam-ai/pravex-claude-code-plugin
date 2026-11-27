@@ -192,6 +192,13 @@ function takeLock(dir) {
   return null;
 }
 
+/** What a failing check said, short: the lines that name a failure first (a runner's summary hides them at the end), else its end. */
+function saidOf(output) {
+  const lines = String(output || '').split('\n');
+  const telling = lines.filter((l) => /\b(FAIL|Error|failed|✗|×)\b|×/.test(l) && !/ELIFECYCLE|ERR_PNPM|run failed: command/.test(l));
+  return (telling.length ? telling.slice(0, 8).join('\n') : tail(output || '', 600)).slice(0, 600);
+}
+
 /** Keeps the computer awake while the run works; it ends with this process. */
 function keepAwake() {
   if (process.platform !== 'darwin') return () => {};
@@ -322,8 +329,58 @@ async function drive(dir, opts = {}) {
     log(task || 'prepare', `checks cannot run: ${line}`);
     return true;
   }
+  /**
+   * Before stopping for checks that cannot run, Pravex prepares by itself what is not a secret (readiness.fillValue): values
+   * only this application reads, addresses of this machine from the committed example, stand-ins that let it start, and
+   * the repository's own local services. Once per problem and at most three times a run. Agents take no part, the real
+   * `.env` is never read, and the values go to the machine's file, never to the repository or to Pravex. True when
+   * something was prepared and the check is worth running again.
+   */
+  async function autoPrepare(b) {
+    if (s.cfg.autoPrepare === false || s.autoPrepared.length >= 3 || s.autoPrepared.includes(b.fp)) return false;
+    given = machineEnv();
+    const example = readiness.readExample(repo);
+    const names = String(b.missing || '').split(/,\s*/).filter(Boolean);
+    const fill = [];
+    const left = [];
+    for (const name of names) {
+      const v = given.env[name] === undefined ? readiness.fillValue(name, example[name]) : null;
+      if (v) fill.push({ name, ...v });
+      else left.push(name);
+    }
+    const services = readiness.NOT_RUNNING.test(b.line || '') || !names.length ? await startServices() : [];
+    const written = fill.length && given.file ? readiness.writeMachineEnv(given.file, fill) : [];
+    if (!written.length && !services.length) return false;
+    given = machineEnv();
+    put({ type: 'env.prepared', task: b.task || undefined, fp: b.fp, names: fill.filter((f) => written.includes(f.name)).map((f) => ({ name: f.name, how: f.how })), services, left });
+    log(b.task || 'prepare', `prepared by itself: ${[...written, ...services.map((x) => `${x} (service)`)].join(', ')}`);
+    return true;
+  }
+  /** The repository's own local services (a database, a cache, storage), started as its compose file says, under the project name the developer uses. */
+  async function startServices() {
+    const c = readiness.composeServices(repo);
+    if (!c) return [];
+    const docker = await run('docker', ['info', '--format', '{{.ServerVersion}}'], { cwd: repo, env: cleanEnv(), timeoutMs: 20e3, signal: ac.signal });
+    if (docker.code !== 0) return [];
+    const project = path.basename(String(s.base.repo || 'repo')).toLowerCase().replace(/[^a-z0-9_-]+/g, '') || 'pravex';
+    const up = await run('docker', ['compose', '-p', project, '-f', c.file, 'up', '-d', ...c.services], { cwd: repo, env: cleanEnv(), timeoutMs: 5 * 60e3, signal: ac.signal });
+    if (up.code !== 0) {
+      log('prepare', `services did not start: ${tail(`${up.out}\n${up.err}`, 200)}`);
+      return [];
+    }
+    await sleep(8000, ac.signal);
+    return c.services;
+  }
+
   /** A failed check that never got to test anything, as the stop it becomes; null when it ran. */
-  const blockFor = (r, task) => (r && !r.ok && r.problem ? { task, command: r.command, line: r.problem.line, missing: r.problem.missing, fp: readiness.problemFp(r.command, r.problem) } : null);
+  const blockFor = (r, task) => {
+    if (!r || r.ok || !r.problem) return null;
+    // A name it lists that this machine does give is not what is missing (a check that prints them all at once).
+    const named = String(r.problem.missing || '').split(/,\s*/).filter(Boolean);
+    const unset = named.filter((n) => given.env[n] === undefined);
+    const problem = { ...r.problem, missing: (unset.length ? unset : named).join(', ') || null };
+    return { task, command: r.command, line: problem.line, missing: problem.missing, fp: readiness.problemFp(r.command, problem) };
+  };
   const diffOf = (t) => git(repo, ['diff', '--no-color', '--no-ext-diff', '--no-textconv', `${t.baseSha}..HEAD`], { allowFail: true });
 
   /** After a job that writes: keep what the role may change, put the rest back, and commit it. */
@@ -366,9 +423,10 @@ async function drive(dir, opts = {}) {
       given = machineEnv();
       // A variable the project says its checks need, and nobody set on this machine: said before anything runs.
       if (given.missing.length) {
-        const name = given.missing[0];
         const line = s.req.locale === 'en' ? `${given.missing.join(', ')} is not set on this machine` : `Falta ${given.missing.join(', ')} en esta máquina`;
-        if (envBlock({ command: '.pravex/project.json', line, missing: name, fp: readiness.problemFp('env', { missing: given.missing.join(',') }) })) return;
+        const b = { command: '.pravex/project.json', line, missing: given.missing.join(', '), fp: readiness.problemFp('env', { missing: given.missing.join(',') }) };
+        if (await autoPrepare(b)) return;
+        if (envBlock(b)) return;
       }
       const programs = new Set([...(install ? [install[0]] : []), 'npm', 'pnpm', 'yarn', 'bun', 'node', 'make', 'python3', 'go', 'cargo']);
       for (const c of readiness.projectConfig(repo).setup) {
@@ -383,7 +441,9 @@ async function drive(dir, opts = {}) {
         if (r.code !== 0) {
           const out = `${r.out}\n${r.err}`;
           const problem = readiness.envProblem(out) || { line: tail(out, 300).trim().split('\n').pop() || c, missing: null };
-          if (envBlock({ command: c, line: problem.line, missing: problem.missing, fp: readiness.problemFp(c, problem) })) return;
+          const b = { command: c, line: problem.line, missing: problem.missing, fp: readiness.problemFp(c, problem) };
+          if (await autoPrepare(b)) return;
+          if (envBlock(b)) return;
         }
       }
       const results = [];
@@ -393,9 +453,10 @@ async function drive(dir, opts = {}) {
         if (ac.signal.aborted) return pause('stopped');
         // It could not test anything here: stop and say so, unless a person already resumed past this same problem.
         const b = blockFor(r);
+        if (b && (await autoPrepare(b))) return; // prepared by itself: the preparation runs again with it
         if (b && envBlock(b)) return;
         // What a check that already failed said is kept: the report and a person can see why, not only that it did.
-        results.push({ command: c, ok: r.ok, ms: r.ms, ...(r.why ? { why: r.why } : {}), ...(r.flaky ? { flaky: true } : {}), ...(b ? { why: 'environment', problem: r.problem.line } : {}), ...(r.ok ? {} : { said: tail(r.output || '', 600) }) });
+        results.push({ command: c, ok: r.ok, ms: r.ms, ...(r.why ? { why: r.why } : {}), ...(r.flaky ? { flaky: true } : {}), ...(b ? { why: 'environment', problem: r.problem.line } : {}), ...(r.ok ? {} : { said: saidOf(r.output) }) });
       }
       resetTo(repo, head(repo));
       return put({ type: 'run.prepared', install: install ? install.join(' ') : null, checks: results, ms: results.reduce((a, r) => a + r.ms, 0) });
@@ -460,8 +521,14 @@ async function drive(dir, opts = {}) {
       if (!kept.length) return missing(`no test file matches ${t.tests.join(', ')}${violations.length ? `; these were put back: ${violations.map((x) => x.file).join(', ')}` : ''}`);
       if (dodges.length) return missing(`skipped tests or silenced checks: ${dodges.map((d) => `${d.file}: ${d.line}`).join('; ')}`);
       if (!allowed(v.command)) return missing(`\`${v.command}\` is not a plain command that only runs these tests`);
-      const r = await checkCmd(v.command, { retry: false });
+      let r = await checkCmd(v.command, { retry: false });
       if (ac.signal.aborted) return pause('stopped');
+      // It never ran because of something Pravex can prepare by itself: prepared, it runs once more on the same tests.
+      const first = blockFor(r, t.id);
+      if (first && (await autoPrepare(first))) {
+        r = await checkCmd(v.command, { retry: false });
+        if (ac.signal.aborted) return pause('stopped');
+      }
       resetTo(repo, sha);
       put({ type: 'check.finished', task: t.id, command: v.command, ok: r.ok, ms: r.ms });
       if (r.why) return missing(`\`${v.command}\` did not run: ${r.why}`);
@@ -521,6 +588,7 @@ async function drive(dir, opts = {}) {
       resetTo(repo, t.sha);
       // Its own tests could not run at all: another round of building would not change that.
       const cannot = blockFor(ranTest, t.id);
+      if (cannot && (await autoPrepare(cannot))) return; // still built: its checks run again, without another round
       if (cannot && envBlock(cannot, () => block({ task: t.id, reason: 'checks-cannot-run', detail: cannot.line }))) return;
       put({ type: 'task.checked', task: t.id, round: t.round, ok: !failures.length, failures, checks: done, fp: failures.length ? fingerprint(failures) : null });
       log(`${t.id} check`, failures.length ? 'failed' : 'passed');
@@ -550,9 +618,12 @@ async function drive(dir, opts = {}) {
       // The cause is this copy, not the work: building again would spend for nothing. It stops and says what is missing.
       if (v.kind === 'environment') {
         const f = t.failures.find((x) => x.command) || {};
-        const named = readiness.envProblem(v.cause);
+        // What the check printed names the variables better than the diagnosis' own words; either will do.
+        const named = readiness.envProblem(t.failures.map((x) => x.output || '').join('\n')) || readiness.envProblem(v.cause);
         const line = String(v.cause).split('\n').find((l) => l.trim()) || '';
-        envBlock({ task: t.id, command: f.command || t.testCommand, line: line.trim().slice(0, 300), missing: named && named.missing, fp: `dx-${fp || 'none'}` }, () => block({ task: t.id, reason: 'checks-cannot-run', detail: line.trim().slice(0, 300) }));
+        const b = { task: t.id, command: f.command || t.testCommand, line: line.trim().slice(0, 300), missing: named && named.missing, fp: `dx-${fp || 'none'}` };
+        if (await autoPrepare(b)) return put({ type: 'task.recheck', task: t.id });
+        envBlock(b, () => block({ task: t.id, reason: 'checks-cannot-run', detail: line.trim().slice(0, 300) }));
       }
     },
 
@@ -665,7 +736,7 @@ async function drive(dir, opts = {}) {
         break;
       }
       // The state must change with every step; one that does not is a defect, and it is not allowed to spin.
-      const mark = JSON.stringify([a, s.jobs, s.usd, s.prepareFailures]);
+      const mark = JSON.stringify([a, s.jobs, s.usd, s.prepareFailures, s.autoPrepared.length]);
       same = mark === last ? same + 1 : 0;
       last = mark;
       if (same >= 3) {
