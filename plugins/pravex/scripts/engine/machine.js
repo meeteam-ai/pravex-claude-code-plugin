@@ -53,6 +53,7 @@ const initial = () => ({
   reason: null,
   // Checks that could not run at all (a variable, a database): each stop, and whether a person resumed after it.
   envBlocks: [], // { at: 'prepare' | task id, command, line, missing, fp, resumed }
+  autoPrepared: [], // the problems Pravex already prepared for by itself, once each
 });
 
 const newTask = (t) => ({
@@ -204,6 +205,13 @@ function reduce(s, e) {
         if (t.baseSha && t.sha && t.sha !== t.baseSha) s.tip = t.baseSha;
         Object.assign(t, { phase: 'new', round: 0, redWhy: '', fps: [], failures: [], diagnosis: null, diagnosedFp: null, review: null, testHashes: {}, testCommand: '', covers: [], extended: 0, baseSha: null, sha: null });
       }
+      break;
+    case 'env.prepared':
+      s.autoPrepared.push(e.fp || null);
+      break;
+    case 'task.recheck':
+      // What kept its checks from running was prepared: they run again on the same build, without another round.
+      if (t) Object.assign(t, { phase: 'built', diagnosis: null, diagnosedFp: null });
       break;
     case 'prepare.reset':
       // Checked again from the start: what the repository and the machine have may have changed while it waited.

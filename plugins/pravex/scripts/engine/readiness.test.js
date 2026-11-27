@@ -91,7 +91,7 @@ test('the machine file, the project file and the setup commands are read careful
   assert.equal(readiness.repoKey('', '/x/my repo'), 'my_repo');
   const file = path.join(tmp(), 'm.env');
   fs.writeFileSync(file, 'A=1\nEXTRA=2\n');
-  assert.deepEqual(readiness.checkEnv({ file, names: ['A', 'B'], base: { B: 'from-shell' } }), { env: { A: '1', B: 'from-shell' }, missing: [], file, names: ['A', 'B'] });
+  assert.deepEqual(readiness.checkEnv({ file, names: ['A', 'B'], base: { B: 'from-shell' } }), { env: { A: '1', EXTRA: '2', B: 'from-shell' }, missing: [], file, names: ['A', 'EXTRA', 'B'] });
   assert.deepEqual(readiness.checkEnv({ file, names: ['A', 'Z'], base: {} }).missing, ['Z']);
   assert.deepEqual(readiness.checkEnv({ file, base: {} }).env, { A: '1', EXTRA: '2' }, 'without names, what a person put in the file');
   const programs = new Set(['pnpm']);
@@ -220,4 +220,82 @@ test('a run whose parts were all set aside says why, instead of leaving the reas
   assert.equal((await go(dir, ask, { envFile })).status, 'failed');
   const p = project(journal.read(dir));
   assert.deepEqual([p.reason.code, p.reason.params.task], ['checks', 'T1']);
+});
+
+// --- preparing by itself ---------------------------------------------------------------------------------------------
+
+test('what is not a secret is filled without asking; somebody else\'s keys never are', () => {
+  for (const n of ['SESSION_SECRET', 'QR_TOKEN_SECRET', 'IP_HASH_SALT', 'S3_ACCESS_KEY', 'SUPERADMIN_PASSWORD', 'JWT_SIGNING_KEY']) {
+    const v = readiness.fillValue(n);
+    assert.equal(v.how, 'generated', n);
+    assert.match(v.value, /^[0-9a-f]{48}$/);
+  }
+  assert.notEqual(readiness.fillValue('SESSION_SECRET').value, readiness.fillValue('SESSION_SECRET').value, 'random each time');
+  assert.deepEqual(readiness.fillValue('S3_ENDPOINT'), { value: 'http://localhost:9000', how: 'placeholder' });
+  assert.deepEqual(readiness.fillValue('S3_BUCKET'), { value: 'pravex-test', how: 'placeholder' });
+  assert.deepEqual(readiness.fillValue('EMAIL_FROM'), { value: 'pruebas@pravex.invalid', how: 'placeholder' });
+  assert.deepEqual(readiness.fillValue('TEST_DATABASE_URL', 'postgresql://napa:napa@localhost:55432/napa_test'), { value: 'postgresql://napa:napa@localhost:55432/napa_test', how: 'example' });
+  for (const n of ['STRIPE_SECRET_KEY', 'APPLE_PASS_KEY_PEM', 'GOOGLE_SERVICE_ACCOUNT_JSON', 'AWS_SECRET_ACCESS_KEY', 'SMTP_URL', 'OPENAI_API_KEY', 'NODE_ENV', 'REDIS_URL']) assert.equal(readiness.fillValue(n), null, n);
+  assert.equal(readiness.fillValue('DATABASE_URL', 'postgres://u:p@db.example.com/x'), null, 'an address that is not this machine is not copied');
+
+  const file = path.join(tmp(), 'env', 'm.env');
+  assert.deepEqual(readiness.writeMachineEnv(file, [{ name: 'A', value: '1' }, { name: 'bad name', value: 'x' }, { name: 'B', value: 'two\nlines' }]), ['A']);
+  assert.deepEqual(readiness.writeMachineEnv(file, [{ name: 'A', value: 'other' }, { name: 'C', value: '3' }]), ['C'], 'never over a value already there');
+  assert.deepEqual(readiness.parseEnv(fs.readFileSync(file, 'utf8')), { A: '1', C: '3' });
+  assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+  assert.match(fs.readFileSync(file, 'utf8'), /# Puesto por Pravex .* nunca secretos reales/);
+
+  const repo = repository({ 'docker-compose.yml': 'services:\n  api:\n    build: .\n  db:\n    image: postgres:16-alpine\n  cache:\n    image: "redis:7"\n  s3:\n    image: chrislusf/seaweedfs:latest\nvolumes:\n  data:\n', '.env.example': 'A=1\nSECRET=\n' });
+  assert.deepEqual(readiness.composeServices(repo), { file: 'docker-compose.yml', services: ['db', 'cache', 's3'] });
+  assert.equal(readiness.composeServices(repository()), null);
+  assert.deepEqual(readiness.readExample(repo), { A: '1', SECRET: '' });
+});
+
+const NEEDS_SECRET = "if (!process.env.APP_SESSION_SECRET || !process.env.APP_DB_URL) { console.error('Error: Variables de entorno inválidas:\\n  APP_SESSION_SECRET: Invalid input: expected string, received undefined\\n  APP_DB_URL: Invalid input: expected string, received undefined'); process.exit(1); }\nimport t from 'node:test'; t('app', () => {});\n";
+
+test('checks that only miss what Pravex can prepare go on by themselves, and the machine keeps it for next time', async () => {
+  const { dir, envFile } = setup({ 'app.test.js': NEEDS_SECRET, '.env.example': 'APP_DB_URL=postgres://app:app@localhost:5432/app_test\nAPP_SESSION_SECRET=change-me\n' });
+  const ask = agents();
+  const r = await go(dir, ask, { envFile });
+  assert.equal(r.status, 'done', 'no pause: nothing here needed a person');
+  const prepared = journal.read(dir).find((e) => e.type === 'env.prepared');
+  assert.deepEqual(prepared.names, [{ name: 'APP_SESSION_SECRET', how: 'generated' }, { name: 'APP_DB_URL', how: 'example' }]);
+  assert.ok(!types(dir).includes('env.blocked'));
+  const kept = readiness.parseEnv(fs.readFileSync(envFile, 'utf8'));
+  assert.match(kept.APP_SESSION_SECRET, /^[0-9a-f]{48}$/);
+  assert.equal(kept.APP_DB_URL, 'postgres://app:app@localhost:5432/app_test');
+  assert.ok(!JSON.stringify(journal.read(dir)).includes(kept.APP_SESSION_SECRET), 'the value is never in the journal, so never sent to Pravex');
+  assert.match(fs.readFileSync(path.join(dir, 'report.md'), 'utf8'), /Preparé solo[\s\S]*`APP_SESSION_SECRET` \(generado\)[\s\S]*`APP_DB_URL` \(del ejemplo\)/);
+});
+
+test('somebody else\'s key still stops the run, after preparing the rest, and says only what is left', async () => {
+  const needy = "if (!process.env.APP_SESSION_SECRET || !process.env.STRIPE_SECRET_KEY) { console.error('Error: Variables de entorno inválidas:\\n  APP_SESSION_SECRET: Invalid input: expected string, received undefined\\n  STRIPE_SECRET_KEY: Invalid input: expected string, received undefined'); process.exit(1); }\nimport t from 'node:test'; t('app', () => {});\n";
+  const { dir, envFile } = setup({ 'app.test.js': needy });
+  assert.equal((await go(dir, agents(), { envFile })).status, 'paused');
+  const p = project(journal.read(dir));
+  assert.equal(p.reason.code, 'checks-cannot-run');
+  assert.equal(p.reason.params.missing, 'STRIPE_SECRET_KEY');
+  assert.deepEqual(p.reason.params.prepared, ['APP_SESSION_SECRET']);
+  assert.ok(readiness.parseEnv(fs.readFileSync(envFile, 'utf8')).APP_SESSION_SECRET);
+});
+
+test('acceptance tests that cannot run for want of a generated value are prepared and run again, without a pause', async () => {
+  const { dir, envFile } = setup({});
+  const needy = "if (!process.env.MUL_SECRET) { console.error('MUL_SECRET: Required'); process.exit(1); }\n" + MUL_TEST;
+  const ask = agents({ tester: (n, cwd) => (fs.writeFileSync(path.join(cwd, 'mul.test.js'), needy), ok({ status: 'DONE', files: ['mul.test.js'], command: 'node --test mul.test.js', covers: [{ criterion: 'AC-1', test: 'multiplies' }], note: '' })) });
+  assert.equal((await go(dir, ask, { envFile })).status, 'done');
+  assert.equal(ask.calls.tester, 1);
+  assert.equal(ask.calls.builder, 1);
+  const red = journal.read(dir).find((e) => e.type === 'task.red');
+  assert.equal(red.redBefore, true, 'red for a real reason once it could run');
+  const history = project(journal.read(dir)).snapshot.tasks[0].history.map((h) => h.kind);
+  assert.ok(history.includes('prepare'));
+});
+
+test('preparing by itself can be turned off for a run', async () => {
+  const { dir, envFile } = setup({ 'app.test.js': NEEDS_SECRET });
+  const { dir: d2 } = { dir };
+  const r = await engine.drive(d2, { ask: agents(), keepAwake: false, sleep: async () => {}, envFile, cfg: { autoPrepare: false } });
+  assert.equal(r.status, 'paused');
+  assert.ok(!types(dir).includes('env.prepared'));
 });

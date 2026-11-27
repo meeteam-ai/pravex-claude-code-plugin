@@ -2,7 +2,7 @@
 /** The state of a run as the screens show it, built from its journal alone, so the screens can never disagree with it. */
 const os = require('os');
 const { fold, estimate } = require('./machine');
-const { proven, envStop } = require('./report');
+const { proven, envStop, prepared } = require('./report');
 
 const ENGINE_VERSION = '1';
 const cut = (t, n) => String(t === undefined || t === null ? '' : t).slice(0, n);
@@ -27,7 +27,13 @@ function stages(t, open) {
   return st;
 }
 
-function history(events, id) {
+const PREP = {
+  es: { generated: 'generado', example: 'del ejemplo', placeholder: 'de relleno', did: 'Preparé solo', up: 'levanté' },
+  en: { generated: 'generated', example: 'from the example', placeholder: 'a stand-in', did: 'Prepared by itself', up: 'started' },
+};
+
+function history(events, id, locale = 'es') {
+  const w = PREP[locale === 'en' ? 'en' : 'es'];
   const out = [];
   let round = 0;
   for (const e of events) {
@@ -45,6 +51,7 @@ function history(events, id) {
     else if (e.type === 'task.restarted') add('restart', true, e.why);
     else if (e.type === 'task.done') add('done', true, '');
     else if (e.type === 'task.blocked') add('blocked', false, e.detail || e.reason);
+    else if (e.type === 'env.prepared') add('prepare', true, `${w.did}: ${[...(e.names || []).map((n) => `${n.name} (${w[n.how] || n.how})`), ...(e.services || []).length ? [`${w.up} ${(e.services || []).join(', ')}`] : []].join('; ')}`);
   }
   return out.slice(-40);
 }
@@ -53,10 +60,11 @@ function history(events, id) {
  * Why it is where it is, never empty when it did not end well: a run whose parts were all set aside says the first part's
  * reason, instead of leaving the page to say "something unexpected happened".
  */
-function reasonOf(s) {
+function reasonOf(s, events = []) {
   if (s.paused === 'checks-cannot-run') {
     const e = envStop(s);
-    return { code: s.paused, ...(e ? { params: { ...(e.task ? { task: e.task } : {}), command: cut(e.command, 300), line: cut(e.line, 300), ...(e.missing ? { missing: e.missing } : {}), envFile: e.envFile, request: cut(e.fix, 800) } } : {}) };
+    const done = prepared(events).names.map((n) => n.name).slice(0, 10);
+    return { code: s.paused, ...(e ? { params: { ...(e.task ? { task: e.task } : {}), command: cut(e.command, 300), line: cut(e.line, 300), ...(e.missing ? { missing: e.missing } : {}), envFile: e.envFile, request: cut(e.fix, 800), ...(done.length ? { prepared: done } : {}) } } : {}) };
   }
   if (s.paused) return { code: s.paused };
   if (s.reason) return { code: s.reason, ...(s.reason === 'environment' && s.prepareError ? { params: { code: s.prepareError.code, detail: cut(s.prepareError.detail, 600) } } : {}) };
@@ -78,7 +86,7 @@ function project(events) {
   const fixes = s.tasks.reduce((n, t) => n + Math.max(0, t.round - 1), 0) + events.filter((e) => e.type === 'task.diagnosed' || e.type === 'task.restarted').length;
   return {
     status: s.final || (s.paused ? 'paused' : 'running'),
-    reason: reasonOf(s),
+    reason: reasonOf(s, events),
     usd: s.usd,
     activeMs: Math.round(s.activeMs),
     tasksTotal: s.tasks.length,
@@ -103,7 +111,7 @@ function project(events) {
         stages: stages(t, s.open),
         blocked: t.blocked ? { reason: t.blocked.reason, detail: cut(t.blocked.detail, 300) } : null,
         branch: (last(events.filter((e) => e.type === 'task.blocked' && e.task === t.id)) || {}).branch || null,
-        history: history(events, t.id),
+        history: history(events, t.id, s.req && s.req.locale),
         trust: { testsIntact: t.evidence ? t.evidence.testsIntact : null, violations: t.violations.length, redBefore: t.redBefore },
       })),
       estimate: estimate(s),
