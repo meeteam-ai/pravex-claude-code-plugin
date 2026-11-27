@@ -394,6 +394,21 @@ Since 0.17.0 a requirement can be built end to end:
 - **Nothing is pushed until the work is done.** The runner pushes the build's branch and
   opens one pull request when the run is done or partly done; agents and checks cannot
   push. `PRAVEX_WORK_NO_PUSH=1` turns pushing off on a machine.
+- **Checks that cannot run stop the run instead of wasting rounds** (0.18.0). A check
+  that fails before it tests anything (a variable nobody set, a database it cannot
+  reach, "no test files found") is not work for an agent. The run pauses as soon as it
+  sees one — while preparing, when the first tests are written, after a build, or when
+  the diagnosis says the cause is the machine — keeps what was built on a branch, and
+  says what is missing. Set it and resume: the run checks again from the start, takes in
+  whatever was merged into the main branch meanwhile, and starts that part over. Resume
+  without fixing it and the run goes on without those checks, and its report says so.
+- **What the checks need from the machine** is said in `.pravex/project.json`, a file
+  agents cannot change: `{"checks": ["pnpm test"], "setup": ["docker compose up -d db"],
+  "env": ["TEST_DATABASE_URL"]}`. The values go in `~/.pravex/env/<owner>__<repo>.env`
+  (`NAME=value` lines, written by a person). Only the checks the engine runs get them;
+  agents never do, and they never go in the repository or to Pravex. `setup` runs after
+  installing, with the same rules as checks plus `docker`/`docker-compose`; it never
+  publishes, deploys, logs in or pushes.
 - **You decide what matters.** Decisions taken where the requirement said nothing are
   listed in Pravex; objecting to one makes the run replan. A run can be paused, resumed
   with more budget, or cancelled from Pravex, and pauses by itself at its budget or time

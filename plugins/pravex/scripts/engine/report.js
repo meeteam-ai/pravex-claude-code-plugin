@@ -1,10 +1,11 @@
 'use strict';
 /** What a run leaves for people: a report in plain words and the evidence behind it. Built from the state alone. */
 const { say } = require('./messages');
+const readiness = require('./readiness');
 
 const L = {
-  es: { done: 'Listo', partial: 'Listo en parte', cancelled: 'Cancelada', failed: 'No quedó listo', infeasible: 'No se puede', paused: 'En pausa', asked: 'Lo que se pidió', result: 'Resultado', criteria: 'Criterios', proof: 'Prueba', parts: 'Partes', rounds: 'rondas', decided: 'Decisiones que tomé', undo: 'se puede revertir', noundo: 'no se puede revertir', objApplied: 'objetada y replanteada', objFailed: 'objetada, NO se pudo aplicar', missing: 'Falta que alguien lo entregue', until: 'mientras tanto', alt: 'Lo que sí puedo hacer', trust: 'Qué lo demuestra', cost: 'Costo a precio de lista', pend: 'Construido, pendiente de verificar', notes: 'Notas para quien revise', saved: 'Nada se perdió', red: 'las pruebas fallaban antes de construir', nored: 'OJO: las pruebas ya pasaban antes de construir', flaky: 'comprobaciones inestables', base: 'ya fallaban antes de empezar', branch: 'Rama', time: 'Tiempo de trabajo', yes: 'cumplido', no: 'sin cumplir' },
-  en: { done: 'Done', partial: 'Partly done', cancelled: 'Cancelled', failed: 'Not done', infeasible: 'It cannot be done', paused: 'Paused', asked: 'What was asked', result: 'Result', criteria: 'Criteria', proof: 'Proof', parts: 'Parts', rounds: 'rounds', decided: 'Decisions made', undo: 'can be undone', noundo: 'cannot be undone', objApplied: 'objected and replanned', objFailed: 'objected, could NOT be applied', missing: 'Needed from someone', until: 'meanwhile', alt: 'What can be done', trust: 'What proves it', cost: 'Cost at list price', pend: 'Built, not verified yet', notes: 'Notes for the reviewer', saved: 'Nothing was lost', red: 'the tests failed before the work', nored: 'NOTE: the tests already passed before the work', flaky: 'unstable checks', base: 'already failing before', branch: 'Branch', time: 'Working time', yes: 'met', no: 'not met' },
+  es: { envWhat: 'Qué falta', envCmd: 'Comando', envSaid: 'Dijo', envVar: 'Variable', envHow: 'Cómo arreglarlo', envHow1: (v, f) => `Pon ${v ? `\`${v}\`` : 'lo que falta'} en \`${f}\` (una línea \`NOMBRE=valor\`; solo lo leen las comprobaciones, nunca un agente) y reanuda.`, envHow2: 'Si hace falta cambiar el repositorio, lanza este requisito como un flujo aparte y reanuda cuando se fusione:', done: 'Listo', partial: 'Listo en parte', cancelled: 'Cancelada', failed: 'No quedó listo', infeasible: 'No se puede', paused: 'En pausa', asked: 'Lo que se pidió', result: 'Resultado', criteria: 'Criterios', proof: 'Prueba', parts: 'Partes', rounds: 'rondas', decided: 'Decisiones que tomé', undo: 'se puede revertir', noundo: 'no se puede revertir', objApplied: 'objetada y replanteada', objFailed: 'objetada, NO se pudo aplicar', missing: 'Falta que alguien lo entregue', until: 'mientras tanto', alt: 'Lo que sí puedo hacer', trust: 'Qué lo demuestra', cost: 'Costo a precio de lista', pend: 'Construido, pendiente de verificar', notes: 'Notas para quien revise', saved: 'Nada se perdió', red: 'las pruebas fallaban antes de construir', nored: 'OJO: las pruebas ya pasaban antes de construir', flaky: 'comprobaciones inestables', base: 'ya fallaban antes de empezar', branch: 'Rama', time: 'Tiempo de trabajo', yes: 'cumplido', no: 'sin cumplir' },
+  en: { envWhat: 'What is missing', envCmd: 'Command', envSaid: 'It said', envVar: 'Variable', envHow: 'How to fix it', envHow1: (v, f) => `Put ${v ? `\`${v}\`` : 'what is missing'} in \`${f}\` (a \`NAME=value\` line; only the checks read it, never an agent) and resume.`, envHow2: 'If the repository has to change, start this requirement as a flow of its own and resume once it is merged:', done: 'Done', partial: 'Partly done', cancelled: 'Cancelled', failed: 'Not done', infeasible: 'It cannot be done', paused: 'Paused', asked: 'What was asked', result: 'Result', criteria: 'Criteria', proof: 'Proof', parts: 'Parts', rounds: 'rounds', decided: 'Decisions made', undo: 'can be undone', noundo: 'cannot be undone', objApplied: 'objected and replanned', objFailed: 'objected, could NOT be applied', missing: 'Needed from someone', until: 'meanwhile', alt: 'What can be done', trust: 'What proves it', cost: 'Cost at list price', pend: 'Built, not verified yet', notes: 'Notes for the reviewer', saved: 'Nothing was lost', red: 'the tests failed before the work', nored: 'NOTE: the tests already passed before the work', flaky: 'unstable checks', base: 'already failing before', branch: 'Branch', time: 'Working time', yes: 'met', no: 'not met' },
 };
 
 /** The criteria, each with whether something proves it: a task that proves it is done, and its tests failed first. */
@@ -25,6 +26,21 @@ function explain(s) {
   return null;
 }
 
+/** The last stop for checks that cannot run, with where its fix goes: what `snapshot` sends and the report shows. */
+function envStop(s) {
+  const b = s.envBlocks && s.envBlocks[s.envBlocks.length - 1];
+  if (!b) return null;
+  const key = readiness.repoKey(s.base && s.base.origin, s.base && s.base.repo);
+  const locale = s.req && s.req.locale === 'en' ? 'en' : 'es';
+  return { task: b.at === 'prepare' ? null : b.at, command: b.command, line: b.line, missing: b.missing, envFile: `~/.pravex/env/${key}.env`, fix: readiness.fixRequirement({ command: b.command, line: b.line, missing: b.missing, locale }) };
+}
+
+function envSection(s, l) {
+  const e = envStop(s);
+  if (!e) return [];
+  return [`## ${l.envWhat}`, '', `- ${l.envCmd}: \`${e.command}\``, `- ${l.envSaid}: ${e.line}`, ...(e.missing ? [`- ${l.envVar}: \`${e.missing}\``] : []), '', `## ${l.envHow}`, '', `1. ${l.envHow1(e.missing, e.envFile)}`, `2. ${l.envHow2}`, '', `   > ${e.fix}`, ''];
+}
+
 function report(s, { reason, status, events = [] }) {
   const locale = s.req && s.req.locale === 'en' ? 'en' : 'es';
   const l = L[locale];
@@ -36,6 +52,7 @@ function report(s, { reason, status, events = [] }) {
   const why = reason ? { ...say(reason, locale) } : null;
   if (why) md.push(`**${why.what}** ${why.did} ${why.todo}`, '');
   if (reason === 'environment' && s.prepareError) md.push(`${say(s.prepareError.code, locale).what}`, '', '```', s.prepareError.detail || '', '```', '');
+  if (reason === 'checks-cannot-run') md.push(...envSection(s, l, locale));
   md.push(`## ${l.asked}`, '', String((s.req && s.req.text) || '').slice(0, 2000), '');
   if (f.summary) md.push(`## ${l.result}`, '', f.summary, '');
   if (f.build && f.build.ok === false) md.push(f.build.why, '', ...(f.alternative ? [`## ${l.alt}`, '', f.alternative, ''] : []));
@@ -76,4 +93,4 @@ function report(s, { reason, status, events = [] }) {
   };
 }
 
-module.exports = { report, explain, proven };
+module.exports = { report, explain, proven, envStop };

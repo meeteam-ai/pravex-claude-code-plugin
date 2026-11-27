@@ -24,6 +24,7 @@ const worker = require('./worker');
 const prompts = require('./prompts');
 const schemas = require('./schemas');
 const { report, explain } = require('./report');
+const readiness = require('./readiness');
 
 // Outside ~/.pravex, which holds the sign-in and no agent may read.
 const BUILDS = path.join(os.homedir(), '.pravex-builds');
@@ -147,12 +148,8 @@ function installCommand(repo) {
 /** The commands that check this repository: the ones the project chose, or the ones it has. */
 function findChecks(repo, cfg) {
   if (Array.isArray(cfg.checks) && cfg.checks.length) return cfg.checks;
-  try {
-    const own = JSON.parse(fs.readFileSync(path.join(repo, '.pravex', 'project.json'), 'utf8'));
-    if (Array.isArray(own.checks) && own.checks.length) return own.checks.filter((c) => typeof c === 'string');
-  } catch {
-    /* no project file */
-  }
+  const own = readiness.projectConfig(repo);
+  if (own.checks.length) return own.checks;
   let found = [];
   try {
     const c = require('../environment').commandsOf(repo);
@@ -295,7 +292,38 @@ async function drive(dir, opts = {}) {
     if (!s.paused) put({ type: 'run.paused', reason });
     return null;
   };
-  const checkCmd = (c, o = {}) => check(c, { cwd: repo, signal: ac.signal, timeoutMs: checkTimeoutMs, ...o });
+  /**
+   * What the checks get from this machine for this repository (`readiness.checkEnv`): read again at every preparation,
+   * since a person may add a value while the run waits. Only checks get it; agents never do.
+   */
+  const machineEnv = () => (s.base ? readiness.checkEnv({ key: readiness.repoKey(s.base.origin, s.base.repo), names: readiness.projectConfig(repo).env, file: opts.envFile }) : { env: {}, missing: [], file: null });
+  let given = machineEnv();
+  const checkCmd = (c, o = {}) => check(c, { cwd: repo, signal: ac.signal, timeoutMs: checkTimeoutMs, env: { ...cleanEnv(), ...given.env }, ...o });
+
+  /**
+   * The checks cannot run here. The first time, it stops and says what is missing; once a person resumed after this same
+   * problem, a part is set aside for it instead (`onAccepted`) and the rest goes on. Work a part had built stays on a branch.
+   */
+  function envBlock({ task, command, line, missing, fp }, onAccepted) {
+    const at = task || 'prepare';
+    if (machine.envAccepted(s, at, fp)) {
+      if (!onAccepted) return false;
+      onAccepted();
+      return true;
+    }
+    const t = task ? taskOf(task) : null;
+    let kept = null;
+    if (t && t.baseSha && t.sha && t.sha !== t.baseSha) {
+      kept = `${s.base.branch}-${t.id.toLowerCase()}-before-setup`;
+      git(repo, ['branch', '-f', kept, t.sha], { allowFail: true });
+      resetTo(repo, t.baseSha);
+    }
+    put({ type: 'env.blocked', task: task || undefined, command, line, missing: missing || undefined, fp, envFile: given.file || undefined, branch: kept || undefined });
+    log(task || 'prepare', `checks cannot run: ${line}`);
+    return true;
+  }
+  /** A failed check that never got to test anything, as the stop it becomes; null when it ran. */
+  const blockFor = (r, task) => (r && !r.ok && r.problem ? { task, command: r.command, line: r.problem.line, missing: r.problem.missing, fp: readiness.problemFp(r.command, r.problem) } : null);
   const diffOf = (t) => git(repo, ['diff', '--no-color', '--no-ext-diff', '--no-textconv', `${t.baseSha}..HEAD`], { allowFail: true });
 
   /** After a job that writes: keep what the role may change, put the rest back, and commit it. */
@@ -311,6 +339,19 @@ async function drive(dir, opts = {}) {
     return { kept, violations, dodges, sha };
   }
 
+  /** Set aside: its work stays on a branch of its own, and the main one goes on as if it had not been tried. */
+  function block(a) {
+    const t = taskOf(a.task);
+    let kept = null;
+    if (t.baseSha && t.sha && t.sha !== t.baseSha) {
+      kept = `${s.base.branch}-${t.id.toLowerCase()}-unfinished`;
+      git(repo, ['branch', '-f', kept, t.sha], { allowFail: true });
+      resetTo(repo, t.baseSha);
+    }
+    put({ type: 'task.blocked', task: t.id, reason: a.reason, detail: a.detail || (t.failures[0] ? `${t.failures[0].command || t.failures[0].kind}` : ''), branch: kept });
+    log(t.id, `set aside: ${a.reason}`);
+  }
+
   const ACT = {
     async prepare() {
       const install = installCommand(repo);
@@ -322,12 +363,38 @@ async function drive(dir, opts = {}) {
         // The lockfile decides what is installed: an install that changed files is put back.
         putBack(repo, changedFiles(repo).map((c) => c.file));
       }
+      given = machineEnv();
+      // A variable the project says its checks need, and nobody set on this machine: said before anything runs.
+      if (given.missing.length) {
+        const name = given.missing[0];
+        const line = s.req.locale === 'en' ? `${given.missing.join(', ')} is not set on this machine` : `Falta ${given.missing.join(', ')} en esta máquina`;
+        if (envBlock({ command: '.pravex/project.json', line, missing: name, fp: readiness.problemFp('env', { missing: given.missing.join(',') }) })) return;
+      }
+      const programs = new Set([...(install ? [install[0]] : []), 'npm', 'pnpm', 'yarn', 'bun', 'node', 'make', 'python3', 'go', 'cargo']);
+      for (const c of readiness.projectConfig(repo).setup) {
+        if (!readiness.setupAllowed(c, programs)) {
+          put({ type: 'prepare.failed', code: 'setup-refused', detail: c });
+          return;
+        }
+        log('setup', c);
+        const [program, ...args] = c.split(/\s+/);
+        const r = await run(program, args, { cwd: repo, env: { ...cleanEnv(), ...given.env }, timeoutMs: 15 * 60e3, signal: ac.signal });
+        if (ac.signal.aborted) return pause('stopped');
+        if (r.code !== 0) {
+          const out = `${r.out}\n${r.err}`;
+          const problem = readiness.envProblem(out) || { line: tail(out, 300).trim().split('\n').pop() || c, missing: null };
+          if (envBlock({ command: c, line: problem.line, missing: problem.missing, fp: readiness.problemFp(c, problem) })) return;
+        }
+      }
       const results = [];
       for (const c of findChecks(repo, s.cfg)) {
         log('check', c);
         const r = await checkCmd(c);
         if (ac.signal.aborted) return pause('stopped');
-        results.push({ command: c, ok: r.ok, ms: r.ms, ...(r.why ? { why: r.why } : {}), ...(r.flaky ? { flaky: true } : {}) });
+        // It could not test anything here: stop and say so, unless a person already resumed past this same problem.
+        const b = blockFor(r);
+        if (b && envBlock(b)) return;
+        results.push({ command: c, ok: r.ok, ms: r.ms, ...(r.why ? { why: r.why } : {}), ...(r.flaky ? { flaky: true } : {}), ...(b ? { why: 'environment', problem: r.problem.line } : {}) });
       }
       resetTo(repo, head(repo));
       return put({ type: 'run.prepared', install: install ? install.join(' ') : null, checks: results, ms: results.reduce((a, r) => a + r.ms, 0) });
@@ -397,6 +464,13 @@ async function drive(dir, opts = {}) {
       resetTo(repo, sha);
       put({ type: 'check.finished', task: t.id, command: v.command, ok: r.ok, ms: r.ms });
       if (r.why) return missing(`\`${v.command}\` did not run: ${r.why}`);
+      // Red because it never ran is not red: nothing proves the tests would catch the missing behaviour.
+      const b = blockFor(r, t.id);
+      if (b) {
+        resetTo(repo, before);
+        envBlock(b, () => put({ type: 'task.blocked', task: t.id, reason: 'checks-cannot-run', detail: b.line }));
+        return;
+      }
       const last = t.redAttempts + 1 >= s.cfg.redAttempts;
       // Passing before the code exists proves nothing yet. One more try; after that it goes on, and says so.
       if (r.ok && !last) return missing(`the tests already pass before the code exists, so they prove nothing. Test the behaviour that is missing.`);
@@ -432,6 +506,7 @@ async function drive(dir, opts = {}) {
       for (const d of (built && built.dodges) || []) failures.push({ kind: d.rule, output: `${d.file}: ${d.line}` });
       if (t.sha === t.baseSha || (built && !built.files.length && built.round === 1)) failures.push({ kind: 'no-change', output: 'nothing was changed' });
       const list = [t.testCommand, ...s.prepared.checks.filter((c) => c.ok && c.command !== t.testCommand).map((c) => c.command)];
+      let ranTest = null;
       for (const c of list) {
         if (failures.length && c !== t.testCommand) break; // the first real failure is enough to work on
         log(`${t.id} check`, c);
@@ -439,9 +514,13 @@ async function drive(dir, opts = {}) {
         if (ac.signal.aborted) return pause('stopped');
         done.push({ command: r.command, ok: r.ok, ms: r.ms, ...(r.flaky ? { flaky: true } : {}) });
         put({ type: 'check.finished', task: t.id, command: r.command, ok: r.ok, ms: r.ms, ...(r.flaky ? { flaky: true } : {}) });
+        if (c === t.testCommand) ranTest = r;
         if (!r.ok) failures.push({ command: r.command, output: r.output });
       }
       resetTo(repo, t.sha);
+      // Its own tests could not run at all: another round of building would not change that.
+      const cannot = blockFor(ranTest, t.id);
+      if (cannot && envBlock(cannot, () => block({ task: t.id, reason: 'checks-cannot-run', detail: cannot.line }))) return;
       put({ type: 'task.checked', task: t.id, round: t.round, ok: !failures.length, failures, checks: done, fp: failures.length ? fingerprint(failures) : null });
       log(`${t.id} check`, failures.length ? 'failed' : 'passed');
     },
@@ -464,7 +543,16 @@ async function drive(dir, opts = {}) {
     async diagnose(a) {
       const t = taskOf(a.task);
       const v = await job('diagnoser', t.id, prompts.diagnoser(s, t, { diff: diffOf(t) }), schemas.DIAGNOSIS);
-      if (v) put({ type: 'task.diagnosed', task: t.id, ...v, fp: t.fps[t.fps.length - 1] });
+      if (!v) return;
+      const fp = t.fps[t.fps.length - 1];
+      put({ type: 'task.diagnosed', task: t.id, ...v, fp });
+      // The cause is this copy, not the work: building again would spend for nothing. It stops and says what is missing.
+      if (v.kind === 'environment') {
+        const f = t.failures.find((x) => x.command) || {};
+        const named = readiness.envProblem(v.cause);
+        const line = String(v.cause).split('\n').find((l) => l.trim()) || '';
+        envBlock({ task: t.id, command: f.command || t.testCommand, line: line.trim().slice(0, 300), missing: named && named.missing, fp: `dx-${fp || 'none'}` }, () => block({ task: t.id, reason: 'checks-cannot-run', detail: line.trim().slice(0, 300) }));
+      }
     },
 
     async restart(a) {
@@ -490,17 +578,8 @@ async function drive(dir, opts = {}) {
       log(t.id, 'done');
     },
 
-    /** Set aside: its work stays on a branch of its own, and the main one goes on as if it had not been tried. */
     async block(a) {
-      const t = taskOf(a.task);
-      let kept = null;
-      if (t.baseSha && t.sha && t.sha !== t.baseSha) {
-        kept = `${s.base.branch}-${t.id.toLowerCase()}-unfinished`;
-        git(repo, ['branch', '-f', kept, t.sha], { allowFail: true });
-        resetTo(repo, t.baseSha);
-      }
-      put({ type: 'task.blocked', task: t.id, reason: a.reason, detail: a.detail || (t.failures[0] ? `${t.failures[0].command || t.failures[0].kind}` : ''), branch: kept });
-      log(t.id, `set aside: ${a.reason}`);
+      block(a);
     },
 
     async integrate() {
@@ -526,13 +605,48 @@ async function drive(dir, opts = {}) {
     },
   };
 
+  /**
+   * After "the checks cannot run", what was fixed meanwhile may be on the main branch (a pull request that made the tests
+   * runnable): it is taken in before checking again. Nothing built yet: the run starts from it. Parts already done: it is
+   * merged on top of them; a merge that does not go clean is left out and the run goes on as it was.
+   */
+  function refreshBase() {
+    const ok = (args) => spawnSync('git', [...GIT, ...args], { cwd: repo, encoding: 'utf8', timeout: 300_000, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_CEILING_DIRECTORIES: path.dirname(path.resolve(repo)) } });
+    const fetchHead = (from, ref) => (ok(['fetch', '-q', '--no-tags', from, ref]).status === 0 ? ok(['rev-parse', '-q', '--verify', 'FETCH_HEAD^{commit}']).stdout.trim() : '');
+    const name = String(s.base.ref || '').replace(/^refs\/(remotes\/origin|heads)\//, '');
+    const latest = (name && name !== 'HEAD' && s.base.origin ? fetchHead('origin', name) : '') || (s.base.repo && fs.existsSync(s.base.repo) ? fetchHead(s.base.repo, s.base.ref || 'HEAD') : '');
+    if (!latest || latest === s.base.sha || ok(['merge-base', '--is-ancestor', latest, s.tip]).status === 0) return;
+    if (!s.tasks.some((t) => t.phase === 'done')) {
+      resetTo(repo, latest);
+      put({ type: 'run.rebased', how: 'reset', sha: latest, from: s.base.sha });
+      return;
+    }
+    const merged = ok(['-c', 'user.name=Pravex', '-c', 'user.email=build@pravex.invalid', 'merge', '-q', '--no-edit', '--no-verify', '-m', 'merge: take in the main branch after the checks were fixed', latest]);
+    if (merged.status !== 0) {
+      ok(['merge', '--abort']);
+      resetTo(repo, s.tip);
+      put({ type: 'run.rebase-failed', sha: latest, detail: tail(`${merged.stdout}\n${merged.stderr}`, 300) });
+      return;
+    }
+    put({ type: 'run.rebased', how: 'merge', sha: head(repo), from: s.tip });
+  }
+
   try {
     if (fs.existsSync(stopFile)) fs.rmSync(stopFile, { force: true });
+    const afterSetup = s.paused === 'checks-cannot-run';
     if (s.open || s.paused || opts.cfg) put({ type: 'run.resumed', ...(opts.cfg ? { cfg: opts.cfg } : {}) });
     // A commit half made by a crash, or a lock it left: the working copy goes back to its last commit.
     fs.rmSync(path.join(repo, '.git', 'index.lock'), { force: true });
     guardGit(dir, repo);
     resetTo(repo, s.tip);
+    if (afterSetup) {
+      try {
+        refreshBase();
+      } catch (e) {
+        log('resume', `the main branch was not taken in: ${e.message}`);
+      }
+      put({ type: 'prepare.reset' });
+    }
     let last = '';
     let same = 0;
     for (let n = 0; n < maxSteps; n++) {

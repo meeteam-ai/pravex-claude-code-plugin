@@ -33,7 +33,9 @@ async function check(command, { cwd, timeoutMs = 20 * 60e3, signal, retry = true
     r = again;
   }
   const ok = r.code === 0 && !r.why;
-  return { command: c, ok, ...(flaky ? { flaky } : {}), ...(r.why ? { why: r.why } : {}), exit: r.code, ms, output: ok ? '' : tail(`${r.out}\n${r.err}${r.why === 'timeout' ? `\nstopped: it took longer than ${Math.round(timeoutMs / 60e3)} min` : ''}`) };
+  // Read on the whole output: the line that says why it could not run is usually at the top, and `output` keeps the end.
+  const problem = ok || r.why ? null : require('./readiness').envProblem(`${r.out}\n${r.err}`);
+  return { command: c, ok, ...(flaky ? { flaky } : {}), ...(r.why ? { why: r.why } : {}), ...(problem ? { problem } : {}), exit: r.code, ms, output:ok ? '' : tail(`${r.out}\n${r.err}${r.why === 'timeout' ? `\nstopped: it took longer than ${Math.round(timeoutMs / 60e3)} min` : ''}`) };
 }
 
 module.exports = { check, allowed, PLAIN };

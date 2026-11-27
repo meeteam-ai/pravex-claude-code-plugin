@@ -2,7 +2,7 @@
 /** The state of a run as the screens show it, built from its journal alone, so the screens can never disagree with it. */
 const os = require('os');
 const { fold, estimate } = require('./machine');
-const { proven } = require('./report');
+const { proven, envStop } = require('./report');
 
 const ENGINE_VERSION = '1';
 const cut = (t, n) => String(t === undefined || t === null ? '' : t).slice(0, n);
@@ -49,6 +49,24 @@ function history(events, id) {
   return out.slice(-40);
 }
 
+/**
+ * Why it is where it is, never empty when it did not end well: a run whose parts were all set aside says the first part's
+ * reason, instead of leaving the page to say "something unexpected happened".
+ */
+function reasonOf(s) {
+  if (s.paused === 'checks-cannot-run') {
+    const e = envStop(s);
+    return { code: s.paused, ...(e ? { params: { ...(e.task ? { task: e.task } : {}), command: cut(e.command, 300), line: cut(e.line, 300), ...(e.missing ? { missing: e.missing } : {}), envFile: e.envFile, request: cut(e.fix, 800) } } : {}) };
+  }
+  if (s.paused) return { code: s.paused };
+  if (s.reason) return { code: s.reason, ...(s.reason === 'environment' && s.prepareError ? { params: { code: s.prepareError.code, detail: cut(s.prepareError.detail, 600) } } : {}) };
+  if (s.final && !['done', 'cancelled'].includes(s.final)) {
+    const set = s.tasks.find((t) => t.blocked && t.blocked.reason !== 'dependency') || s.tasks.find((t) => t.blocked);
+    if (set) return { code: set.blocked.reason, params: { task: set.id, ...(set.blocked.detail ? { detail: cut(set.blocked.detail, 300) } : {}) } };
+  }
+  return null;
+}
+
 /** Everything the backend stores about a run: `{ status, reason, usd, …, snapshot, decisions, inputs, jobs }`. */
 function project(events) {
   const s = fold(events);
@@ -60,7 +78,7 @@ function project(events) {
   const fixes = s.tasks.reduce((n, t) => n + Math.max(0, t.round - 1), 0) + events.filter((e) => e.type === 'task.diagnosed' || e.type === 'task.restarted').length;
   return {
     status: s.final || (s.paused ? 'paused' : 'running'),
-    reason: s.paused ? { code: s.paused } : s.reason ? { code: s.reason, ...(s.reason === 'environment' && s.prepareError ? { params: { code: s.prepareError.code, detail: cut(s.prepareError.detail, 600) } } : {}) } : null,
+    reason: reasonOf(s),
     usd: s.usd,
     activeMs: Math.round(s.activeMs),
     tasksTotal: s.tasks.length,
