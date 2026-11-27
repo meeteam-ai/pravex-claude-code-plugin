@@ -107,6 +107,21 @@ function cancelRun(dir) {
   fs.writeFileSync(path.join(dir, 'report.md'), report(machine.fold(after), { status: 'cancelled', events: after }).markdown);
 }
 
+/** Cuts at a word, never mid-word, and says it was cut. */
+function cutWords(text, max) {
+  const t = String(text || '').replace(/\s+/g, ' ').trim();
+  if (t.length <= max) return t;
+  const space = t.lastIndexOf(' ', max - 1);
+  return `${t.slice(0, space > max / 3 ? space : max - 1).replace(/[\s,;:(«"'-]+$/, '')}…`;
+}
+
+/** The pull request's title: the analyst's own short title, or the requirement's first line cut at a word. */
+function prTitle(s) {
+  const own = String((s.feasibility && s.feasibility.title) || '').replace(/\s+/g, ' ').trim().replace(/\.$/, '');
+  if (own && own.length <= 72) return own;
+  return cutWords(String(s.req.text || '').split('\n')[0], 70);
+}
+
 /** Puts the branch on the remote and opens the pull request. A failure is written down; the work is still there. */
 function openPr(dir, { gh = 'gh', run = spawnSync } = {}) {
   const events = journal.read(dir);
@@ -126,7 +141,7 @@ function openPr(dir, { gh = 'gh', run = spawnSync } = {}) {
   const status = machine.finalStatus(s);
   const body = path.join(dir, 'pr-body.md');
   fs.writeFileSync(body, `${report(s, { status, events }).markdown}\n\n---\n${s.req.locale === 'en' ? 'Built by Pravex. Every line above comes from checks it ran, not from what an agent said.' : 'Construido por Pravex. Todo lo de arriba sale de comprobaciones que corrió, no de lo que dijo un agente.'}\n`);
-  const title = `${s.req.text.split('\n')[0].slice(0, 70)}${status === 'partial' ? (s.req.locale === 'en' ? ' (partial)' : ' (en parte)') : ''}`;
+  const title = `${prTitle(s)}${status === 'partial' ? (s.req.locale === 'en' ? ' (partial)' : ' (en parte)') : ''}`;
   const base = String(s.base.ref || '').replace(/^refs\/remotes\/origin\//, '').replace(/^refs\/heads\//, '');
   const made = run(gh, ['pr', 'create', '--title', title, '--body-file', body, '--head', s.base.branch, ...(base && base !== 'HEAD' ? ['--base', base] : [])], opts);
   if (made.status !== 0) return fail(made.stderr || made.error);
@@ -229,7 +244,43 @@ async function take(q, { api, machineId, findRepo, root, start }) {
   }
 }
 
-async function poll({ api, machineId, findRepo, root = engine.BUILDS, start, signedIn = () => null, now = Date.now, log = () => {}, maxRuns = 1 }) {
+/**
+ * One check at a time on a machine: the schedule asks every minute, also while a long flow run keeps the scheduled tick
+ * busy, so two checks may meet. A lock older than five minutes was left by a check that died.
+ */
+function pollLock(root, now = Date.now) {
+  fs.mkdirSync(root, { recursive: true });
+  const file = path.join(root, '.poll.lock');
+  for (let i = 0; i < 2; i++) {
+    try {
+      fs.writeFileSync(file, String(process.pid), { flag: 'wx' });
+      return () => fs.rmSync(file, { force: true });
+    } catch (e) {
+      if (e.code !== 'EEXIST') throw e;
+      let age = 0;
+      try {
+        age = now() - fs.statSync(file).mtimeMs;
+      } catch {
+        continue;
+      }
+      if (age < 5 * 60_000) return null;
+      fs.rmSync(file, { force: true });
+    }
+  }
+  return null;
+}
+
+async function poll(o) {
+  const release = pollLock(o.root || engine.BUILDS, o.now);
+  if (!release) return { busy: true };
+  try {
+    return await pollOnce(o);
+  } finally {
+    release();
+  }
+}
+
+async function pollOnce({ api, machineId, findRepo, root = engine.BUILDS, start, signedIn = () => null, now = Date.now, log = () => {}, maxRuns = 1 }) {
   const runs = localRuns(root);
   const open = runs.filter((r) => !['done', 'partial', 'failed', 'infeasible', 'cancelled'].includes(r.status));
   // What the runs on this machine need does not depend on Pravex answering: a run whose process died goes on.
@@ -346,4 +397,4 @@ if (require.main === module) {
   );
 }
 
-module.exports = { drive, poll, take, sync, openPr, localRuns, alive, saveWork, workOf, startDetached, logOf };
+module.exports = { drive, poll, pollLock, take, sync, openPr, prTitle, localRuns, alive, saveWork, workOf, startDetached, logOf };

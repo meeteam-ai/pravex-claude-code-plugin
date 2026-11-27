@@ -1944,8 +1944,16 @@ async function main(argv = process.argv.slice(2)) {
     return 0;
   }
   if (argv.includes('--tick')) {
+    // A tick that runs a flow can last an hour, and the schedule starts no other tick meanwhile: requirements queued in
+    // Pravex are still asked for every minute.
     pollWork();
-    await tick();
+    const asking = setInterval(pollWork, 60_000);
+    asking.unref();
+    try {
+      await tick();
+    } finally {
+      clearInterval(asking);
+    }
     return 0;
   }
   const flowId = flagValue(argv, '--run');

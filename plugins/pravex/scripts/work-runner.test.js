@@ -231,6 +231,26 @@ test('the pull request is opened by the runner, once, and a failure is written d
   assert.equal(ran.length, 2);
 });
 
+test('the pull request title is short and never cut in the middle of a word', () => {
+  const req = { text: 'En el footer de la página de inicio (home) de la web, agregar el texto "by mbc", sencillo y discreto. Solo en el home.' };
+  assert.equal(work.prTitle({ req, feasibility: { title: 'Mostrar «by mbc» en el pie, solo en la página de inicio.' } }), 'Mostrar «by mbc» en el pie, solo en la página de inicio');
+  const cut = work.prTitle({ req, feasibility: { title: '' } });
+  assert.ok(cut.length <= 70 && cut.endsWith('…'), cut);
+  const kept = cut.slice(0, -1);
+  assert.ok(req.text.startsWith(kept), cut);
+  assert.match(req.text.slice(kept.length), /^[\s,;:(«"']/, 'cut where a word ends');
+  assert.equal(work.prTitle({ req: { text: 'Add a filter\nwith details' } }), 'Add a filter');
+});
+
+test('one work check at a time; a lock left by a dead check is taken after five minutes', () => {
+  const root = tmp();
+  const release = work.pollLock(root);
+  assert.ok(release);
+  assert.equal(work.pollLock(root), null, 'a second check waits for the next minute');
+  assert.ok(work.pollLock(root, () => Date.now() + 6 * 60_000), 'a stale lock is taken');
+  release();
+});
+
 test('with pushing turned off nothing runs, and it reads as off, not as a failure', () => {
   const repoDir = repository();
   sh(repoDir, 'git', 'remote', 'add', 'origin', 'https://github.com/acme/x.git');
